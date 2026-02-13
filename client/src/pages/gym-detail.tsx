@@ -292,13 +292,13 @@ function ReportView({ gymId }: { gymId: string }) {
 
           <div className="space-y-6" data-testid="section-reports">
             {data.reports.map((report, i) => (
-              <ReportCard key={i} report={report} />
+              <ReportCard
+                key={i}
+                report={report}
+                atRiskMembers={report.metric === "Member Risk Radar" ? data.atRiskMembers : undefined}
+              />
             ))}
           </div>
-
-          {data.atRiskMembers && data.atRiskMembers.length > 0 && (
-            <AtRiskMembersSection members={data.atRiskMembers} />
-          )}
         </>
       )}
     </div>
@@ -398,7 +398,7 @@ function TrendIndicator({ direction, value }: { direction: MetricReport["trendDi
   );
 }
 
-function ReportCard({ report }: { report: MetricReport }) {
+function ReportCard({ report, atRiskMembers }: { report: MetricReport; atRiskMembers?: AtRiskMember[] }) {
   const isHighRisk = report.metric === "Monthly Churn" && parseFloat(report.current) > 7;
   const isRiskRadar = report.metric === "Member Risk Radar";
 
@@ -440,62 +440,36 @@ function ReportCard({ report }: { report: MetricReport }) {
             <p className="text-sm leading-relaxed text-muted-foreground">{report.action}</p>
           </div>
         </div>
+
+        {isRiskRadar && atRiskMembers && atRiskMembers.length > 0 && (
+          <div className="border-t pt-4 space-y-3" data-testid="section-flagged-members">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Flagged Members</p>
+            <div className="space-y-2">
+              {atRiskMembers.map((m) => (
+                <div key={m.id} className="flex flex-wrap items-center justify-between gap-2 text-sm" data-testid={`row-risk-member-${m.id}`}>
+                  <span className="font-medium">{m.name}</span>
+                  <div className="flex items-center gap-3">
+                    <Badge variant="outline" className="text-xs">
+                      {getRiskReason(m.tenureDays)}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(m.joinDate + "T00:00:00").toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
 }
 
-function AtRiskMembersSection({ members }: { members: AtRiskMember[] }) {
-  return (
-    <Card data-testid="section-at-risk-members">
-      <CardContent className="p-6 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="space-y-1">
-            <h3 className="font-semibold text-sm flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-500" />
-              Members Requiring Outreach
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              {members.length} member{members.length !== 1 ? "s" : ""} in the first 60 days — the highest-risk window for cancellation.
-            </p>
-          </div>
-          <Badge variant="outline" className="text-xs">
-            ${members.reduce((sum, m) => sum + Number(m.monthlyRate), 0).toLocaleString()}/mo at risk
-          </Badge>
-        </div>
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Joined</TableHead>
-                <TableHead>Tenure</TableHead>
-                <TableHead>Rate</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {members.map((member) => (
-                <TableRow key={member.id} data-testid={`row-risk-member-${member.id}`}>
-                  <TableCell className="font-medium">{member.name}</TableCell>
-                  <TableCell className="text-muted-foreground text-sm">{member.email || "\u2014"}</TableCell>
-                  <TableCell className="text-sm">
-                    {new Date(member.joinDate + "T00:00:00").toLocaleDateString()}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="text-xs font-mono">
-                      {member.tenureDays}d
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="font-mono text-sm">${Number(member.monthlyRate).toFixed(0)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      </CardContent>
-    </Card>
-  );
+function getRiskReason(tenureDays: number): string {
+  if (tenureDays <= 14) return "New member";
+  if (tenureDays <= 30) return "Early stage";
+  return "Pre-habit window";
 }
 
 function RiskTierBadge({ current }: { current: string }) {
