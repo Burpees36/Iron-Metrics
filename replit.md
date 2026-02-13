@@ -21,7 +21,7 @@ The Stability Command Center for CrossFit gyms. A financial resilience operating
 3. **Member Risk Radar** - Predictive early-warning. Risk tiers (Low/Moderate/High), intervention windows, outreach priority.
 4. **Lifetime Value Engine (LTVE)** - True LTV, revenue unlocked per 1% churn improvement, scenario projections.
 5. **Coach Impact Layer** - Retention leverage by class type and attendance patterns (future: requires attendance data).
-6. **Predictive Intelligence Stack** - Member-level churn prediction (0-1 probability, engagement classification, intervention types), cohort survival analysis, revenue scenario modeling (Monte Carlo-style), strategic brief generator with economically-quantified CrossFit-aware recommendations.
+6. **Predictive Intelligence Stack** - Member-level churn prediction (0-1 probability, engagement classification, intervention types), cohort survival analysis, revenue scenario modeling (Monte Carlo-style), strategic brief generator with economically-quantified CrossFit-aware recommendations, execution checklists, stability verdict visual (strong/moderate/fragile with progress bar), enriched member alerts (tenure, last contact, outreach status, suggested action), and revenue outlook bar comparison.
 
 ## Report Format
 Every metric block contains:

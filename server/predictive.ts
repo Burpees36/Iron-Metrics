@@ -109,17 +109,44 @@ export interface BriefRecommendation {
   interventionType: string;
   crossfitContext: string;
   timeframe: string;
+  executionChecklist: string[];
+}
+
+export interface MemberAlertEnriched {
+  name: string;
+  probability: number;
+  driver: string;
+  intervention: string;
+  revenue: string;
+  tenureDays: number;
+  lastContactDays: number | null;
+  outreachLogged: boolean;
+  suggestedAction: string;
+  engagementClass: string;
+  memberId: string;
+}
+
+export interface RevenueComparison {
+  currentMrr: number;
+  expectedMrr: number;
+  upsideMrr: number;
+  downsideMrr: number;
+  expectedDeltaPct: number;
+  upsideDeltaPct: number;
+  downsideDeltaPct: number;
 }
 
 export interface StrategicBrief {
   generatedAt: string;
   executiveSummary: string;
   stabilityVerdict: string;
+  stabilityLevel: "strong" | "moderate" | "fragile";
   keyMetrics: { label: string; value: string; status: "good" | "warning" | "critical" }[];
   recommendations: BriefRecommendation[];
   cohortAlert: string | null;
   revenueOutlook: string;
-  memberAlerts: { name: string; probability: number; driver: string; intervention: string; revenue: string }[];
+  revenueComparison: RevenueComparison;
+  memberAlerts: MemberAlertEnriched[];
   roiProjection: { actionTaken: string; membersRetained: number; revenuePreserved: number; annualImpact: number };
 }
 
@@ -805,13 +832,16 @@ function generateStrategicBrief(
     { label: "Revenue at Risk", value: `$${memberPredictions.summary.totalRevenueAtRisk.toLocaleString()}/mo`, status: memberPredictions.summary.totalRevenueAtRisk === 0 ? "good" : memberPredictions.summary.totalRevenueAtRisk < latestMrr * 0.1 ? "warning" : "critical" },
   ];
 
-  // Stability verdict
   let stabilityVerdict: string;
+  let stabilityLevel: "strong" | "moderate" | "fragile";
   if (latestRsi >= 80 && gymChurnRate <= 5) {
+    stabilityLevel = "strong";
     stabilityVerdict = "Your gym is operating from a position of financial strength. Retention systems are working, revenue is predictable, and your community has stability. This is the platform to build from — not the time to coast.";
   } else if (latestRsi >= 60 && gymChurnRate <= 7) {
+    stabilityLevel = "moderate";
     stabilityVerdict = "Your gym is functional but not yet fortified. The numbers are acceptable, but acceptable isn't resilient. One bad month — a coaching change, a competitor opening, a seasonal dip — could expose the gaps. Now is the time to strengthen, while you have margin.";
   } else {
+    stabilityLevel = "fragile";
     stabilityVerdict = "Your gym is in a fragile position. Revenue is volatile, retention is leaking, and the membership base is not building the compound loyalty that creates financial resilience. Every month without intervention makes the next month harder. Focus on the fundamentals: onboarding, community, and personal connection.";
   }
 
@@ -845,6 +875,14 @@ function generateStrategicBrief(
       interventionType: "Structured onboarding program",
       crossfitContext: "In CrossFit, the first month determines everything. Members need to feel competent (they can do the movements), connected (they know people's names), and challenged (they have something to chase). Without all three, they leave.",
       timeframe: "Implement within 2 weeks",
+      executionChecklist: [
+        "Assign a dedicated coach to every new member within 24 hours of signup",
+        "Schedule a 1-on-1 intro session in their first week",
+        "Set 3 movement-based milestones for their first 30 days",
+        "Pair them with a buddy member by their 3rd class",
+        "Coach check-in call/text after their 1st, 7th, and 14th day",
+        "Track first benchmark WOD completion in week 2",
+      ],
     });
   } else if (worst60Day && worst60Day.lostCount > 0 && worst60Day.lostPct > 15) {
     const savedRevenue = Math.round(worst60Day.lostCount * 0.25 * gymArm * 8);
@@ -857,6 +895,14 @@ function generateStrategicBrief(
       interventionType: "Skill milestone program",
       crossfitContext: "The 30-60 day window is where CrossFit either becomes identity or exits. Members need visible progress — a heavier deadlift, a faster Fran, a skill they couldn't do before. Progress creates identity. Identity creates retention.",
       timeframe: "Launch within 1 month",
+      executionChecklist: [
+        "Define 3 skill milestones for each new member (e.g. first pull-up, first Rx workout, first competition)",
+        "Assign coach to track milestone progress per member",
+        "Set 30/60/90-day check-in schedule with each member",
+        "Track first Rx workout completion",
+        "Celebrate milestone achievements publicly in class",
+        "Log milestone progress in member notes",
+      ],
     });
   }
 
@@ -874,6 +920,14 @@ function generateStrategicBrief(
       interventionType: "Retention system overhaul",
       crossfitContext: "High churn in CrossFit usually means one of three things: (1) poor onboarding — members feel lost, (2) coaching inconsistency — different experience depending on the day, or (3) weak community — members workout but don't connect. Diagnosing which one applies to your gym is the first step.",
       timeframe: "Begin assessment this week",
+      executionChecklist: [
+        "Call every member who cancelled in the last 60 days — ask what could have been different",
+        "Audit onboarding: does every new member get a personal coach intro?",
+        "Review coaching consistency — are class experiences uniform across coaches?",
+        "Identify members with 0 logged contacts and schedule outreach",
+        "Implement a cancellation save process (exit interview before processing)",
+        "Set a weekly churn review meeting with coaching staff",
+      ],
     });
   } else if (gymChurnRate > 5) {
     const improvement = gymChurnRate - 4;
@@ -887,6 +941,13 @@ function generateStrategicBrief(
       interventionType: "Targeted member outreach",
       crossfitContext: "At this churn level, the problem isn't systemic — it's individual. Each at-risk member has a specific reason they're drifting. A genuine conversation from a coach who knows their name is the highest-ROI retention tool in CrossFit.",
       timeframe: "This week — personal outreach",
+      executionChecklist: [
+        "Pull the at-risk member list from the Member Risk tab",
+        "Assign each at-risk member to a specific coach for personal outreach",
+        "Schedule text or call within 48 hours for each at-risk member",
+        "Ask one open-ended question: 'What can we do better for you?'",
+        "Log every contact in Iron Metrics to track outreach coverage",
+      ],
     });
   } else {
     recommendations.push({
@@ -898,6 +959,13 @@ function generateStrategicBrief(
       interventionType: "Community deepening",
       crossfitContext: "The strongest CrossFit gyms don't just retain members — they create belonging. When members say 'my gym' instead of 'the gym,' you've crossed the loyalty threshold. Invest in the rituals and relationships that make your gym irreplaceable.",
       timeframe: "Ongoing — culture investment",
+      executionChecklist: [
+        "Identify 3-5 long-tenured members to serve as community ambassadors",
+        "Pair each new member with a veteran buddy",
+        "Celebrate membership anniversaries publicly (6mo, 1yr, 2yr)",
+        "Create a member spotlight routine (weekly or monthly)",
+        "Host one community event per month outside the gym",
+      ],
     });
   }
 
@@ -914,6 +982,13 @@ function generateStrategicBrief(
       interventionType: "Pricing tier introduction",
       crossfitContext: "CrossFit members are investing in transformation, not just access. Premium tiers that include goal-setting, body composition tracking, and coach check-ins align pricing with the value you're actually delivering. Most members will pay more if the value is explicit.",
       timeframe: "Design within 2 weeks, launch within 1 month",
+      executionChecklist: [
+        "Define 2-3 pricing tiers (e.g. Base, Performance, Unlimited)",
+        "Add value to premium tiers: open gym, nutrition coaching, specialty classes",
+        "Present upgrade options to current members at their next check-in",
+        "Set a target: convert 20% of base members to a higher tier within 60 days",
+        "Track ARM weekly to measure impact",
+      ],
     });
   } else if (gymArm < 150) {
     recommendations.push({
@@ -925,6 +1000,13 @@ function generateStrategicBrief(
       interventionType: "Value-add services",
       crossfitContext: "Members who invest more engage more. A $200/month member who gets nutrition coaching and quarterly goal reviews is far stickier than a $120/month member who just shows up for WODs. Higher ARM actually improves retention.",
       timeframe: "Plan and pilot within 1 month",
+      executionChecklist: [
+        "Survey members: which add-on service would they value most?",
+        "Pilot a nutrition coaching add-on with 5-10 interested members",
+        "Create a specialty class series (Olympic lifting, gymnastics, etc.)",
+        "Offer quarterly goal-review sessions as a premium perk",
+        "Measure uptake rate and ARM impact monthly",
+      ],
     });
   }
 
@@ -944,6 +1026,13 @@ function generateStrategicBrief(
       interventionType: "Referral and acquisition programs",
       crossfitContext: "Your gym's retention is your competitive advantage for growth. When new members join a gym where people stay, they feel it. That stability is itself a marketing tool. Run a 'Bring Your Person' week — every member invites someone who would benefit from CrossFit.",
       timeframe: "Launch referral program within 2 weeks",
+      executionChecklist: [
+        "Launch a 'Bring Your Person' week — every member invites one guest",
+        "Create a referral reward (free month, gear credit, etc.)",
+        "Host one open community event per month (partner WOD, potluck, competition)",
+        "Post member transformation stories on social media weekly",
+        "Track referral source for every new signup",
+      ],
     });
   } else if (avgNetGrowth < -2) {
     const monthlyLoss = Math.abs(avgNetGrowth);
@@ -956,6 +1045,14 @@ function generateStrategicBrief(
       interventionType: "Retention emergency protocol",
       crossfitContext: "When a CrossFit gym is losing members, the instinct is to run promotions and discounts. This is the wrong move. Discounts attract price-sensitive members who churn even faster. Instead: fix the experience, then grow. Call every member who left in the last 90 days and ask one question: 'What could we have done differently?'",
       timeframe: "Start exit interviews this week",
+      executionChecklist: [
+        "Freeze all acquisition spending until churn is below 7%",
+        "Call every member who cancelled in the last 90 days",
+        "Ask one question: 'What could we have done differently?'",
+        "Identify the top 3 cancellation reasons and create a fix plan for each",
+        "Implement a 'save' conversation before processing any cancellation",
+        "Review coaching quality and class experience consistency",
+      ],
     });
   }
 
@@ -979,17 +1076,39 @@ function generateStrategicBrief(
     revenueOutlook = `Revenue is projected to decline ${Math.abs(expectedDelta).toFixed(1)}% to $${revenueScenario.expectedMrr.toLocaleString()}/month. Worst case: $${revenueScenario.worstCaseMrr.toLocaleString()}/month. Every month of decline makes the next month harder. Intervention now has the highest ROI.`;
   }
 
-  // Member alerts (top 5 at-risk)
-  const topAlerts = memberPredictions.members
+  const topAlerts: MemberAlertEnriched[] = memberPredictions.members
     .filter(m => m.churnProbability > 0.25)
     .slice(0, 5)
-    .map(m => ({
-      name: m.name,
-      probability: parseFloat((m.churnProbability * 100).toFixed(0)),
-      driver: m.primaryRiskDriver,
-      intervention: m.interventionDetail,
-      revenue: `$${m.monthlyRate}/mo`,
-    }));
+    .map(m => {
+      let suggestedAction: string;
+      if (m.lastContactDays === null && m.tenureDays <= 60) {
+        suggestedAction = "Text + personal goal check-in";
+      } else if (m.lastContactDays === null) {
+        suggestedAction = "Personal call from head coach";
+      } else if (m.lastContactDays > 30) {
+        suggestedAction = "Text check-in + invite to partner WOD";
+      } else if (m.tenureDays <= 30) {
+        suggestedAction = "1-on-1 intro session with assigned coach";
+      } else if (m.tenureDays <= 90) {
+        suggestedAction = "Set a 90-day skill milestone together";
+      } else {
+        suggestedAction = "Community re-engagement (invite to event or competition)";
+      }
+
+      return {
+        name: m.name,
+        memberId: m.memberId,
+        probability: parseFloat((m.churnProbability * 100).toFixed(0)),
+        driver: m.primaryRiskDriver,
+        intervention: m.interventionDetail,
+        revenue: `$${m.monthlyRate}/mo`,
+        tenureDays: m.tenureDays,
+        lastContactDays: m.lastContactDays,
+        outreachLogged: m.lastContactDays !== null,
+        suggestedAction,
+        engagementClass: m.engagementClass,
+      };
+    });
 
   // ROI projection
   const retainableMembers = memberPredictions.members.filter(m => m.churnProbability > 0.25 && m.churnProbability < 0.7);
@@ -1002,14 +1121,26 @@ function generateStrategicBrief(
     annualImpact: Math.round(preservedRevenue * 12),
   };
 
+  const revenueComparison: RevenueComparison = {
+    currentMrr: latestMrr,
+    expectedMrr: revenueScenario.expectedMrr,
+    upsideMrr: revenueScenario.upsideMrr,
+    downsideMrr: revenueScenario.worstCaseMrr,
+    expectedDeltaPct: latestMrr > 0 ? parseFloat(((revenueScenario.expectedMrr - latestMrr) / latestMrr * 100).toFixed(1)) : 0,
+    upsideDeltaPct: latestMrr > 0 ? parseFloat(((revenueScenario.upsideMrr - latestMrr) / latestMrr * 100).toFixed(1)) : 0,
+    downsideDeltaPct: latestMrr > 0 ? parseFloat(((revenueScenario.worstCaseMrr - latestMrr) / latestMrr * 100).toFixed(1)) : 0,
+  };
+
   return {
     generatedAt: now.toISOString(),
     executiveSummary,
     stabilityVerdict,
+    stabilityLevel,
     keyMetrics,
     recommendations,
     cohortAlert,
     revenueOutlook,
+    revenueComparison,
     memberAlerts: topAlerts,
     roiProjection,
   };
@@ -1049,10 +1180,12 @@ function getEmptyIntelligence(message: string): PredictiveIntelligence {
       generatedAt: new Date().toISOString(),
       executiveSummary: message,
       stabilityVerdict: message,
+      stabilityLevel: "fragile",
       keyMetrics: [],
       recommendations: [],
       cohortAlert: null,
       revenueOutlook: message,
+      revenueComparison: { currentMrr: 0, expectedMrr: 0, upsideMrr: 0, downsideMrr: 0, expectedDeltaPct: 0, upsideDeltaPct: 0, downsideDeltaPct: 0 },
       memberAlerts: [],
       roiProjection: { actionTaken: "N/A", membersRetained: 0, revenuePreserved: 0, annualImpact: 0 },
     },

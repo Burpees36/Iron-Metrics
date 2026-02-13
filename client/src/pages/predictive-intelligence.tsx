@@ -10,7 +10,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import {
   Brain, AlertTriangle, TrendingDown, TrendingUp, Users, DollarSign,
   Shield, ShieldAlert, ShieldCheck, Target, Zap, FileText, BarChart3,
-  ChevronRight, Clock, Minus, ArrowUp, ArrowDown,
+  ChevronRight, Clock, Minus, ArrowUp, ArrowDown, CheckCircle2, Circle,
+  MessageSquare, Phone, UserCheck, CalendarDays,
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -51,11 +52,21 @@ interface PredictiveIntelligence {
     generatedAt: string;
     executiveSummary: string;
     stabilityVerdict: string;
+    stabilityLevel: string;
     keyMetrics: { label: string; value: string; status: string }[];
     recommendations: BriefRecommendation[];
     cohortAlert: string | null;
     revenueOutlook: string;
-    memberAlerts: { name: string; probability: number; driver: string; intervention: string; revenue: string }[];
+    revenueComparison: {
+      currentMrr: number;
+      expectedMrr: number;
+      upsideMrr: number;
+      downsideMrr: number;
+      expectedDeltaPct: number;
+      upsideDeltaPct: number;
+      downsideDeltaPct: number;
+    };
+    memberAlerts: MemberAlertEnriched[];
     roiProjection: { actionTaken: string; membersRetained: number; revenuePreserved: number; annualImpact: number };
   };
 }
@@ -78,6 +89,20 @@ interface MemberPrediction {
   interventionUrgency: string;
   lastContactDays: number | null;
   isHighValue: boolean;
+}
+
+interface MemberAlertEnriched {
+  name: string;
+  memberId: string;
+  probability: number;
+  driver: string;
+  intervention: string;
+  revenue: string;
+  tenureDays: number;
+  lastContactDays: number | null;
+  outreachLogged: boolean;
+  suggestedAction: string;
+  engagementClass: string;
 }
 
 interface CohortBucket {
@@ -118,6 +143,7 @@ interface BriefRecommendation {
   interventionType: string;
   crossfitContext: string;
   timeframe: string;
+  executionChecklist: string[];
 }
 
 export default function PredictiveIntelligenceView({ gymId }: { gymId: string }) {
@@ -171,6 +197,168 @@ export default function PredictiveIntelligenceView({ gymId }: { gymId: string })
 }
 
 // ═══════════════════════════════════════════════════════════════
+// STABILITY VERDICT BAR
+// ═══════════════════════════════════════════════════════════════
+
+const stabilityConfig: Record<string, { label: string; color: string; bgColor: string; borderColor: string; barWidth: string; dotColor: string }> = {
+  strong: {
+    label: "Strong",
+    color: "text-emerald-700 dark:text-emerald-300",
+    bgColor: "bg-emerald-500/10",
+    borderColor: "border-emerald-500/30",
+    barWidth: "w-full",
+    dotColor: "bg-emerald-500",
+  },
+  moderate: {
+    label: "Moderate",
+    color: "text-amber-700 dark:text-amber-300",
+    bgColor: "bg-amber-500/10",
+    borderColor: "border-amber-500/30",
+    barWidth: "w-2/3",
+    dotColor: "bg-amber-500",
+  },
+  fragile: {
+    label: "Fragile",
+    color: "text-red-700 dark:text-red-300",
+    bgColor: "bg-red-500/10",
+    borderColor: "border-red-500/30",
+    barWidth: "w-1/3",
+    dotColor: "bg-red-500",
+  },
+};
+
+function StabilityVerdictBar({ level, verdict }: { level: string; verdict: string }) {
+  const config = stabilityConfig[level] || stabilityConfig.fragile;
+
+  return (
+    <Card className={`${config.borderColor}`} data-testid="card-stability-verdict">
+      <CardContent className="pt-5 pb-4 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className={`w-3 h-3 rounded-full ${config.dotColor} ring-4 ring-opacity-20 ${level === "strong" ? "ring-emerald-500" : level === "moderate" ? "ring-amber-500" : "ring-red-500"}`} />
+            <div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Stability Status</p>
+              <p className={`text-lg font-semibold tracking-tight ${config.color}`} data-testid="text-stability-level">{config.label}</p>
+            </div>
+          </div>
+          <Badge variant="outline" className={`${config.color} ${config.borderColor}`} data-testid="badge-stability-level">
+            <ShieldCheck className="w-3 h-3 mr-1" />
+            {config.label}
+          </Badge>
+        </div>
+
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">Stability Index</p>
+            <p className={`text-xs font-medium ${config.color}`}>{config.label}</p>
+          </div>
+          <div className="h-2 rounded-full bg-muted overflow-hidden" data-testid="bar-stability">
+            <div className={`h-full rounded-full transition-all duration-700 ${config.barWidth} ${config.dotColor}`} />
+          </div>
+          <div className="flex justify-between text-[10px] text-muted-foreground/60">
+            <span>Fragile</span>
+            <span>Moderate</span>
+            <span>Strong</span>
+          </div>
+        </div>
+
+        <p className="text-sm leading-relaxed text-muted-foreground" data-testid="text-stability-verdict">{verdict}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// REVENUE OUTLOOK BAR VISUAL
+// ═══════════════════════════════════════════════════════════════
+
+function RevenueOutlookVisual({ comparison, outlook }: {
+  comparison: PredictiveIntelligence["strategicBrief"]["revenueComparison"];
+  outlook: string;
+}) {
+  const maxVal = Math.max(comparison.currentMrr, comparison.expectedMrr, comparison.upsideMrr, comparison.downsideMrr, 1);
+
+  const bars = [
+    {
+      label: "Current",
+      value: comparison.currentMrr,
+      pct: (comparison.currentMrr / maxVal) * 100,
+      delta: null as number | null,
+      color: "bg-muted-foreground/40",
+      textColor: "text-muted-foreground",
+    },
+    {
+      label: "Expected",
+      value: comparison.expectedMrr,
+      pct: (comparison.expectedMrr / maxVal) * 100,
+      delta: comparison.expectedDeltaPct,
+      color: "bg-blue-500 dark:bg-blue-400",
+      textColor: "text-blue-700 dark:text-blue-300",
+    },
+    {
+      label: "Upside",
+      value: comparison.upsideMrr,
+      pct: (comparison.upsideMrr / maxVal) * 100,
+      delta: comparison.upsideDeltaPct,
+      color: "bg-emerald-500 dark:bg-emerald-400",
+      textColor: "text-emerald-700 dark:text-emerald-300",
+    },
+    {
+      label: "Downside",
+      value: comparison.downsideMrr,
+      pct: (comparison.downsideMrr / maxVal) * 100,
+      delta: comparison.downsideDeltaPct,
+      color: "bg-red-500/70 dark:bg-red-400/70",
+      textColor: "text-red-700 dark:text-red-300",
+    },
+  ];
+
+  return (
+    <Card data-testid="card-revenue-outlook">
+      <CardContent className="pt-5 space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Revenue Outlook</p>
+          {comparison.upsideDeltaPct > 0 && (
+            <Badge variant="outline" className="text-xs text-emerald-700 dark:text-emerald-300 border-emerald-500/30" data-testid="badge-upside-delta">
+              <ArrowUp className="w-3 h-3 mr-1" />
+              +{comparison.upsideDeltaPct}% upside potential
+            </Badge>
+          )}
+        </div>
+
+        <div className="space-y-3" data-testid="bars-revenue-comparison">
+          {bars.map((bar) => (
+            <div key={bar.label} className="space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium">{bar.label}</span>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs font-mono font-semibold ${bar.textColor}`}>
+                    ${bar.value.toLocaleString()}
+                  </span>
+                  {bar.delta !== null && (
+                    <span className={`text-[10px] font-medium ${bar.delta >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                      {bar.delta >= 0 ? "+" : ""}{bar.delta}%
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="h-2.5 rounded-full bg-muted overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${bar.color}`}
+                  style={{ width: `${Math.max(bar.pct, 2)}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <p className="text-sm leading-relaxed text-muted-foreground pt-2 border-t" data-testid="text-revenue-outlook">{outlook}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
 // STRATEGIC BRIEF
 // ═══════════════════════════════════════════════════════════════
 
@@ -192,13 +380,12 @@ function StrategicBriefView({ brief }: { brief: PredictiveIntelligence["strategi
         </Badge>
       </div>
 
+      <StabilityVerdictBar level={brief.stabilityLevel} verdict={brief.stabilityVerdict} />
+
       <Card data-testid="card-executive-summary">
-        <CardContent className="pt-6 space-y-4">
+        <CardContent className="pt-6">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">Executive Summary</p>
           <p className="text-sm leading-relaxed">{brief.executiveSummary}</p>
-          <div className="border-t pt-4">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Stability Verdict</p>
-            <p className="text-sm leading-relaxed">{brief.stabilityVerdict}</p>
-          </div>
         </CardContent>
       </Card>
 
@@ -246,6 +433,24 @@ function StrategicBriefView({ brief }: { brief: PredictiveIntelligence["strategi
               </div>
               <p className="text-sm font-medium">{rec.headline}</p>
               <p className="text-sm text-muted-foreground leading-relaxed">{rec.detail}</p>
+
+              {rec.executionChecklist && rec.executionChecklist.length > 0 && (
+                <div className="pt-3 border-t space-y-2" data-testid={`checklist-recommendation-${i}`}>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Execution Checklist
+                  </p>
+                  <div className="space-y-1.5 pl-1">
+                    {rec.executionChecklist.map((item, j) => (
+                      <div key={j} className="flex items-start gap-2 group" data-testid={`checklist-item-${i}-${j}`}>
+                        <Circle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-muted-foreground/50" />
+                        <span className="text-xs leading-relaxed text-muted-foreground">{item}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="grid sm:grid-cols-2 gap-3 pt-2 border-t">
                 <div>
                   <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400 mb-1">Revenue Impact</p>
@@ -265,30 +470,19 @@ function StrategicBriefView({ brief }: { brief: PredictiveIntelligence["strategi
         ))}
       </div>
 
-      <Card data-testid="card-revenue-outlook">
-        <CardContent className="pt-5 space-y-2">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Revenue Outlook</p>
-          <p className="text-sm leading-relaxed">{brief.revenueOutlook}</p>
-        </CardContent>
-      </Card>
+      <RevenueOutlookVisual comparison={brief.revenueComparison} outlook={brief.revenueOutlook} />
 
       {brief.memberAlerts.length > 0 && (
         <div className="space-y-3" data-testid="section-member-alerts">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Priority Member Alerts</h3>
-          <div className="grid gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Priority Member Alerts</h3>
+            <Badge variant="outline" className="text-xs text-red-600 dark:text-red-400 border-red-500/30">
+              {brief.memberAlerts.length} members need attention
+            </Badge>
+          </div>
+          <div className="grid gap-3">
             {brief.memberAlerts.map((alert, i) => (
-              <Card key={i} data-testid={`card-member-alert-${i}`}>
-                <CardContent className="py-3 px-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-medium">{alert.name}</span>
-                      <Badge variant="destructive" className="text-xs">{alert.probability}% risk</Badge>
-                      <span className="text-xs text-muted-foreground">{alert.revenue}</span>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{alert.driver}</p>
-                </CardContent>
-              </Card>
+              <MemberAlertCard key={alert.memberId} alert={alert} index={i} />
             ))}
           </div>
         </div>
@@ -314,6 +508,81 @@ function StrategicBriefView({ brief }: { brief: PredictiveIntelligence["strategi
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ENRICHED MEMBER ALERT CARD
+// ═══════════════════════════════════════════════════════════════
+
+function MemberAlertCard({ alert, index }: { alert: MemberAlertEnriched; index: number }) {
+  const classColors: Record<string, string> = {
+    core: "text-emerald-600 dark:text-emerald-400",
+    drifter: "text-amber-600 dark:text-amber-400",
+    "at-risk": "text-orange-600 dark:text-orange-400",
+    ghost: "text-red-600 dark:text-red-400",
+  };
+
+  const formatTenure = (days: number): string => {
+    if (days < 30) return `${days} days`;
+    const months = Math.floor(days / 30.44);
+    return `${months} month${months !== 1 ? "s" : ""}`;
+  };
+
+  return (
+    <Card data-testid={`card-member-alert-${index}`}>
+      <CardContent className="py-4 px-4 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold" data-testid={`text-alert-name-${index}`}>{alert.name}</span>
+            <Badge variant="destructive" className="text-xs" data-testid={`badge-alert-risk-${index}`}>{alert.probability}% risk</Badge>
+            <Badge variant="outline" className={`text-xs capitalize ${classColors[alert.engagementClass] || ""}`}>
+              {alert.engagementClass}
+            </Badge>
+          </div>
+          <span className="text-xs font-medium text-muted-foreground" data-testid={`text-alert-revenue-${index}`}>{alert.revenue}</span>
+        </div>
+
+        <p className="text-xs text-muted-foreground" data-testid={`text-alert-driver-${index}`}>{alert.driver}</p>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t">
+          <div className="flex items-center gap-2" data-testid={`stat-tenure-${index}`}>
+            <CalendarDays className="w-3.5 h-3.5 text-muted-foreground/60 flex-shrink-0" />
+            <div>
+              <p className="text-[10px] text-muted-foreground uppercase">Tenure</p>
+              <p className="text-xs font-medium">{formatTenure(alert.tenureDays)}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2" data-testid={`stat-last-contact-${index}`}>
+            <Clock className="w-3.5 h-3.5 text-muted-foreground/60 flex-shrink-0" />
+            <div>
+              <p className="text-[10px] text-muted-foreground uppercase">Last Contact</p>
+              <p className="text-xs font-medium">{alert.lastContactDays !== null ? `${alert.lastContactDays} days ago` : "Never"}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2" data-testid={`stat-outreach-${index}`}>
+            {alert.outreachLogged ? (
+              <UserCheck className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+            ) : (
+              <MessageSquare className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
+            )}
+            <div>
+              <p className="text-[10px] text-muted-foreground uppercase">Outreach</p>
+              <p className={`text-xs font-medium ${alert.outreachLogged ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                {alert.outreachLogged ? "Yes" : "No"}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2" data-testid={`stat-suggested-action-${index}`}>
+            <Phone className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+            <div>
+              <p className="text-[10px] text-muted-foreground uppercase">Suggested</p>
+              <p className="text-xs font-medium text-blue-700 dark:text-blue-300">{alert.suggestedAction}</p>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -540,86 +809,86 @@ function CohortView({ cohorts: data }: { cohorts: PredictiveIntelligence["cohort
         </Card>
       </div>
 
-      {data.retentionWindows.filter(w => w.lostCount > 0).length > 0 && (
-        <div className="space-y-3" data-testid="section-retention-windows">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Retention Window Analysis</h3>
-          {data.retentionWindows.filter(w => w.lostCount > 0).map((w, i) => (
-            <Card key={i} data-testid={`card-window-${i}`}>
-              <CardContent className="pt-4 pb-3">
-                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="outline">{w.window}</Badge>
-                    <span className="text-sm text-red-600 dark:text-red-400 font-medium">{w.lostCount} lost ({w.lostPct}%)</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">${w.revenueLost.toLocaleString()}/mo lost</span>
-                </div>
-                {w.insight && <p className="text-xs text-muted-foreground leading-relaxed italic">{w.insight}</p>}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+      <Card data-testid="chart-cohort-survival">
+        <CardContent className="pt-5">
+          <p className="text-sm font-medium mb-4">Cohort Survival Rates</p>
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={data.cohorts}>
+              <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+              <XAxis dataKey="cohortLabel" tick={{ fontSize: 10 }} />
+              <YAxis domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11 }} />
+              <RechartsTooltip
+                formatter={(v: number, name: string) => {
+                  if (name === "survivalRate") return [`${v}%`, "Survival Rate"];
+                  return [v, name];
+                }}
+                contentStyle={{ fontSize: "12px", borderRadius: "6px" }}
+              />
+              <Bar dataKey="survivalRate" fill="hsl(210, 60%, 50%)" radius={[4, 4, 0, 0]} name="Survival Rate" />
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        {data.insights.length > 0 && (
-          <Card data-testid="card-cohort-insights">
-            <CardContent className="pt-5 space-y-3">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Cohort Insights</p>
-              {data.insights.map((ins, i) => (
-                <p key={i} className="text-sm leading-relaxed">{ins}</p>
-              ))}
-            </CardContent>
-          </Card>
-        )}
-
-        {data.crossfitInsights.length > 0 && (
-          <Card data-testid="card-crossfit-insights">
-            <CardContent className="pt-5 space-y-3">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">CrossFit-Specific Intelligence</p>
-              {data.crossfitInsights.map((ins, i) => (
-                <p key={i} className="text-sm text-muted-foreground leading-relaxed italic">{ins}</p>
-              ))}
-            </CardContent>
-          </Card>
-        )}
+      <div className="rounded-md border overflow-x-auto" data-testid="table-cohorts">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Cohort</TableHead>
+              <TableHead className="text-right">Joined</TableHead>
+              <TableHead className="text-right">Active</TableHead>
+              <TableHead className="text-right">Survival</TableHead>
+              <TableHead className="text-right">Avg Rate</TableHead>
+              <TableHead className="text-right">Revenue Retained</TableHead>
+              <TableHead className="text-right">Revenue Lost</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data.cohorts.map((c) => (
+              <TableRow key={c.cohortMonth}>
+                <TableCell className="font-medium">{c.cohortLabel}</TableCell>
+                <TableCell className="text-right">{c.totalJoined}</TableCell>
+                <TableCell className="text-right">{c.stillActive}</TableCell>
+                <TableCell className="text-right">
+                  <span className={`font-medium ${c.survivalRate >= 70 ? "text-emerald-600 dark:text-emerald-400" : c.survivalRate >= 50 ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"}`}>
+                    {c.survivalRate}%
+                  </span>
+                </TableCell>
+                <TableCell className="text-right text-sm">${c.avgMonthlyRate}</TableCell>
+                <TableCell className="text-right text-sm text-emerald-600 dark:text-emerald-400">${c.revenueRetained.toLocaleString()}</TableCell>
+                <TableCell className="text-right text-sm text-red-600 dark:text-red-400">${c.revenueLost.toLocaleString()}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </div>
 
-      {data.cohorts.length > 0 && (
-        <div data-testid="table-cohorts">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">Cohort Performance</h3>
-          <div className="rounded-md border overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Cohort</TableHead>
-                  <TableHead className="text-right">Joined</TableHead>
-                  <TableHead className="text-right">Active</TableHead>
-                  <TableHead className="text-right">Survival</TableHead>
-                  <TableHead className="text-right">Avg Rate</TableHead>
-                  <TableHead className="text-right">Revenue Retained</TableHead>
-                  <TableHead className="text-right">Revenue Lost</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.cohorts.slice(-12).map((c) => (
-                  <TableRow key={c.cohortMonth}>
-                    <TableCell className="text-sm font-medium">{c.cohortLabel}</TableCell>
-                    <TableCell className="text-right text-sm">{c.totalJoined}</TableCell>
-                    <TableCell className="text-right text-sm">{c.stillActive}</TableCell>
-                    <TableCell className="text-right">
-                      <span className={`text-sm font-medium ${c.survivalRate >= 70 ? "text-emerald-600 dark:text-emerald-400" : c.survivalRate >= 50 ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"}`}>
-                        {c.survivalRate}%
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right text-sm">${c.avgMonthlyRate}</TableCell>
-                    <TableCell className="text-right text-sm text-emerald-600 dark:text-emerald-400">${c.revenueRetained.toLocaleString()}</TableCell>
-                    <TableCell className="text-right text-sm text-red-600 dark:text-red-400">${c.revenueLost.toLocaleString()}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
+      {data.retentionWindows.length > 0 && (
+        <Card data-testid="card-retention-insights">
+          <CardContent className="pt-5 space-y-3">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Retention Window Insights</p>
+            {data.retentionWindows.filter(w => w.lostCount > 0).map((w, i) => (
+              <div key={i} className="border-b last:border-0 pb-3 last:pb-0">
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <Badge variant="outline" className="text-xs">{w.window}</Badge>
+                  <span className="text-xs text-red-600 dark:text-red-400">{w.lostCount} lost ({w.lostPct.toFixed(0)}%)</span>
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">{w.insight}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {data.crossfitInsights.length > 0 && (
+        <Card data-testid="card-crossfit-insights">
+          <CardContent className="pt-5 space-y-3">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">CrossFit-Specific Insights</p>
+            {data.crossfitInsights.map((ins, i) => (
+              <p key={i} className="text-sm leading-relaxed">{ins}</p>
+            ))}
+          </CardContent>
+        </Card>
       )}
     </div>
   );
