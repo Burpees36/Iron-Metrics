@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes rsi-pulse {
+  0%, 100% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  50% { opacity: 0.5; transform: translate(-50%, 0) scale(1.8); }
+}
+
 /* LIGHT MODE — Dark steel / charcoal + clean white + muted deep blue */
 :root {
   --button-outline: rgba(0,0,0, .10);

@@ -240,15 +240,7 @@ function ReportView({ gymId }: { gymId: string }) {
       ) : (
         <>
           <div className="grid sm:grid-cols-3 lg:grid-cols-5 gap-4">
-            <ScoreCard
-              icon={Gauge}
-              label="RSI"
-              fullName="Retention Stability Index"
-              value={`${data.metrics.rsi}`}
-              suffix="/100"
-              status={data.metrics.rsi >= 80 ? "good" : data.metrics.rsi >= 60 ? "moderate" : "risk"}
-              testId="metric-rsi"
-            />
+            <RSIDial value={data.metrics.rsi} testId="metric-rsi" />
             <ScoreCard
               icon={TrendingDown}
               label="Churn"
@@ -303,6 +295,91 @@ function ReportView({ gymId }: { gymId: string }) {
         </>
       )}
     </div>
+  );
+}
+
+function RSIDial({ value, testId }: { value: number; testId: string }) {
+  const radius = 40;
+  const strokeWidth = 6;
+  const center = 50;
+  const circumference = 2 * Math.PI * radius;
+  const startAngle = 135;
+  const totalArc = 270;
+  const arcLength = (totalArc / 360) * circumference;
+  const filledLength = (value / 100) * arcLength;
+
+  const color = value >= 80
+    ? { stroke: "#10b981", glow: "rgba(16, 185, 129, 0.25)", label: "Stable" }
+    : value >= 60
+      ? { stroke: "#f59e0b", glow: "rgba(245, 158, 11, 0.25)", label: "Moderate" }
+      : { stroke: "#ef4444", glow: "rgba(239, 68, 68, 0.25)", label: "Unstable" };
+
+  return (
+    <Card data-testid={testId}>
+      <CardContent className="p-5 flex flex-col items-center justify-center space-y-1">
+        <div className="relative w-[100px] h-[85px]">
+          <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
+            <circle
+              cx={center}
+              cy={center}
+              r={radius}
+              fill="none"
+              stroke="hsl(var(--muted))"
+              strokeWidth={strokeWidth}
+              strokeLinecap="round"
+              strokeDasharray={`${arcLength} ${circumference - arcLength}`}
+              strokeDashoffset={-(circumference - arcLength) / 2 - ((360 - totalArc) / 360) * circumference / 2}
+              transform={`rotate(${startAngle} ${center} ${center})`}
+            />
+            <circle
+              cx={center}
+              cy={center}
+              r={radius}
+              fill="none"
+              stroke={color.stroke}
+              strokeWidth={strokeWidth}
+              strokeLinecap="round"
+              strokeDasharray={`${filledLength} ${circumference - filledLength}`}
+              strokeDashoffset={-(circumference - arcLength) / 2 - ((360 - totalArc) / 360) * circumference / 2}
+              transform={`rotate(${startAngle} ${center} ${center})`}
+              style={{ filter: `drop-shadow(0 0 4px ${color.glow})`, transition: "stroke-dasharray 0.8s ease" }}
+            />
+            <text
+              x={center}
+              y={center - 2}
+              textAnchor="middle"
+              dominantBaseline="central"
+              className="fill-foreground"
+              style={{ fontSize: "18px", fontWeight: 700, fontFamily: "var(--font-mono, monospace)" }}
+            >
+              {value}
+            </text>
+            <text
+              x={center}
+              y={center + 14}
+              textAnchor="middle"
+              dominantBaseline="central"
+              className="fill-muted-foreground"
+              style={{ fontSize: "7px", fontWeight: 500 }}
+            >
+              / 100
+            </text>
+          </svg>
+          <div
+            className="absolute -top-1 left-1/2 w-1.5 h-1.5 rounded-full"
+            style={{
+              backgroundColor: color.stroke,
+              boxShadow: `0 0 6px 2px ${color.glow}`,
+              animation: "rsi-pulse 2.5s ease-in-out infinite",
+            }}
+          />
+        </div>
+        <div className="text-center">
+          <p className="text-xs font-medium text-muted-foreground">RSI</p>
+          <p className="text-[10px] text-muted-foreground/70">Retention Stability Index</p>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
