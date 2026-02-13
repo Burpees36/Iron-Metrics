@@ -158,8 +158,7 @@ export default function LandingPage() {
                 </div>
                 <h3 className="font-semibold text-sm">Every Metric, Translated</h3>
                 <p className="text-muted-foreground text-sm leading-relaxed">
-                  Value. Target. 90-day trend. Interpretation. Recommended action.
-                  If it does not drive action, it is not shown.
+                  No raw numbers. No guessing. If it doesn't drive action, it doesn't exist.
                 </p>
               </CardContent>
             </Card>
