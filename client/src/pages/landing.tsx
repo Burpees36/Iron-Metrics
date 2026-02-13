@@ -31,7 +31,7 @@ const modules = [
     icon: Radar,
     title: "Member Risk Radar",
     description:
-      "Predictive early-warning system. Flags members by risk tier with intervention window recommendations and outreach priority. Proactive, not reactive.",
+      "See how small retention improvements unlock real revenue. Make stability measurable.",
   },
   {
     icon: TrendingUp,
