@@ -92,7 +92,7 @@ export default function LandingPage() {
                   </Button>
                 </a>
               </div>
-              <p className="text-muted-foreground text-left mt-[4px] mb-[4px] text-[13px] ml-[13px] mr-[13px]">Stable gyms build 
+              <p className="text-muted-foreground ml-[0px] mr-[0px] mt-[0px] mb-[0px] text-left text-[13px] pt-[6px] pb-[6px]">Stable gyms build 
               stronger communities</p>
             </div>
 
