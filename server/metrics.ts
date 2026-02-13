@@ -388,22 +388,120 @@ export function generateMetricReports(metrics: {
     impact: netGrowth < 0
       ? `Losing ${Math.abs(netGrowth)} members/month compounds to significant revenue erosion`
       : netGrowth === 0
-        ? "Flat growth. Acquisition is matching attrition."
+        ? "No forward momentum. Every month flat is a month without compounding."
         : `+${netGrowth} members adds ~$${Math.round(netGrowth * metrics.arm).toLocaleString()}/mo`,
     meaning: netGrowth > 0
-      ? "Your gym is growing. New members are outpacing cancellations."
+      ? "Your gym is growing. New members are outpacing cancellations. Momentum is building."
       : netGrowth === 0
-        ? "Your roster is flat. Acquisition exactly offsets churn."
-        : "Your roster is shrinking. Cancellations are outpacing new sign-ups.",
-    whyItMatters: "Net growth is the clearest signal of roster momentum. Negative growth indicates a systemic problem that compounds monthly. Positive growth builds financial resilience.",
+        ? "Stable roster — but no forward momentum. Acquisition is matching attrition exactly."
+        : "Your roster is contracting. Every month without correction accelerates the decline.",
+    whyItMatters: "Net growth is the clearest signal of roster momentum. Negative growth compounds monthly — it doesn't just stall revenue, it erodes community. Positive growth builds financial resilience and culture simultaneously.",
     action: netGrowth < 0
       ? "Address retention first before increasing acquisition spend. Reducing churn by 1-2% is more cost-effective than acquiring replacement members."
       : netGrowth === 0
-        ? "Evaluate whether your acquisition channels are performing. Consider member referral incentives to break through the plateau."
+        ? "Flat growth is friction, not stability. Evaluate acquisition channels and consider member referral incentives to break through the plateau."
         : "Sustain current momentum. Ensure new members are well-onboarded to prevent growth from masking rising churn.",
     trendDirection: membersTrend.direction,
     trendValue: membersTrend.value,
   });
 
   return reports;
+}
+
+export interface Forecast {
+  nextMonthMrr: number;
+  mrrChange: number;
+  churnTrajectory: string;
+  projectedChurn: number;
+  ifNothingChanges: {
+    mrrIn3Months: number;
+    membersIn3Months: number;
+    revenueAtRisk: number;
+  };
+  outlook: string;
+}
+
+export function generateForecast(metricsHistory: {
+  activeMembers: number;
+  churnRate: string | number;
+  mrr: string | number;
+  arm: string | number;
+  newMembers: number;
+  cancels: number;
+}[]): Forecast {
+  const current = metricsHistory[0];
+  if (!current) {
+    return {
+      nextMonthMrr: 0,
+      mrrChange: 0,
+      churnTrajectory: "Insufficient data",
+      projectedChurn: 0,
+      ifNothingChanges: { mrrIn3Months: 0, membersIn3Months: 0, revenueAtRisk: 0 },
+      outlook: "Not enough data to project.",
+    };
+  }
+
+  const churnRate = Number(current.churnRate);
+  const mrr = Number(current.mrr);
+  const arm = Number(current.arm);
+  const members = current.activeMembers;
+  const netGrowth = current.newMembers - current.cancels;
+
+  const projectedMembers = Math.max(0, members + netGrowth);
+  const projectedMrr = projectedMembers * arm;
+  const mrrChange = projectedMrr - mrr;
+
+  let churnTrajectory: string;
+  let projectedChurn = churnRate;
+  if (metricsHistory.length >= 3) {
+    const churnValues = metricsHistory.slice(0, 3).map((m) => Number(m.churnRate));
+    const churnTrend = churnValues[0] - churnValues[2];
+    if (churnTrend > 1) {
+      churnTrajectory = "Rising — churn is accelerating";
+      projectedChurn = Math.min(churnRate + (churnTrend / 2), 100);
+    } else if (churnTrend < -1) {
+      churnTrajectory = "Declining — retention is improving";
+      projectedChurn = Math.max(churnRate + (churnTrend / 2), 0);
+    } else {
+      churnTrajectory = "Holding steady";
+      projectedChurn = churnRate;
+    }
+  } else {
+    churnTrajectory = "Insufficient history for trend";
+  }
+
+  const monthlyChurnDec = projectedChurn / 100;
+  let m3Members = members;
+  let m3Mrr = mrr;
+  for (let i = 0; i < 3; i++) {
+    const lost = Math.round(m3Members * monthlyChurnDec);
+    const gained = current.newMembers;
+    m3Members = Math.max(0, m3Members - lost + gained);
+    m3Mrr = m3Members * arm;
+  }
+  const revenueAtRisk = Math.max(0, mrr - m3Mrr) * 3;
+
+  let outlook: string;
+  if (churnRate <= 3 && netGrowth > 0) {
+    outlook = "Strong position. Revenue is predictable and growing. Maintain current systems.";
+  } else if (churnRate <= 5 && netGrowth >= 0) {
+    outlook = "Stable but watchful. No immediate risk, but forward momentum is limited.";
+  } else if (churnRate <= 7) {
+    outlook = "Attention needed. Churn is eroding gains. Retention interventions will have the highest ROI.";
+  } else {
+    outlook = "Urgent action required. Current trajectory leads to meaningful revenue loss within 90 days.";
+  }
+
+  return {
+    nextMonthMrr: Math.round(projectedMrr),
+    mrrChange: Math.round(mrrChange),
+    churnTrajectory,
+    projectedChurn: parseFloat(projectedChurn.toFixed(1)),
+    ifNothingChanges: {
+      mrrIn3Months: Math.round(m3Mrr),
+      membersIn3Months: m3Members,
+      revenueAtRisk: Math.round(revenueAtRisk),
+    },
+    outlook,
+  };
 }

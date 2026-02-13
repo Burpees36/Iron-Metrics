@@ -1,8 +1,9 @@
 import {
-  gyms, members, gymMonthlyMetrics,
+  gyms, members, gymMonthlyMetrics, memberContacts,
   type Gym, type InsertGym,
   type Member, type InsertMember,
   type GymMonthlyMetrics, type InsertGymMonthlyMetrics,
+  type MemberContact, type InsertMemberContact,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, sql, gte, lte, desc } from "drizzle-orm";
@@ -18,6 +19,9 @@ export interface IStorage {
   getNewMembers(gymId: string, monthStart: string, monthEnd: string): Promise<Member[]>;
   getCancels(gymId: string, monthStart: string, monthEnd: string): Promise<Member[]>;
   getActiveStartOfMonth(gymId: string, monthStart: string): Promise<number>;
+
+  logContact(contact: InsertMemberContact): Promise<MemberContact>;
+  getLatestContacts(gymId: string): Promise<MemberContact[]>;
 
   upsertMonthlyMetrics(metrics: InsertGymMonthlyMetrics): Promise<GymMonthlyMetrics>;
   getMonthlyMetrics(gymId: string, monthStart: string): Promise<GymMonthlyMetrics | undefined>;
@@ -115,6 +119,19 @@ export class DatabaseStorage implements IStorage {
 
     const active = await this.getActiveMembers(gymId, dayBeforeStr);
     return active.length;
+  }
+
+  async logContact(contact: InsertMemberContact): Promise<MemberContact> {
+    const [created] = await db.insert(memberContacts).values(contact).returning();
+    return created;
+  }
+
+  async getLatestContacts(gymId: string): Promise<MemberContact[]> {
+    return db
+      .select()
+      .from(memberContacts)
+      .where(eq(memberContacts.gymId, gymId))
+      .orderBy(desc(memberContacts.contactedAt));
   }
 
   async upsertMonthlyMetrics(metrics: InsertGymMonthlyMetrics): Promise<GymMonthlyMetrics> {

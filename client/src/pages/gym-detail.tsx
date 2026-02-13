@@ -40,6 +40,8 @@ import {
   ArrowDown,
   Minus,
   AlertTriangle,
+  Phone,
+  Eye,
 } from "lucide-react";
 import { useState } from "react";
 import {
@@ -73,6 +75,20 @@ interface AtRiskMember {
   joinDate: string;
   monthlyRate: string;
   tenureDays: number;
+  lastContacted: string | null;
+}
+
+interface Forecast {
+  nextMonthMrr: number;
+  mrrChange: number;
+  churnTrajectory: string;
+  projectedChurn: number;
+  ifNothingChanges: {
+    mrrIn3Months: number;
+    membersIn3Months: number;
+    revenueAtRisk: number;
+  };
+  outlook: string;
 }
 
 export default function GymDetail() {
@@ -178,7 +194,7 @@ function ReportView({ gymId }: { gymId: string }) {
     year: "numeric",
   });
 
-  const { data, isLoading } = useQuery<{ metrics: GymMonthlyMetrics; reports: MetricReport[]; atRiskMembers: AtRiskMember[] } | null>({
+  const { data, isLoading } = useQuery<{ metrics: GymMonthlyMetrics; reports: MetricReport[]; atRiskMembers: AtRiskMember[]; forecast: Forecast } | null>({
     queryKey: ["/api/gyms", gymId, "report", monthDate],
     queryFn: async () => {
       const res = await fetch(`/api/gyms/${gymId}/report?month=${monthDate}`, {
@@ -288,10 +304,14 @@ function ReportView({ gymId }: { gymId: string }) {
               <ReportCard
                 key={i}
                 report={report}
+                gymId={gymId}
                 atRiskMembers={report.metric === "Member Risk Radar" ? data.atRiskMembers : undefined}
+                monthDate={monthDate}
               />
             ))}
           </div>
+
+          {data.forecast && <ForecastSection forecast={data.forecast} />}
         </>
       )}
     </div>
@@ -476,7 +496,7 @@ function TrendIndicator({ direction, value }: { direction: MetricReport["trendDi
   );
 }
 
-function ReportCard({ report, atRiskMembers }: { report: MetricReport; atRiskMembers?: AtRiskMember[] }) {
+function ReportCard({ report, gymId, atRiskMembers, monthDate }: { report: MetricReport; gymId: string; atRiskMembers?: AtRiskMember[]; monthDate: string }) {
   const isHighRisk = report.metric === "Monthly Churn" && parseFloat(report.current) > 7;
   const isRiskRadar = report.metric === "Member Risk Radar";
 
@@ -523,40 +543,99 @@ function ReportCard({ report, atRiskMembers }: { report: MetricReport; atRiskMem
           <div className="border-t pt-4 space-y-3" data-testid="section-flagged-members">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Flagged Members</p>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              {atRiskMembers.map((m) => {
-                const { label, description } = getRiskReason(m.tenureDays);
-                return (
-                  <div
-                    key={m.id}
-                    className="flex items-center justify-between gap-2 rounded-md border px-3 py-2"
-                    data-testid={`row-risk-member-${m.id}`}
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{m.name}</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {new Date(m.joinDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                      </p>
-                    </div>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div>
-                          <Badge variant="outline" className="text-[10px] cursor-default whitespace-nowrap">
-                            {label}
-                          </Badge>
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="max-w-[220px] text-xs">
-                        {description}
-                      </TooltipContent>
-                    </Tooltip>
-                  </div>
-                );
-              })}
+              {atRiskMembers.map((m) => (
+                <FlaggedMemberCard key={m.id} member={m} gymId={gymId} monthDate={monthDate} />
+              ))}
             </div>
           </div>
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function FlaggedMemberCard({ member: m, gymId, monthDate }: { member: AtRiskMember; gymId: string; monthDate: string }) {
+  const { toast } = useToast();
+  const { label, description } = getRiskReason(m.tenureDays);
+
+  const contactMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/gyms/${gymId}/members/${m.id}/contact`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ note: "Outreach logged from risk radar" }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Contact logged", description: `Outreach to ${m.name} recorded.` });
+      queryClient.invalidateQueries({ queryKey: ["/api/gyms", gymId, "report", monthDate] });
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        window.location.href = "/api/login";
+        return;
+      }
+      toast({ title: "Error", description: "Failed to log contact. Try again.", variant: "destructive" });
+    },
+  });
+
+  const contactedRecently = m.lastContacted
+    ? (Date.now() - new Date(m.lastContacted).getTime()) < 7 * 24 * 60 * 60 * 1000
+    : false;
+
+  return (
+    <div
+      className="flex items-center justify-between gap-2 rounded-md border px-3 py-2"
+      data-testid={`row-risk-member-${m.id}`}
+    >
+      <div className="min-w-0">
+        <p className="text-sm font-medium truncate">{m.name}</p>
+        <p className="text-[11px] text-muted-foreground">
+          {new Date(m.joinDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+          {m.lastContacted && (
+            <span className="ml-1 text-emerald-600 dark:text-emerald-400">
+              {" "}· Contacted {new Date(m.lastContacted).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+            </span>
+          )}
+        </p>
+      </div>
+      <div className="flex items-center gap-1">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div>
+              <Badge variant="outline" className="text-[10px] cursor-default whitespace-nowrap">
+                {label}
+              </Badge>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-[220px] text-xs">
+            {description}
+          </TooltipContent>
+        </Tooltip>
+        {!contactedRecently && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6"
+                disabled={contactMutation.isPending}
+                onClick={() => contactMutation.mutate()}
+                data-testid={`button-contact-${m.id}`}
+              >
+                <Phone className="w-3 h-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs">
+              Log outreach
+            </TooltipContent>
+          </Tooltip>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -576,6 +655,59 @@ function RiskTierBadge({ current }: { current: string }) {
     <Badge variant={variant} className="text-xs">
       {tier} Risk
     </Badge>
+  );
+}
+
+function ForecastSection({ forecast }: { forecast: Forecast }) {
+  const mrrDelta = forecast.mrrChange;
+  const isPositive = mrrDelta >= 0;
+  const revenueAtRisk = forecast.ifNothingChanges.revenueAtRisk;
+
+  return (
+    <Card data-testid="section-forecast">
+      <CardContent className="p-6 space-y-5">
+        <div className="flex items-center gap-2">
+          <Eye className="w-4 h-4 text-muted-foreground" />
+          <h3 className="font-semibold text-sm">What Happens Next</h3>
+        </div>
+
+        <div className="grid sm:grid-cols-3 gap-4">
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Projected MRR</p>
+            <p className="text-lg font-bold font-mono" data-testid="text-forecast-mrr">
+              ${forecast.nextMonthMrr.toLocaleString()}
+            </p>
+            <p className={`text-xs font-mono ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"}`}>
+              {isPositive ? "+" : ""}{mrrDelta.toLocaleString()} vs. current
+            </p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Churn Trajectory</p>
+            <p className="text-sm font-medium" data-testid="text-forecast-churn-trajectory">{forecast.churnTrajectory}</p>
+            <p className="text-xs text-muted-foreground font-mono">Projected: {forecast.projectedChurn}%</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">90-Day Revenue at Risk</p>
+            <p className={`text-lg font-bold font-mono ${revenueAtRisk > 0 ? "text-red-500 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`} data-testid="text-forecast-risk">
+              ${revenueAtRisk.toLocaleString()}
+            </p>
+          </div>
+        </div>
+
+        <div className="p-3 rounded-md bg-muted/50 space-y-2">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">If Nothing Changes (3 months)</p>
+          <div className="flex flex-wrap gap-6 text-sm font-mono">
+            <span>MRR: <span className="font-bold">${forecast.ifNothingChanges.mrrIn3Months.toLocaleString()}</span></span>
+            <span>Members: <span className="font-bold">{forecast.ifNothingChanges.membersIn3Months}</span></span>
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Outlook</p>
+          <p className="text-sm leading-relaxed" data-testid="text-forecast-outlook">{forecast.outlook}</p>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

@@ -46,6 +46,26 @@ export const insertMemberSchema = createInsertSchema(members).omit({ id: true })
 export type InsertMember = z.infer<typeof insertMemberSchema>;
 export type Member = typeof members.$inferSelect;
 
+export const memberContacts = pgTable("member_contacts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  memberId: varchar("member_id").notNull().references(() => members.id),
+  gymId: varchar("gym_id").notNull().references(() => gyms.id),
+  contactedAt: timestamp("contacted_at").defaultNow(),
+  note: text("note"),
+}, (table) => [
+  index("idx_member_contacts_member").on(table.memberId),
+  index("idx_member_contacts_gym").on(table.gymId),
+]);
+
+export const memberContactsRelations = relations(memberContacts, ({ one }) => ({
+  member: one(members, { fields: [memberContacts.memberId], references: [members.id] }),
+  gym: one(gyms, { fields: [memberContacts.gymId], references: [gyms.id] }),
+}));
+
+export const insertMemberContactSchema = createInsertSchema(memberContacts).omit({ id: true, contactedAt: true });
+export type InsertMemberContact = z.infer<typeof insertMemberContactSchema>;
+export type MemberContact = typeof memberContacts.$inferSelect;
+
 export const gymMonthlyMetrics = pgTable("gym_monthly_metrics", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   gymId: varchar("gym_id").notNull().references(() => gyms.id),

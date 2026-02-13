@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { parseMembersCsv } from "./csv-parser";
-import { recomputeAllMetrics, generateMetricReports } from "./metrics";
+import { recomputeAllMetrics, generateMetricReports, generateForecast } from "./metrics";
 import { insertGymSchema } from "@shared/schema";
 import multer from "multer";
 
@@ -202,6 +202,14 @@ export async function registerRoutes(
       const lastDayOfMonth = monthEnd.toISOString().slice(0, 10);
 
       const activeMembers = await storage.getActiveMembers(req.params.id, lastDayOfMonth);
+      const contacts = await storage.getLatestContacts(req.params.id);
+      const contactMap = new Map<string, Date>();
+      for (const c of contacts) {
+        if (c.contactedAt && !contactMap.has(c.memberId)) {
+          contactMap.set(c.memberId, c.contactedAt);
+        }
+      }
+
       const asOfDate = monthEnd;
       const atRiskMembers = activeMembers
         .filter((m) => {
@@ -217,12 +225,40 @@ export async function registerRoutes(
           joinDate: m.joinDate,
           monthlyRate: m.monthlyRate,
           tenureDays: Math.max(0, Math.floor((asOfDate.getTime() - new Date(m.joinDate + "T00:00:00").getTime()) / (1000 * 60 * 60 * 24))),
+          lastContacted: contactMap.get(m.id)?.toISOString() || null,
         }));
 
-      res.json({ metrics, reports, atRiskMembers });
+      const prevMetrics = [
+        metrics,
+        ...(prev1 ? [prev1] : []),
+        ...(prev2 ? [prev2] : []),
+        ...(prev3 ? [prev3] : []),
+      ];
+
+      const forecast = generateForecast(prevMetrics);
+
+      res.json({ metrics, reports, atRiskMembers, forecast });
     } catch (error) {
       console.error("Error fetching report:", error);
       res.status(500).json({ message: "Failed to fetch report" });
+    }
+  });
+
+  app.post("/api/gyms/:id/members/:memberId/contact", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      const contact = await storage.logContact({
+        memberId: req.params.memberId,
+        gymId: req.params.id,
+        note: req.body.note || null,
+      });
+      res.json(contact);
+    } catch (error) {
+      console.error("Error logging contact:", error);
+      res.status(500).json({ message: "Failed to log contact" });
     }
   });
 
