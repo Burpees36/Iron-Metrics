@@ -25,17 +25,21 @@ import {
   TrendingUp,
   Activity,
   Upload,
-  Heart,
   UserPlus,
   UserMinus,
-  Calculator,
-  Clock,
   ChevronLeft,
   ChevronRight,
   Search,
   RefreshCw,
+  Gauge,
+  BarChart3,
+  Radar,
+  Building2,
+  Target,
+  ArrowRight,
+  AlertTriangle,
 } from "lucide-react";
-import { useState, useRef, useCallback } from "react";
+import { useState } from "react";
 import {
   LineChart,
   Line,
@@ -47,6 +51,15 @@ import {
   Area,
   AreaChart,
 } from "recharts";
+
+interface MetricReport {
+  metric: string;
+  current: string;
+  target: string;
+  impact: string;
+  meaning: string;
+  action: string;
+}
 
 export default function GymDetail() {
   const [, params] = useRoute("/gyms/:id");
@@ -63,7 +76,7 @@ export default function GymDetail() {
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="font-serif text-2xl font-bold tracking-tight" data-testid="text-gym-name">
+          <h1 className="text-xl font-bold tracking-tight" data-testid="text-gym-name">
             {gym.name}
           </h1>
           {gym.location && (
@@ -81,15 +94,15 @@ export default function GymDetail() {
         </div>
       </div>
 
-      <Tabs defaultValue="heartbeat">
+      <Tabs defaultValue="report">
         <TabsList data-testid="tabs-gym-detail">
-          <TabsTrigger value="heartbeat" data-testid="tab-heartbeat">Heartbeat</TabsTrigger>
+          <TabsTrigger value="report" data-testid="tab-report">Report</TabsTrigger>
           <TabsTrigger value="members" data-testid="tab-members">Members</TabsTrigger>
           <TabsTrigger value="trends" data-testid="tab-trends">Trends</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="heartbeat" className="mt-6">
-          <HeartbeatView gymId={gym.id} />
+        <TabsContent value="report" className="mt-6">
+          <ReportView gymId={gym.id} />
         </TabsContent>
 
         <TabsContent value="members" className="mt-6">
@@ -135,7 +148,7 @@ function RecomputeButton({ gymId }: { gymId: string }) {
   );
 }
 
-function HeartbeatView({ gymId }: { gymId: string }) {
+function ReportView({ gymId }: { gymId: string }) {
   const [monthOffset, setMonthOffset] = useState(0);
 
   const getMonthDate = (offset: number) => {
@@ -151,10 +164,10 @@ function HeartbeatView({ gymId }: { gymId: string }) {
     year: "numeric",
   });
 
-  const { data: metrics, isLoading } = useQuery<GymMonthlyMetrics | null>({
-    queryKey: ["/api/gyms", gymId, "heartbeat", monthDate],
+  const { data, isLoading } = useQuery<{ metrics: GymMonthlyMetrics; reports: MetricReport[] } | null>({
+    queryKey: ["/api/gyms", gymId, "report", monthDate],
     queryFn: async () => {
-      const res = await fetch(`/api/gyms/${gymId}/heartbeat?month=${monthDate}`, {
+      const res = await fetch(`/api/gyms/${gymId}/report?month=${monthDate}`, {
         credentials: "include",
       });
       if (res.status === 404) return null;
@@ -165,8 +178,8 @@ function HeartbeatView({ gymId }: { gymId: string }) {
 
   if (isLoading) {
     return (
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {Array(8).fill(0).map((_, i) => <Skeleton key={i} className="h-28 rounded-md" />)}
+      <div className="space-y-4">
+        {Array(5).fill(0).map((_, i) => <Skeleton key={i} className="h-32 rounded-md" />)}
       </div>
     );
   }
@@ -183,7 +196,7 @@ function HeartbeatView({ gymId }: { gymId: string }) {
           >
             <ChevronLeft className="w-4 h-4" />
           </Button>
-          <h2 className="font-serif text-xl font-semibold min-w-[160px] text-center" data-testid="text-current-month">
+          <h2 className="text-lg font-semibold min-w-[160px] text-center" data-testid="text-current-month">
             {displayMonth}
           </h2>
           <Button
@@ -196,15 +209,9 @@ function HeartbeatView({ gymId }: { gymId: string }) {
             <ChevronRight className="w-4 h-4" />
           </Button>
         </div>
-        {metrics?.generatedAt && (
-          <span className="text-xs text-muted-foreground flex items-center gap-1">
-            <Clock className="w-3 h-3" />
-            Computed {new Date(metrics.generatedAt).toLocaleDateString()}
-          </span>
-        )}
       </div>
 
-      {!metrics ? (
+      {!data ? (
         <Card>
           <CardContent className="p-8 text-center space-y-3">
             <Activity className="w-10 h-10 text-muted-foreground mx-auto" />
@@ -214,106 +221,158 @@ function HeartbeatView({ gymId }: { gymId: string }) {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <MetricCard
-            icon={Users}
-            label="Active Members"
-            value={String(metrics.activeMembers)}
-            sublabel={`Started month: ${metrics.activeStartOfMonth}`}
-            testId="metric-active-members"
-          />
-          <MetricCard
-            icon={UserPlus}
-            label="New Members"
-            value={String(metrics.newMembers)}
-            sublabel="Joined this month"
-            positive
-            testId="metric-new-members"
-          />
-          <MetricCard
-            icon={UserMinus}
-            label="Cancellations"
-            value={String(metrics.cancels)}
-            sublabel="Left this month"
-            negative={metrics.cancels > 0}
-            testId="metric-cancels"
-          />
-          <MetricCard
-            icon={TrendingDown}
-            label="Churn Rate"
-            value={`${metrics.churnRate}%`}
-            sublabel={metrics.rollingChurn3m ? `3mo avg: ${metrics.rollingChurn3m}%` : undefined}
-            negative={Number(metrics.churnRate) > 5}
-            testId="metric-churn-rate"
-          />
-          <MetricCard
-            icon={DollarSign}
-            label="MRR"
-            value={`$${Number(metrics.mrr).toLocaleString()}`}
-            sublabel="Monthly Recurring Revenue"
-            testId="metric-mrr"
-          />
-          <MetricCard
-            icon={Calculator}
-            label="ARM"
-            value={`$${Number(metrics.arm).toFixed(2)}`}
-            sublabel="Avg. Revenue / Member"
-            testId="metric-arm"
-          />
-          <MetricCard
-            icon={Heart}
-            label="LTV"
-            value={`$${Number(metrics.ltv).toLocaleString()}`}
-            sublabel="Lifetime Value"
-            testId="metric-ltv"
-          />
-          <MetricCard
-            icon={TrendingUp}
-            label="Rolling 3mo Churn"
-            value={metrics.rollingChurn3m ? `${metrics.rollingChurn3m}%` : "N/A"}
-            sublabel="3-month average"
-            testId="metric-rolling-churn"
-          />
-        </div>
+        <>
+          <div className="grid sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            <ScoreCard
+              icon={Gauge}
+              label="RSI"
+              value={`${data.metrics.rsi}`}
+              suffix="/100"
+              status={data.metrics.rsi >= 80 ? "good" : data.metrics.rsi >= 60 ? "moderate" : "risk"}
+              testId="metric-rsi"
+            />
+            <ScoreCard
+              icon={TrendingDown}
+              label="Churn"
+              value={`${data.metrics.churnRate}`}
+              suffix="%"
+              status={Number(data.metrics.churnRate) <= 5 ? "good" : Number(data.metrics.churnRate) <= 7 ? "moderate" : "risk"}
+              testId="metric-churn"
+            />
+            <ScoreCard
+              icon={DollarSign}
+              label="MRR"
+              value={`$${Number(data.metrics.mrr).toLocaleString()}`}
+              testId="metric-mrr"
+            />
+            <ScoreCard
+              icon={Users}
+              label="Active"
+              value={String(data.metrics.activeMembers)}
+              testId="metric-active"
+            />
+            <ScoreCard
+              icon={Radar}
+              label="At Risk"
+              value={String(data.metrics.memberRiskCount)}
+              status={data.metrics.memberRiskCount > data.metrics.activeMembers * 0.15 ? "risk" : data.metrics.memberRiskCount > 0 ? "moderate" : "good"}
+              testId="metric-risk"
+            />
+          </div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <SmallMetric label="ARM" value={`$${Number(data.metrics.arm).toFixed(0)}`} icon={BarChart3} />
+            <SmallMetric label="LTV" value={`$${Number(data.metrics.ltv).toLocaleString()}`} icon={TrendingUp} />
+            <SmallMetric label="New Members" value={String(data.metrics.newMembers)} icon={UserPlus} />
+            <SmallMetric label="Cancellations" value={String(data.metrics.cancels)} icon={UserMinus} />
+          </div>
+
+          <div className="space-y-4" data-testid="section-reports">
+            {data.reports.map((report, i) => (
+              <ReportCard key={i} report={report} />
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
 }
 
-function MetricCard({
+function ScoreCard({
   icon: Icon,
   label,
   value,
-  sublabel,
-  positive,
-  negative,
+  suffix,
+  status,
   testId,
 }: {
-  icon: typeof Users;
+  icon: typeof Gauge;
   label: string;
   value: string;
-  sublabel?: string;
-  positive?: boolean;
-  negative?: boolean;
+  suffix?: string;
+  status?: "good" | "moderate" | "risk";
   testId: string;
 }) {
+  const statusColor = status === "good"
+    ? "text-emerald-600 dark:text-emerald-400"
+    : status === "risk"
+      ? "text-red-600 dark:text-red-400"
+      : "";
+
+  const indicatorColor = status === "good"
+    ? "bg-emerald-500"
+    : status === "risk"
+      ? "bg-red-500"
+      : status === "moderate"
+        ? "bg-amber-500"
+        : "bg-muted";
+
   return (
     <Card data-testid={testId}>
       <CardContent className="p-4 space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs text-muted-foreground font-medium">{label}</span>
-          <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center">
-            <Icon className="w-4 h-4 text-primary" />
+          <div className="flex items-center gap-1.5">
+            <div className={`w-1.5 h-1.5 rounded-full ${indicatorColor}`} />
+            <span className="text-xs text-muted-foreground font-medium">{label}</span>
+          </div>
+          <Icon className="w-4 h-4 text-muted-foreground" />
+        </div>
+        <p className={`text-2xl font-bold font-mono tracking-tight ${statusColor}`}>
+          {value}
+          {suffix && <span className="text-sm font-normal text-muted-foreground">{suffix}</span>}
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SmallMetric({ label, value, icon: Icon }: { label: string; value: string; icon: typeof Users }) {
+  return (
+    <Card>
+      <CardContent className="p-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Icon className="w-3.5 h-3.5 text-muted-foreground" />
+          <span className="text-xs text-muted-foreground">{label}</span>
+        </div>
+        <span className="font-mono text-sm font-semibold">{value}</span>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ReportCard({ report }: { report: MetricReport }) {
+  const isRisk = report.metric === "Monthly Churn" && parseFloat(report.current) > 7;
+
+  return (
+    <Card data-testid={`report-${report.metric.toLowerCase().replace(/\s+/g, "-")}`}>
+      <CardContent className="p-5 space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              {isRisk && <AlertTriangle className="w-4 h-4 text-red-500 dark:text-red-400" />}
+              <h3 className="font-semibold text-sm">{report.metric}</h3>
+            </div>
+            <div className="flex flex-wrap items-baseline gap-3 font-mono">
+              <span className="text-lg font-bold">{report.current}</span>
+              <span className="text-xs text-muted-foreground">Target: {report.target}</span>
+            </div>
+          </div>
+          <Badge variant="secondary" className="text-xs font-normal whitespace-nowrap">
+            <Target className="w-3 h-3 mr-1" />
+            {report.impact.length > 50 ? report.impact.slice(0, 50) + "..." : report.impact}
+          </Badge>
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">What This Means</p>
+            <p className="text-sm leading-relaxed">{report.meaning}</p>
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Recommended Action</p>
+            <p className="text-sm leading-relaxed text-muted-foreground">{report.action}</p>
           </div>
         </div>
-        <p
-          className={`text-2xl font-bold font-mono tracking-tight ${
-            positive ? "text-emerald-600 dark:text-emerald-400" : negative ? "text-red-600 dark:text-red-400" : ""
-          }`}
-        >
-          {value}
-        </p>
-        {sublabel && <p className="text-xs text-muted-foreground">{sublabel}</p>}
       </CardContent>
     </Card>
   );
@@ -400,7 +459,7 @@ function MembersView({ gymId }: { gymId: string }) {
               {filtered.map((member) => (
                 <TableRow key={member.id} data-testid={`row-member-${member.id}`}>
                   <TableCell className="font-medium">{member.name}</TableCell>
-                  <TableCell className="text-muted-foreground text-sm">{member.email || "—"}</TableCell>
+                  <TableCell className="text-muted-foreground text-sm">{member.email || "\u2014"}</TableCell>
                   <TableCell>
                     <Badge
                       variant={member.status === "active" ? "default" : "outline"}
@@ -457,11 +516,38 @@ function TrendsView({ gymId }: { gymId: string }) {
       mrr: Number(m.mrr),
       members: m.activeMembers,
       churn: Number(m.churnRate),
+      rsi: m.rsi,
     }));
 
   return (
     <div className="space-y-6">
-      <div className="grid lg:grid-cols-2 gap-6">
+      <div className="grid lg:grid-cols-2 gap-4">
+        <Card>
+          <CardContent className="p-5 space-y-4">
+            <h3 className="font-semibold text-sm">Retention Stability Index</h3>
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData}>
+                  <defs>
+                    <linearGradient id="rsiGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(var(--chart-1))" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="hsl(var(--chart-1))" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                  <XAxis dataKey="month" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                  <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" domain={[0, 100]} />
+                  <RechartsTooltip
+                    contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12 }}
+                    formatter={(value: number) => [`${value}/100`, "RSI"]}
+                  />
+                  <Area type="monotone" dataKey="rsi" stroke="hsl(var(--chart-1))" fill="url(#rsiGrad)" strokeWidth={2} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardContent className="p-5 space-y-4">
             <h3 className="font-semibold text-sm">Monthly Recurring Revenue</h3>
@@ -470,8 +556,8 @@ function TrendsView({ gymId }: { gymId: string }) {
                 <AreaChart data={chartData}>
                   <defs>
                     <linearGradient id="mrrGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--chart-1))" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="hsl(var(--chart-1))" stopOpacity={0} />
+                      <stop offset="5%" stopColor="hsl(var(--chart-2))" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="hsl(var(--chart-2))" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
@@ -481,7 +567,7 @@ function TrendsView({ gymId }: { gymId: string }) {
                     contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12 }}
                     formatter={(value: number) => [`$${value.toLocaleString()}`, "MRR"]}
                   />
-                  <Area type="monotone" dataKey="mrr" stroke="hsl(var(--chart-1))" fill="url(#mrrGrad)" strokeWidth={2} />
+                  <Area type="monotone" dataKey="mrr" stroke="hsl(var(--chart-2))" fill="url(#mrrGrad)" strokeWidth={2} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -496,8 +582,8 @@ function TrendsView({ gymId }: { gymId: string }) {
                 <AreaChart data={chartData}>
                   <defs>
                     <linearGradient id="memGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--chart-3))" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="hsl(var(--chart-3))" stopOpacity={0} />
+                      <stop offset="5%" stopColor="hsl(var(--chart-5))" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="hsl(var(--chart-5))" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
@@ -506,14 +592,14 @@ function TrendsView({ gymId }: { gymId: string }) {
                   <RechartsTooltip
                     contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12 }}
                   />
-                  <Area type="monotone" dataKey="members" stroke="hsl(var(--chart-3))" fill="url(#memGrad)" strokeWidth={2} />
+                  <Area type="monotone" dataKey="members" stroke="hsl(var(--chart-5))" fill="url(#memGrad)" strokeWidth={2} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-2">
+        <Card>
           <CardContent className="p-5 space-y-4">
             <h3 className="font-semibold text-sm">Churn Rate (%)</h3>
             <div className="h-56">
@@ -526,7 +612,7 @@ function TrendsView({ gymId }: { gymId: string }) {
                     contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12 }}
                     formatter={(value: number) => [`${value}%`, "Churn"]}
                   />
-                  <Line type="monotone" dataKey="churn" stroke="hsl(var(--chart-2))" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="churn" stroke="hsl(var(--chart-3))" strokeWidth={2} dot={{ r: 3 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -541,12 +627,12 @@ function GymDetailSkeleton() {
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       <div className="space-y-2">
-        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-7 w-48" />
         <Skeleton className="h-4 w-32" />
       </div>
       <Skeleton className="h-10 w-64" />
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {Array(8).fill(0).map((_, i) => <Skeleton key={i} className="h-28 rounded-md" />)}
+      <div className="grid sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        {Array(5).fill(0).map((_, i) => <Skeleton key={i} className="h-24 rounded-md" />)}
       </div>
     </div>
   );
@@ -557,7 +643,7 @@ function GymNotFound() {
     <div className="flex items-center justify-center min-h-[60vh]">
       <div className="text-center space-y-4">
         <Building2 className="w-12 h-12 text-muted-foreground mx-auto" />
-        <h2 className="font-serif text-xl font-bold">Gym not found</h2>
+        <h2 className="text-lg font-bold">Gym not found</h2>
         <Link href="/">
           <Button variant="outline">Back to Dashboard</Button>
         </Link>

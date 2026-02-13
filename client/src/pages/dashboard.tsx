@@ -7,12 +7,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Plus,
   Building2,
-  Users,
-  DollarSign,
-  TrendingDown,
-  Activity,
   ArrowRight,
-  Heart,
+  Activity,
+  Gauge,
+  TrendingDown,
+  DollarSign,
+  Users,
+  Radar,
 } from "lucide-react";
 
 export default function Dashboard() {
@@ -32,7 +33,7 @@ export default function Dashboard() {
     <div className="p-6 max-w-6xl mx-auto space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="font-serif text-2xl font-bold tracking-tight" data-testid="text-dashboard-title">
+          <h1 className="text-xl font-bold tracking-tight" data-testid="text-dashboard-title">
             Dashboard
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
@@ -88,27 +89,37 @@ function GymCard({ gym }: { gym: Gym }) {
           </div>
 
           {metrics ? (
-            <div className="grid grid-cols-2 gap-3">
-              <MiniMetric
-                icon={Users}
-                label="Members"
-                value={String(metrics.activeMembers)}
-              />
-              <MiniMetric
-                icon={DollarSign}
-                label="MRR"
-                value={`$${Number(metrics.mrr).toLocaleString()}`}
-              />
-              <MiniMetric
-                icon={TrendingDown}
-                label="Churn"
-                value={`${metrics.churnRate}%`}
-              />
-              <MiniMetric
-                icon={Activity}
-                label="ARM"
-                value={`$${Number(metrics.arm).toFixed(0)}`}
-              />
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <MiniMetric
+                  icon={Gauge}
+                  label="RSI"
+                  value={`${metrics.rsi}/100`}
+                  status={metrics.rsi >= 80 ? "good" : metrics.rsi >= 60 ? "moderate" : "risk"}
+                />
+                <MiniMetric
+                  icon={TrendingDown}
+                  label="Churn"
+                  value={`${metrics.churnRate}%`}
+                  status={Number(metrics.churnRate) <= 5 ? "good" : Number(metrics.churnRate) <= 7 ? "moderate" : "risk"}
+                />
+                <MiniMetric
+                  icon={DollarSign}
+                  label="MRR"
+                  value={`$${Number(metrics.mrr).toLocaleString()}`}
+                />
+                <MiniMetric
+                  icon={Users}
+                  label="Members"
+                  value={String(metrics.activeMembers)}
+                />
+              </div>
+              {metrics.memberRiskCount > 0 && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Radar className="w-3 h-3" />
+                  <span>{metrics.memberRiskCount} at-risk members</span>
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
@@ -132,18 +143,26 @@ function MiniMetric({
   icon: Icon,
   label,
   value,
+  status,
 }: {
   icon: typeof Users;
   label: string;
   value: string;
+  status?: "good" | "moderate" | "risk";
 }) {
+  const statusColor = status === "good"
+    ? "text-emerald-600 dark:text-emerald-400"
+    : status === "risk"
+      ? "text-red-600 dark:text-red-400"
+      : "";
+
   return (
     <div className="space-y-0.5">
       <div className="flex items-center gap-1 text-muted-foreground">
         <Icon className="w-3 h-3" />
         <span className="text-xs">{label}</span>
       </div>
-      <p className="font-mono text-sm font-semibold">{value}</p>
+      <p className={`font-mono text-sm font-semibold ${statusColor}`}>{value}</p>
     </div>
   );
 }
@@ -152,15 +171,16 @@ function EmptyDashboard() {
   return (
     <div className="flex items-center justify-center min-h-[60vh]">
       <div className="text-center space-y-6 max-w-md px-4">
-        <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
-          <Heart className="w-8 h-8 text-primary" />
+        <div className="w-16 h-16 rounded-md bg-primary/10 flex items-center justify-center mx-auto">
+          <Activity className="w-8 h-8 text-primary" />
         </div>
         <div className="space-y-2">
-          <h2 className="font-serif text-2xl font-bold" data-testid="text-empty-title">
+          <h2 className="text-xl font-bold" data-testid="text-empty-title">
             Welcome to Iron Metrics
           </h2>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Add your first gym to start tracking retention, revenue, and member health.
+            Financial clarity starts here.
           </p>
         </div>
         <Link href="/gyms/new">
@@ -179,8 +199,8 @@ function DashboardSkeleton() {
     <div className="p-6 max-w-6xl mx-auto space-y-8">
       <div className="flex items-center justify-between">
         <div className="space-y-2">
-          <Skeleton className="h-8 w-40" />
-          <Skeleton className="h-4 w-56" />
+          <Skeleton className="h-7 w-32" />
+          <Skeleton className="h-4 w-48" />
         </div>
         <Skeleton className="h-9 w-28" />
       </div>

@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { parseMembersCsv } from "./csv-parser";
-import { recomputeAllMetrics } from "./metrics";
+import { recomputeAllMetrics, generateMetricReports } from "./metrics";
 import { insertGymSchema } from "@shared/schema";
 import multer from "multer";
 
@@ -138,6 +138,40 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching metrics:", error);
       res.status(500).json({ message: "Failed to fetch metrics" });
+    }
+  });
+
+  app.get("/api/gyms/:id/report", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      const month = req.query.month as string;
+      if (!month) return res.status(400).json({ message: "month query parameter required (YYYY-MM-DD)" });
+
+      const metrics = await storage.getMonthlyMetrics(req.params.id, month);
+      if (!metrics) return res.status(404).json({ message: "No metrics for this month" });
+
+      const reports = generateMetricReports({
+        activeMembers: metrics.activeMembers,
+        churnRate: Number(metrics.churnRate),
+        mrr: Number(metrics.mrr),
+        arm: Number(metrics.arm),
+        ltv: Number(metrics.ltv),
+        rsi: metrics.rsi,
+        res: Number(metrics.res),
+        ltveImpact: Number(metrics.ltveImpact),
+        memberRiskCount: metrics.memberRiskCount,
+        rollingChurn3m: metrics.rollingChurn3m ? Number(metrics.rollingChurn3m) : null,
+        newMembers: metrics.newMembers,
+        cancels: metrics.cancels,
+      });
+
+      res.json({ metrics, reports });
+    } catch (error) {
+      console.error("Error fetching report:", error);
+      res.status(500).json({ message: "Failed to fetch report" });
     }
   });
 

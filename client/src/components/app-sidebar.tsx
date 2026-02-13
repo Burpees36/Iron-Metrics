@@ -18,7 +18,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard,
-  Heart,
+  Activity,
   Plus,
   Building2,
   LogOut,
@@ -41,8 +41,8 @@ export function AppSidebar() {
       <SidebarHeader className="p-4">
         <Link href="/">
           <div className="flex items-center gap-2 hover-elevate rounded-md px-2 py-1.5 cursor-pointer" data-testid="link-home">
-            <Heart className="w-5 h-5 text-primary fill-primary flex-shrink-0" />
-            <span className="font-serif text-lg font-bold tracking-tight">Iron Metrics</span>
+            <Activity className="w-5 h-5 text-sidebar-primary flex-shrink-0" />
+            <span className="text-base font-bold tracking-tight">Iron Metrics</span>
           </div>
         </Link>
       </SidebarHeader>
@@ -98,7 +98,7 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-3 border-t">
+      <SidebarFooter className="p-3 border-t border-sidebar-border">
         <div className="flex items-center gap-3">
           <Avatar className="w-8 h-8">
             <AvatarImage src={user?.profileImageUrl || undefined} />

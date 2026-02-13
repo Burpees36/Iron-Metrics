@@ -59,6 +59,10 @@ export const gymMonthlyMetrics = pgTable("gym_monthly_metrics", {
   mrr: numeric("mrr", { precision: 12, scale: 2 }).notNull().default("0"),
   arm: numeric("arm", { precision: 10, scale: 2 }).notNull().default("0"),
   ltv: numeric("ltv", { precision: 12, scale: 2 }).notNull().default("0"),
+  rsi: integer("rsi").notNull().default(0),
+  res: numeric("res", { precision: 5, scale: 1 }).notNull().default("0"),
+  ltveImpact: numeric("ltve_impact", { precision: 12, scale: 2 }).notNull().default("0"),
+  memberRiskCount: integer("member_risk_count").notNull().default(0),
   generatedAt: timestamp("generated_at").defaultNow(),
 }, (table) => [
   uniqueIndex("idx_gym_month").on(table.gymId, table.monthStart),

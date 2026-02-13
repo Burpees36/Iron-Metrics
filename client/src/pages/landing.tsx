@@ -7,47 +7,48 @@ import {
   Shield,
   TrendingUp,
   Users,
-  Zap,
   ArrowRight,
-  Heart,
+  Target,
+  Gauge,
+  Radar,
+  LineChart,
 } from "lucide-react";
 
-const features = [
+const performanceStack = [
   {
-    icon: Activity,
-    title: "Heartbeat Metrics",
+    icon: Gauge,
+    title: "Retention Stability Index",
+    abbr: "RSI",
     description:
-      "Monthly pulse check on your gym's financial health. Active members, churn rate, MRR — all computed and cached for instant access.",
-  },
-  {
-    icon: Shield,
-    title: "Multi-Tenant Secure",
-    description:
-      "Every data point is tenant-scoped and hard-filtered. No data leakage. No cross-gym contamination. Built for scale from day one.",
-  },
-  {
-    icon: TrendingUp,
-    title: "Revenue Intelligence",
-    description:
-      "Transform messy membership exports into retention insights, churn visibility, and predictable growth indicators.",
-  },
-  {
-    icon: Users,
-    title: "Member Management",
-    description:
-      "Import members via CSV, track status changes, and see your roster at a glance. Idempotent imports mean no duplicate headaches.",
+      "A single score (1-100) that captures your monthly churn, early cancellation trends, and membership age distribution. Know your retention health at a glance.",
   },
   {
     icon: BarChart3,
-    title: "Churn Visibility",
+    title: "Revenue Efficiency Score",
+    abbr: "RES",
     description:
-      "Rolling 3-month churn, monthly cancellation tracking, and early warning signals so you can act before revenue dips.",
+      "Measures revenue per member, tier distribution, and overall revenue optimization. Identifies opportunities to increase yield without increasing headcount.",
   },
   {
-    icon: Zap,
-    title: "Performance-First",
+    icon: TrendingUp,
+    title: "Lifetime Value Engine",
+    abbr: "LTVE",
     description:
-      "Cache-driven architecture. No heavy request-path computation. Sub-500ms responses. Infrastructure-grade thinking, not hobby SaaS.",
+      "Calculates true average LTV and shows exactly how much annual revenue you gain from a 1% reduction in churn. Your most powerful financial lever.",
+  },
+  {
+    icon: LineChart,
+    title: "Coach Impact Index",
+    abbr: "CII",
+    description:
+      "Identifies retention leverage by class type and attendance patterns. Not rating coaches \u2014 identifying where engagement creates stickiness.",
+  },
+  {
+    icon: Radar,
+    title: "Member Risk Radar",
+    abbr: "Risk Radar",
+    description:
+      "Predictive layer flagging members with early risk signals. Suggested intervention windows so you can act before they cancel.",
   },
 ];
 
@@ -57,8 +58,8 @@ export default function LandingPage() {
       <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md bg-background/80 border-b">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4 h-14">
           <div className="flex items-center gap-2">
-            <Heart className="w-5 h-5 text-primary fill-primary" />
-            <span className="font-serif text-lg font-bold tracking-tight" data-testid="text-logo">
+            <Activity className="w-5 h-5 text-primary" />
+            <span className="font-semibold text-base tracking-tight" data-testid="text-logo">
               Iron Metrics
             </span>
           </div>
@@ -75,12 +76,12 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div className="space-y-6">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium">
-                <Activity className="w-3.5 h-3.5" />
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-primary/10 text-primary text-sm font-medium">
+                <Shield className="w-3.5 h-3.5" />
                 Financial Intelligence for Gyms
               </div>
               <h1
-                className="font-serif text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-tight"
+                className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight leading-tight"
                 data-testid="text-hero-headline"
               >
                 Retention is the
@@ -89,9 +90,12 @@ export default function LandingPage() {
                 <br />
                 your gym.
               </h1>
-              <p className="text-muted-foreground text-lg max-w-lg leading-relaxed">
+              <p className="text-muted-foreground text-base sm:text-lg max-w-lg leading-relaxed">
                 Iron Metrics gives gym owners financial clarity, retention intelligence,
-                and revenue stability. Stop guessing. Start knowing.
+                and revenue stability. Simple. Actionable. Calm.
+              </p>
+              <p className="text-sm text-muted-foreground italic max-w-md">
+                When your retention is stable, your impact becomes sustainable.
               </p>
               <div className="flex flex-wrap items-center gap-3">
                 <a href="/api/login">
@@ -101,43 +105,38 @@ export default function LandingPage() {
                   </Button>
                 </a>
               </div>
-              <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1.5">
-                  <Shield className="w-3.5 h-3.5" /> Free to start
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <Zap className="w-3.5 h-3.5" /> No credit card required
-                </span>
-              </div>
             </div>
 
             <div className="relative hidden lg:block">
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-primary/10 rounded-md" />
-              <div className="relative p-8 space-y-4">
+              <div className="relative space-y-3">
                 <MetricPreviewCard
-                  label="Monthly Recurring Revenue"
-                  value="$48,250"
-                  change="+4.2%"
-                  positive
+                  label="Monthly Churn"
+                  current="6.8%"
+                  target="5%"
+                  impact="+$42,000 annual revenue if reduced"
                 />
                 <MetricPreviewCard
-                  label="Active Members"
-                  value="321"
-                  change="+12"
-                  positive
+                  label="Retention Stability Index"
+                  current="72/100"
+                  target="80/100"
+                  impact="Moderate retention risk"
                 />
                 <MetricPreviewCard
-                  label="Monthly Churn Rate"
-                  value="3.1%"
-                  change="-0.8%"
-                  positive
+                  label="Lifetime Value"
+                  current="$2,180"
+                  target="$3,000+"
+                  impact="+$18,400/yr from 1% churn reduction"
                 />
-                <MetricPreviewCard
-                  label="Avg. Revenue / Member"
-                  value="$150.31"
-                  change="+$2.10"
-                  positive
-                />
+                <div className="p-3 rounded-md bg-muted/50">
+                  <p className="text-xs font-medium text-muted-foreground mb-1">What This Means</p>
+                  <p className="text-sm leading-relaxed">
+                    Your current churn suggests revenue volatility over the next 6-12 months.
+                  </p>
+                  <p className="text-xs font-medium text-muted-foreground mt-2 mb-1">Recommended Action</p>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    Prioritize outreach to members with declining attendance.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -147,38 +146,86 @@ export default function LandingPage() {
       <section className="py-16 sm:py-24 border-t">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12 space-y-3">
-            <h2 className="font-serif text-3xl sm:text-4xl font-bold tracking-tight" data-testid="text-features-title">
-              Built for gym owners who care
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight" data-testid="text-stack-title">
+              The Iron Metrics Performance Stack
             </h2>
-            <p className="text-muted-foreground max-w-xl mx-auto text-lg">
-              No hype. No fluff. Just the financial clarity your gym deserves.
+            <p className="text-muted-foreground max-w-2xl mx-auto">
+              Five core systems that translate your gym's data into clarity.
+              Human insight + Data clarity. Not pure math.
             </p>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {features.map((feature) => (
-              <Card key={feature.title} className="hover-elevate">
-                <CardContent className="p-6 space-y-3">
-                  <div className="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center">
-                    <feature.icon className="w-5 h-5 text-primary" />
+            {performanceStack.map((item) => (
+              <Card key={item.abbr} className="hover-elevate">
+                <CardContent className="p-5 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <item.icon className="w-4 h-4 text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-sm">{item.title}</h3>
+                      <span className="text-xs text-muted-foreground font-mono">{item.abbr}</span>
+                    </div>
                   </div>
-                  <h3 className="font-semibold text-lg">{feature.title}</h3>
                   <p className="text-muted-foreground text-sm leading-relaxed">
-                    {feature.description}
+                    {item.description}
                   </p>
                 </CardContent>
               </Card>
             ))}
+            <Card className="hover-elevate sm:col-span-2 lg:col-span-1">
+              <CardContent className="p-5 space-y-3 flex flex-col justify-center h-full">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <Target className="w-4 h-4 text-primary" />
+                  </div>
+                  <h3 className="font-semibold text-sm">Every Metric, Translated</h3>
+                </div>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  Every number includes what it means, why it matters, and what to do next.
+                  You are not just reporting. You are translating.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      <section className="py-16 sm:py-24 border-t">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-10 space-y-3">
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
+              Built for gym owners who
+            </h2>
+            <p className="text-muted-foreground max-w-xl mx-auto">
+              Love coaching. Hate spreadsheets. Feel stress about revenue swings.
+            </p>
+          </div>
+          <div className="grid sm:grid-cols-3 gap-4 max-w-3xl mx-auto">
+            <EmotionCard
+              icon={Users}
+              quote="Finally... I understand my business."
+            />
+            <EmotionCard
+              icon={Shield}
+              quote="This isn't overwhelming."
+            />
+            <EmotionCard
+              icon={Activity}
+              quote="I can actually act on this."
+            />
           </div>
         </div>
       </section>
 
       <section className="py-16 sm:py-24 border-t">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-6">
-          <h2 className="font-serif text-3xl sm:text-4xl font-bold tracking-tight">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
             Strong gyms create strong communities
           </h2>
-          <p className="text-muted-foreground text-lg max-w-xl mx-auto leading-relaxed">
-            Financial stability protects the impact your gym has on people's lives.
+          <p className="text-muted-foreground max-w-xl mx-auto leading-relaxed">
+            Strong communities create healthy lives.
+            Financial stability protects both.
             Iron Metrics is the operating system behind that stability.
           </p>
           <a href="/api/login">
@@ -193,8 +240,8 @@ export default function LandingPage() {
       <footer className="border-t py-8">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-wrap items-center justify-between gap-4 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
-            <Heart className="w-4 h-4 text-primary fill-primary" />
-            <span className="font-serif font-semibold text-foreground">Iron Metrics</span>
+            <Activity className="w-4 h-4 text-primary" />
+            <span className="font-semibold text-foreground">Iron Metrics</span>
           </div>
           <p>Built by someone who understands barbells and balance sheets.</p>
         </div>
@@ -205,29 +252,39 @@ export default function LandingPage() {
 
 function MetricPreviewCard({
   label,
-  value,
-  change,
-  positive,
+  current,
+  target,
+  impact,
 }: {
   label: string;
-  value: string;
-  change: string;
-  positive: boolean;
+  current: string;
+  target: string;
+  impact: string;
 }) {
   return (
     <Card>
-      <CardContent className="p-4 flex items-center justify-between gap-4">
-        <div className="space-y-0.5">
-          <p className="text-xs text-muted-foreground">{label}</p>
-          <p className="text-xl font-bold font-mono tracking-tight">{value}</p>
+      <CardContent className="p-4 space-y-1.5">
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-xs text-muted-foreground font-medium">{label}</p>
         </div>
-        <span
-          className={`text-sm font-medium font-mono ${
-            positive ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
-          }`}
-        >
-          {change}
-        </span>
+        <div className="flex items-baseline gap-4">
+          <span className="text-lg font-bold font-mono tracking-tight">{current}</span>
+          <span className="text-xs text-muted-foreground">
+            Target: {target}
+          </span>
+        </div>
+        <p className="text-xs text-primary font-medium">{impact}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function EmotionCard({ icon: Icon, quote }: { icon: typeof Users; quote: string }) {
+  return (
+    <Card>
+      <CardContent className="p-5 text-center space-y-3">
+        <Icon className="w-6 h-6 text-primary mx-auto" />
+        <p className="text-sm font-medium italic">"{quote}"</p>
       </CardContent>
     </Card>
   );

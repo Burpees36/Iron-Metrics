@@ -1,0 +1,322 @@
+Perfect.
+
+That sentence is strong.
+
+It’s focused.
+It’s measurable.
+It’s not fluffy.
+It sounds like infrastructure.
+
+Now we build everything around that.
+
+---
+
+# Iron Metrics
+
+### Internal Framework Blueprint (Version 1.0)
+
+This is what you will eventually plug into AI to build:
+
+* The dashboard
+* The analytics engine
+* The pitch deck
+* The website copy
+* The SaaS architecture
+
+We are defining it properly now.
+
+---
+
+# 1️⃣ Mission Statement
+
+**Iron Metrics exists to stabilize and professionalize boutique gym revenue through retention intelligence.**
+
+Key words:
+
+* Stabilize → reduce volatility
+* Professionalize → structured KPIs
+* Revenue → financial outcomes
+* Retention intelligence → data-driven churn control
+
+---
+
+# 2️⃣ Ideal Client Profile (ICP)
+
+Target Gyms:
+
+* 120–350 active members
+* $30,000–$80,000 monthly recurring revenue
+* Recurring membership model
+* Owner-operated
+* Using software like:
+
+  * PushPress
+  * Wodify
+  * Mindbody
+
+Not targeting:
+
+* Startups under 75 members
+* Franchise chains with corporate analytics
+* Class-pass-only studios
+
+---
+
+# 3️⃣ The Iron Metrics Performance Stack™
+
+This is your intellectual property.
+
+Each component must have:
+
+* Defined inputs
+* Defined calculations
+* Defined outputs
+* Defined decisions
+
+---
+
+## 🔹 Module 1: Retention Stability Index (RSI)
+
+Purpose:
+Quantify how stable gym membership is.
+
+Inputs:
+
+* Monthly active members
+* Monthly cancellations
+* Join dates
+* Attendance frequency
+
+Calculations:
+
+* Monthly churn rate
+* 3-month rolling churn
+* Cohort retention curve
+* Attendance decay rate
+
+Output:
+
+* Stability Score (0–100)
+* Risk tier (Stable / Warning / Critical)
+
+Decision Informs:
+
+* Whether retention intervention is urgent
+* Whether pricing changes are safe
+
+---
+
+## 🔹 Module 2: Revenue Efficiency Score (RES)
+
+Purpose:
+Measure how effectively revenue is generated per member.
+
+Inputs:
+
+* Total monthly revenue
+* Membership tiers
+* PT revenue
+* Add-on services
+
+Calculations:
+
+* Revenue per member (ARM)
+* Tier distribution %
+* PT attach rate
+* Upsell penetration
+
+Output:
+
+* Revenue efficiency rating
+* Pricing optimization opportunity estimate
+
+Decision Informs:
+
+* Price increases
+* Packaging changes
+* Upsell strategy
+
+---
+
+## 🔹 Module 3: Lifetime Value Engine (LTVE)
+
+Purpose:
+Quantify long-term revenue impact of retention shifts.
+
+Inputs:
+
+* Churn rate
+* Revenue per member
+* Membership duration
+
+Calculation:
+LTV = ARM × (1 / churn rate)
+
+Output:
+
+* Current LTV
+* LTV by tier
+* Revenue impact of 1% churn improvement
+
+Decision Informs:
+
+* Justification for retention investment
+* Marketing budget tolerance
+
+---
+
+## 🔹 Module 4: Coach Impact Index (CII)
+
+Purpose:
+Measure operational impact of coaching performance.
+
+Inputs:
+
+* Attendance by class
+* Coach assignments
+* Retention by member-coach exposure
+
+Calculations:
+
+* Average class attendance
+* Retention by class type
+* Drop-off patterns by coach
+
+Output:
+
+* Coach impact score
+* Attendance density analysis
+
+Decision Informs:
+
+* Schedule optimization
+* Coach development
+* Class restructuring
+
+---
+
+## 🔹 Module 5: Member Risk Radar (MRR)
+
+Purpose:
+Predict short-term cancellation risk.
+
+Inputs:
+
+* 30-day attendance
+* 90-day attendance trend
+* Membership age
+* Price tier
+* Attendance drop %
+
+Model:
+Logistic regression (interpretable)
+
+Output:
+
+* Risk probability %
+* Risk classification (Low / Medium / High)
+* Suggested intervention window
+
+Decision Informs:
+
+* Targeted outreach
+* Save attempts
+* Personal check-ins
+
+---
+
+# 4️⃣ Standardized Data Schema (Critical)
+
+You need a standard schema from Day 1.
+
+Member Table:
+
+* member_id
+* join_date
+* cancel_date
+* membership_type
+* monthly_price
+* status
+
+Attendance Table:
+
+* member_id
+* class_date
+* class_type
+* coach_id
+
+Revenue Table:
+
+* member_id
+* billing_month
+* revenue_amount
+
+Coach Table:
+
+* coach_id
+* hire_date
+* class_types
+
+This is the backbone.
+
+Future SaaS depends on this structure.
+
+---
+
+# 5️⃣ Deliverables (Consulting Phase)
+
+Iron Metrics clients receive:
+
+Monthly:
+
+* Dashboard access
+* Risk list (Top 10–20 members)
+* Churn & revenue summary
+* Stability score update
+
+Quarterly:
+
+* Pricing review
+* Tier analysis
+* Retention strategy session
+* Executive report
+
+---
+
+# 6️⃣ Positioning Statement (External)
+
+Iron Metrics helps boutique fitness gyms reduce revenue volatility by identifying hidden churn risk, optimizing pricing structure, and turning attendance data into predictable cash flow.
+
+No AI buzzwords.
+
+No fluff.
+
+Just financial stability.
+
+---
+
+# Now — Your Original Question
+
+Yes.
+
+Building this documentation first is exactly what you should do.
+
+Because now you can plug this into AI and say:
+
+“Build me a Streamlit dashboard that calculates the Retention Stability Index, Revenue Efficiency Score, Lifetime Value Engine, Coach Impact Index, and Member Risk Radar using this schema.”
+
+That prompt will work.
+
+Without this clarity, it wouldn’t.
+
+---
+
+Now here’s the next level question:
+
+Do you want Iron Metrics to feel:
+
+A) Analytical & institutional
+or
+B) Performance-driven & athletic
+
+This affects branding, tone, and even dashboard design language.

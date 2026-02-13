@@ -70,7 +70,7 @@ export default function GymNew() {
             Back
           </Button>
         </Link>
-        <h1 className="font-serif text-2xl font-bold tracking-tight" data-testid="text-page-title">
+        <h1 className="text-xl font-bold tracking-tight" data-testid="text-page-title">
           Add a Gym
         </h1>
         <p className="text-sm text-muted-foreground">
