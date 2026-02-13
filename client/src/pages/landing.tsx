@@ -223,7 +223,7 @@ export default function LandingPage() {
             <Activity className="w-4 h-4 text-primary" />
             <span className="font-semibold text-foreground">Iron Metrics</span>
           </div>
-          <p>The Stability Command Center for gyms.</p>
+          <p>The Stability Operating System for gyms.</p>
         </div>
       </footer>
     </div>
