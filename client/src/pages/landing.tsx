@@ -183,6 +183,7 @@ export default function LandingPage() {
       </section>
       <section className="py-20 sm:py-28 border-t">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          <p className="text-center text-muted-foreground text-sm mb-6">Stability changes how you lead.</p>
           <div className="grid sm:grid-cols-3 gap-6 max-w-3xl mx-auto">
             <PrincipleCard
               icon={Shield}
