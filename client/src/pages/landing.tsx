@@ -25,7 +25,7 @@ const modules = [
     icon: BarChart3,
     title: "Revenue Stability Panel",
     description:
-      "Monthly churn, net member growth, revenue per member, tier distribution, and volatility indicators. Every number includes what it means, why it matters, and what to do next.",
+      "Know where volatility lives. See what's driving it. Know what to do next.",
   },
   {
     icon: Radar,
