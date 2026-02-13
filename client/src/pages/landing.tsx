@@ -43,7 +43,7 @@ const modules = [
     icon: LineChart,
     title: "Coach Impact Layer",
     description:
-      "Class attendance retention, engagement stickiness by class type, and time-block patterns. Not coach ranking. Retention leverage insight.",
+      "See which classes build long-term retention. Strengthen what keeps members coming back.",
   },
 ];
 
