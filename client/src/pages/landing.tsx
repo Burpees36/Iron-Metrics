@@ -80,7 +80,7 @@ export default function LandingPage() {
                 <br />
                 <span className="text-primary">heartbeat.</span>
                 <br />
-                Stability protects what you built.
+                Stability protects your peace of mind.
               </h1>
               <p className="text-muted-foreground text-base sm:text-lg max-w-md leading-relaxed">Iron Metrics is the Stability Operating System for gyms.
               We reduce financial stress so you can focus on your members.</p>
@@ -92,8 +92,7 @@ export default function LandingPage() {
                   </Button>
                 </a>
               </div>
-              <p className="text-muted-foreground ml-[0px] mr-[0px] mt-[0px] mb-[0px] text-left text-[13px] pt-[6px] pb-[6px]">Stable gyms build 
-              stronger communities</p>
+              <p className="text-muted-foreground ml-[0px] mr-[0px] mt-[0px] mb-[0px] text-left text-[13px] pt-[6px] pb-[6px]">Clarity reduces anxiety. Stability restores focus.</p>
             </div>
 
             <div className="relative hidden lg:block">
