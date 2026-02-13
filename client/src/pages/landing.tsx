@@ -78,11 +78,12 @@ export default function LandingPage() {
               >
                 Retention is the
                 <br />
-                <span className="text-primary">heartbeat</span> of
+                <span className="text-primary">heartbeat.</span>
                 <br />
-                your gym.
+                Stability protects what you built.
               </h1>
-              <p className="text-muted-foreground text-base sm:text-lg max-w-md leading-relaxed">Iron Metrics is the financial resilience operating system for gyms. Reduce revenue volatility. Improve retention stability. Lower stress.</p>
+              <p className="text-muted-foreground text-base sm:text-lg max-w-md leading-relaxed">Iron Metrics is the Stability Operating System for gyms.
+              We reduce financial stress so you can focus on your members.</p>
               <div className="flex flex-wrap items-center gap-3">
                 <a href="/api/login">
                   <Button size="lg" data-testid="button-get-started">
