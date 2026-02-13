@@ -139,7 +139,7 @@ export default function LandingPage() {
           </div>
           <div className="space-y-10">
             <div className="space-y-3">
-              <p className="text-muted-foreground uppercase tracking-widest font-black text-[13px]">Layer 1 — Stability Core</p>
+              <p className="text-muted-foreground uppercase tracking-widest text-[13px] font-medium">Layer 1 — Stability Core</p>
               <div className="grid sm:grid-cols-2 gap-6">
                 <ModuleCard icon={modules[0].icon} title={modules[0].title} description={modules[0].description} />
                 <ModuleCard icon={modules[1].icon} title={modules[1].title} description={modules[1].description} />
