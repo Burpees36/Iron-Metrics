@@ -202,9 +202,6 @@ export default function LandingPage() {
       </section>
       <section className="py-20 sm:py-28 border-t">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-8">
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
-            Stability is strategy.
-          </h2>
           <div className="max-w-lg mx-auto space-y-3">
             <p className="text-xs font-medium text-primary uppercase tracking-widest mb-4">The Iron Metrics Creed</p>
             <p className="text-muted-foreground leading-relaxed">Strong gyms create strong communities.</p>
