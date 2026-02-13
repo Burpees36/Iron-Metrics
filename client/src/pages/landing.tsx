@@ -83,7 +83,7 @@ export default function LandingPage() {
                 <br />
                 your gym.
               </h1>
-              <p className="text-muted-foreground text-base sm:text-lg max-w-md leading-relaxed">Iron Metrics is the financial resilience operating system for gyms. Reduce revenue volatility. Improve retention stability. Lower owner stress.</p>
+              <p className="text-muted-foreground text-base sm:text-lg max-w-md leading-relaxed">Iron Metrics is the financial resilience operating system for gyms. Reduce revenue volatility. Improve retention stability. Lower stress.</p>
               <div className="flex flex-wrap items-center gap-3">
                 <a href="/api/login">
                   <Button size="lg" data-testid="button-get-started">
