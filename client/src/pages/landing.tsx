@@ -92,7 +92,8 @@ export default function LandingPage() {
                   </Button>
                 </a>
               </div>
-              <p className="text-sm text-muted-foreground">Stable gyms build stronger communities</p>
+              <p className="text-muted-foreground text-left mt-[4px] mb-[4px] text-[13px] ml-[13px] mr-[13px]">Stable gyms build 
+              stronger communities</p>
             </div>
 
             <div className="relative hidden lg:block">
