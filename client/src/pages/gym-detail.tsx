@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/auth-utils";
@@ -444,20 +445,36 @@ function ReportCard({ report, atRiskMembers }: { report: MetricReport; atRiskMem
         {isRiskRadar && atRiskMembers && atRiskMembers.length > 0 && (
           <div className="border-t pt-4 space-y-3" data-testid="section-flagged-members">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Flagged Members</p>
-            <div className="space-y-2">
-              {atRiskMembers.map((m) => (
-                <div key={m.id} className="flex flex-wrap items-center justify-between gap-2 text-sm" data-testid={`row-risk-member-${m.id}`}>
-                  <span className="font-medium">{m.name}</span>
-                  <div className="flex items-center gap-3">
-                    <Badge variant="outline" className="text-xs">
-                      {getRiskReason(m.tenureDays)}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(m.joinDate + "T00:00:00").toLocaleDateString()}
-                    </span>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {atRiskMembers.map((m) => {
+                const { label, description } = getRiskReason(m.tenureDays);
+                return (
+                  <div
+                    key={m.id}
+                    className="flex items-center justify-between gap-2 rounded-md border px-3 py-2"
+                    data-testid={`row-risk-member-${m.id}`}
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{m.name}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {new Date(m.joinDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                      </p>
+                    </div>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div>
+                          <Badge variant="outline" className="text-[10px] cursor-default whitespace-nowrap">
+                            {label}
+                          </Badge>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-[220px] text-xs">
+                        {description}
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -466,10 +483,12 @@ function ReportCard({ report, atRiskMembers }: { report: MetricReport; atRiskMem
   );
 }
 
-function getRiskReason(tenureDays: number): string {
-  if (tenureDays <= 14) return "New member";
-  if (tenureDays <= 30) return "Early stage";
-  return "Pre-habit window";
+function getRiskReason(tenureDays: number): { label: string; description: string } {
+  if (tenureDays <= 14)
+    return { label: "New member", description: "Joined in the last 2 weeks. Highest cancellation risk — personal outreach now has the greatest impact." };
+  if (tenureDays <= 30)
+    return { label: "Early stage", description: "In their first month. Still deciding if this gym is the right fit. Check-ins and class introductions reduce drop-off." };
+  return { label: "Pre-habit window", description: "30-60 days in. Exercise habits haven't solidified yet. Social connections and routine consistency are key to retention." };
 }
 
 function RiskTierBadge({ current }: { current: string }) {
