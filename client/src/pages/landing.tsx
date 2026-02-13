@@ -37,7 +37,7 @@ const modules = [
     icon: TrendingUp,
     title: "Lifetime Value Engine",
     description:
-      "True average LTV, revenue unlocked per 1% churn improvement, and long-term projection scenarios. Makes the financial impact of retention tangible.",
+      "See how small retention improvements unlock real revenue. Make stability measurable.",
   },
   {
     icon: LineChart,
