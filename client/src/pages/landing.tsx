@@ -70,9 +70,8 @@ export default function LandingPage() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             <div className="space-y-8">
-              <p className="text-sm font-medium text-primary tracking-wide uppercase">
-                Stability Command Center
-              </p>
+              <p className="text-sm font-medium text-primary tracking-wide uppercase">Stability operating system
+</p>
               <h1
                 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight leading-tight"
                 data-testid="text-hero-headline"
