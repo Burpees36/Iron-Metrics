@@ -65,6 +65,15 @@ interface MetricReport {
   trendValue: string;
 }
 
+interface AtRiskMember {
+  id: string;
+  name: string;
+  email: string | null;
+  joinDate: string;
+  monthlyRate: string;
+  tenureDays: number;
+}
+
 export default function GymDetail() {
   const [, params] = useRoute("/gyms/:id");
   const gymId = params?.id;
@@ -168,7 +177,7 @@ function ReportView({ gymId }: { gymId: string }) {
     year: "numeric",
   });
 
-  const { data, isLoading } = useQuery<{ metrics: GymMonthlyMetrics; reports: MetricReport[] } | null>({
+  const { data, isLoading } = useQuery<{ metrics: GymMonthlyMetrics; reports: MetricReport[]; atRiskMembers: AtRiskMember[] } | null>({
     queryKey: ["/api/gyms", gymId, "report", monthDate],
     queryFn: async () => {
       const res = await fetch(`/api/gyms/${gymId}/report?month=${monthDate}`, {
@@ -233,6 +242,7 @@ function ReportView({ gymId }: { gymId: string }) {
             <ScoreCard
               icon={Gauge}
               label="RSI"
+              fullName="Retention Stability Index"
               value={`${data.metrics.rsi}`}
               suffix="/100"
               status={data.metrics.rsi >= 80 ? "good" : data.metrics.rsi >= 60 ? "moderate" : "risk"}
@@ -241,6 +251,7 @@ function ReportView({ gymId }: { gymId: string }) {
             <ScoreCard
               icon={TrendingDown}
               label="Churn"
+              fullName="Monthly Churn Rate"
               value={`${data.metrics.churnRate}`}
               suffix="%"
               status={Number(data.metrics.churnRate) <= 5 ? "good" : Number(data.metrics.churnRate) <= 7 ? "moderate" : "risk"}
@@ -249,18 +260,23 @@ function ReportView({ gymId }: { gymId: string }) {
             <ScoreCard
               icon={DollarSign}
               label="MRR"
+              fullName="Monthly Recurring Revenue"
               value={`$${Number(data.metrics.mrr).toLocaleString()}`}
+              status={Number(data.metrics.arm) >= 150 ? "good" : Number(data.metrics.arm) >= 100 ? "moderate" : "risk"}
               testId="metric-mrr"
             />
             <ScoreCard
               icon={Users}
               label="Active"
+              fullName="Active Members"
               value={String(data.metrics.activeMembers)}
+              status={data.metrics.activeMembers >= 50 ? "good" : data.metrics.activeMembers >= 20 ? "moderate" : undefined}
               testId="metric-active"
             />
             <ScoreCard
               icon={Radar}
               label="At Risk"
+              fullName="Members at Risk"
               value={String(data.metrics.memberRiskCount)}
               status={data.metrics.memberRiskCount > data.metrics.activeMembers * 0.15 ? "risk" : data.metrics.memberRiskCount > 0 ? "moderate" : "good"}
               testId="metric-risk"
@@ -279,6 +295,10 @@ function ReportView({ gymId }: { gymId: string }) {
               <ReportCard key={i} report={report} />
             ))}
           </div>
+
+          {data.atRiskMembers && data.atRiskMembers.length > 0 && (
+            <AtRiskMembersSection members={data.atRiskMembers} />
+          )}
         </>
       )}
     </div>
@@ -288,6 +308,7 @@ function ReportView({ gymId }: { gymId: string }) {
 function ScoreCard({
   icon: Icon,
   label,
+  fullName,
   value,
   suffix,
   status,
@@ -295,6 +316,7 @@ function ScoreCard({
 }: {
   icon: typeof Gauge;
   label: string;
+  fullName?: string;
   value: string;
   suffix?: string;
   status?: "good" | "moderate" | "risk";
@@ -320,7 +342,10 @@ function ScoreCard({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <div className={`w-1.5 h-1.5 rounded-full ${indicatorColor}`} />
-            <span className="text-xs text-muted-foreground font-medium">{label}</span>
+            <div>
+              <span className="text-xs text-muted-foreground font-medium">{label}</span>
+              {fullName && <p className="text-[10px] text-muted-foreground/70 leading-tight">{fullName}</p>}
+            </div>
           </div>
           <Icon className="w-4 h-4 text-muted-foreground" />
         </div>
@@ -414,6 +439,59 @@ function ReportCard({ report }: { report: MetricReport }) {
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">What To Do Next</p>
             <p className="text-sm leading-relaxed text-muted-foreground">{report.action}</p>
           </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function AtRiskMembersSection({ members }: { members: AtRiskMember[] }) {
+  return (
+    <Card data-testid="section-at-risk-members">
+      <CardContent className="p-6 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="space-y-1">
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-500" />
+              Members Requiring Outreach
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              {members.length} member{members.length !== 1 ? "s" : ""} in the first 60 days — the highest-risk window for cancellation.
+            </p>
+          </div>
+          <Badge variant="outline" className="text-xs">
+            ${members.reduce((sum, m) => sum + Number(m.monthlyRate), 0).toLocaleString()}/mo at risk
+          </Badge>
+        </div>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Joined</TableHead>
+                <TableHead>Tenure</TableHead>
+                <TableHead>Rate</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {members.map((member) => (
+                <TableRow key={member.id} data-testid={`row-risk-member-${member.id}`}>
+                  <TableCell className="font-medium">{member.name}</TableCell>
+                  <TableCell className="text-muted-foreground text-sm">{member.email || "\u2014"}</TableCell>
+                  <TableCell className="text-sm">
+                    {new Date(member.joinDate + "T00:00:00").toLocaleDateString()}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="text-xs font-mono">
+                      {member.tenureDays}d
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="font-mono text-sm">${Number(member.monthlyRate).toFixed(0)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </div>
       </CardContent>
     </Card>

@@ -194,7 +194,32 @@ export async function registerRoutes(
         prev3: toTrend(prev3),
       });
 
-      res.json({ metrics, reports });
+      const monthDate = new Date(month + "T00:00:00");
+      const nextMonth = new Date(monthDate);
+      nextMonth.setMonth(nextMonth.getMonth() + 1);
+      const monthEnd = new Date(nextMonth);
+      monthEnd.setDate(monthEnd.getDate() - 1);
+      const lastDayOfMonth = monthEnd.toISOString().slice(0, 10);
+
+      const activeMembers = await storage.getActiveMembers(req.params.id, lastDayOfMonth);
+      const asOfDate = monthEnd;
+      const atRiskMembers = activeMembers
+        .filter((m) => {
+          const joinDate = new Date(m.joinDate + "T00:00:00");
+          const tenureMonths = (asOfDate.getFullYear() - joinDate.getFullYear()) * 12 +
+            (asOfDate.getMonth() - joinDate.getMonth());
+          return tenureMonths <= 2;
+        })
+        .map((m) => ({
+          id: m.id,
+          name: m.name,
+          email: m.email,
+          joinDate: m.joinDate,
+          monthlyRate: m.monthlyRate,
+          tenureDays: Math.max(0, Math.floor((asOfDate.getTime() - new Date(m.joinDate + "T00:00:00").getTime()) / (1000 * 60 * 60 * 24))),
+        }));
+
+      res.json({ metrics, reports, atRiskMembers });
     } catch (error) {
       console.error("Error fetching report:", error);
       res.status(500).json({ message: "Failed to fetch report" });
