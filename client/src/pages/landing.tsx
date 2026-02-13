@@ -134,9 +134,7 @@ export default function LandingPage() {
       <section className="py-20 sm:py-28 border-t">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16 space-y-4">
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight" data-testid="text-stack-title">
-              Core Modules
-            </h2>
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight" data-testid="text-stack-title">The  Stability Framework</h2>
             <p className="text-muted-foreground max-w-xl mx-auto leading-relaxed">
               Five systems that translate your data into decisions.
               Not a reporting tool. A decision engine.
