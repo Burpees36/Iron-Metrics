@@ -69,11 +69,14 @@ shared/
 - `GET /api/gyms` - List owner's gyms
 - `POST /api/gyms` - Create gym
 - `GET /api/gyms/:id` - Get gym detail
-- `GET /api/gyms/:id/members` - List gym members
+- `GET /api/gyms/:id/members` - List gym members (raw)
+- `GET /api/gyms/:id/members/enriched` - Enriched members with risk scores, tenure, contact recency, high-value flags
+- `GET /api/gyms/:id/members/:memberId/contacts` - Contact history for a member
+- `POST /api/gyms/:id/members/:memberId/contact` - Log a touchpoint/contact
 - `POST /api/gyms/:id/import/members` - CSV member import (multipart)
 - `GET /api/gyms/:id/heartbeat?month=YYYY-MM-DD` - Monthly heartbeat metrics
 - `GET /api/gyms/:id/metrics` - All monthly metrics history
-- `GET /api/gyms/:id/report?month=YYYY-MM-DD` - Full report with 90-day trends, interpretations, actions
+- `GET /api/gyms/:id/report?month=YYYY-MM-DD` - Full report with 90-day trends, forecast, interpretations, actions
 - `POST /api/gyms/:id/recompute` - Recompute all metrics
 
 ## Design Tokens

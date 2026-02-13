@@ -64,6 +64,108 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/gyms/:id/members/enriched", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      const members = await storage.getMembersByGym(req.params.id);
+      const contacts = await storage.getLatestContacts(req.params.id);
+
+      const contactMap = new Map<string, Date>();
+      for (const c of contacts) {
+        if (c.contactedAt && !contactMap.has(c.memberId)) {
+          contactMap.set(c.memberId, c.contactedAt);
+        }
+      }
+
+      const now = new Date();
+      const rates = members
+        .filter((m) => m.status === "active")
+        .map((m) => Number(m.monthlyRate))
+        .sort((a, b) => b - a);
+      const top20Threshold = rates.length > 0 ? rates[Math.floor(rates.length * 0.2)] : 0;
+
+      const enriched = members.map((m) => {
+        const joinDate = new Date(m.joinDate + "T00:00:00");
+        const tenureDays = Math.max(0, Math.floor((now.getTime() - joinDate.getTime()) / (1000 * 60 * 60 * 24)));
+        const tenureMonths = Math.floor(tenureDays / 30.44);
+        const lastContacted = contactMap.get(m.id) || null;
+        const daysSinceContact = lastContacted
+          ? Math.floor((now.getTime() - lastContacted.getTime()) / (1000 * 60 * 60 * 24))
+          : null;
+        const rate = Number(m.monthlyRate);
+        const isHighValue = rate >= top20Threshold && top20Threshold > 0;
+
+        let risk: "low" | "medium" | "high" = "low";
+        let riskReasons: string[] = [];
+
+        if (m.status === "cancelled") {
+          risk = "low";
+          riskReasons = ["Cancelled"];
+        } else {
+          if (tenureDays <= 14) {
+            risk = "high";
+            riskReasons.push("New member (< 2 weeks)");
+          } else if (tenureDays <= 30) {
+            risk = "high";
+            riskReasons.push("First month");
+          } else if (tenureDays <= 60) {
+            risk = "medium";
+            riskReasons.push("Pre-habit window (< 60 days)");
+          }
+
+          if (daysSinceContact !== null && daysSinceContact > 14) {
+            if (risk === "low") risk = "medium";
+            riskReasons.push("No recent contact");
+          }
+
+          if (daysSinceContact === null && tenureDays <= 60) {
+            if (risk !== "high") risk = "high";
+            riskReasons.push("Never contacted");
+          }
+        }
+
+        return {
+          id: m.id,
+          name: m.name,
+          email: m.email,
+          status: m.status,
+          joinDate: m.joinDate,
+          cancelDate: m.cancelDate,
+          monthlyRate: m.monthlyRate,
+          tenureDays,
+          tenureMonths,
+          risk,
+          riskReasons,
+          lastContacted: lastContacted?.toISOString() || null,
+          daysSinceContact,
+          isHighValue,
+          totalRevenue: tenureMonths * rate,
+        };
+      });
+
+      res.json(enriched);
+    } catch (error) {
+      console.error("Error fetching enriched members:", error);
+      res.status(500).json({ message: "Failed to fetch members" });
+    }
+  });
+
+  app.get("/api/gyms/:id/members/:memberId/contacts", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      const contacts = await storage.getContactsForMember(req.params.memberId);
+      res.json(contacts);
+    } catch (error) {
+      console.error("Error fetching member contacts:", error);
+      res.status(500).json({ message: "Failed to fetch contacts" });
+    }
+  });
+
   app.post("/api/gyms/:id/import/members", isAuthenticated, upload.single("file"), async (req: any, res) => {
     try {
       const gym = await storage.getGym(req.params.id);

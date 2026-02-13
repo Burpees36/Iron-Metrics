@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
-import type { Gym, Member, GymMonthlyMetrics } from "@shared/schema";
+import type { Gym, Member, GymMonthlyMetrics, MemberContact } from "@shared/schema";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,6 +16,14 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/auth-utils";
@@ -42,6 +50,13 @@ import {
   AlertTriangle,
   Phone,
   Eye,
+  Shield,
+  ShieldAlert,
+  ShieldCheck,
+  Star,
+  Clock,
+  MessageSquare,
+  X,
 } from "lucide-react";
 import { useState } from "react";
 import {
@@ -77,6 +92,26 @@ interface AtRiskMember {
   tenureDays: number;
   lastContacted: string | null;
 }
+
+interface EnrichedMember {
+  id: string;
+  name: string;
+  email: string | null;
+  status: string;
+  joinDate: string;
+  cancelDate: string | null;
+  monthlyRate: string;
+  tenureDays: number;
+  tenureMonths: number;
+  risk: "low" | "medium" | "high";
+  riskReasons: string[];
+  lastContacted: string | null;
+  daysSinceContact: number | null;
+  isHighValue: boolean;
+  totalRevenue: number;
+}
+
+type MemberFilter = "all" | "high-risk" | "no-contact" | "new" | "high-value" | "pre-60";
 
 interface Forecast {
   nextMonthMrr: number;
@@ -713,14 +748,23 @@ function ForecastSection({ forecast }: { forecast: Forecast }) {
 
 function MembersView({ gymId }: { gymId: string }) {
   const [search, setSearch] = useState("");
-  const { data: members, isLoading } = useQuery<Member[]>({
-    queryKey: ["/api/gyms", gymId, "members"],
+  const [activeFilter, setActiveFilter] = useState<MemberFilter>("all");
+  const [selectedMember, setSelectedMember] = useState<EnrichedMember | null>(null);
+  const { toast } = useToast();
+
+  const { data: members, isLoading } = useQuery<EnrichedMember[]>({
+    queryKey: ["/api/gyms", gymId, "members", "enriched"],
+    queryFn: async () => {
+      const res = await fetch(`/api/gyms/${gymId}/members/enriched`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
   });
 
   if (isLoading) {
     return (
       <div className="space-y-2">
-        {Array(5).fill(0).map((_, i) => <Skeleton key={i} className="h-12 rounded-md" />)}
+        {Array(8).fill(0).map((_, i) => <Skeleton key={i} className="h-12 rounded-md" />)}
       </div>
     );
   }
@@ -730,9 +774,7 @@ function MembersView({ gymId }: { gymId: string }) {
       <Card>
         <CardContent className="p-10 text-center space-y-4">
           <Users className="w-10 h-10 text-muted-foreground mx-auto" />
-          <p className="text-muted-foreground">
-            No members imported yet.
-          </p>
+          <p className="text-muted-foreground">No members imported yet.</p>
           <Link href={`/gyms/${gymId}/import`}>
             <Button variant="outline">
               <Upload className="w-4 h-4 mr-1" />
@@ -744,25 +786,55 @@ function MembersView({ gymId }: { gymId: string }) {
     );
   }
 
-  const filtered = members.filter(
+  const activeMembers = members.filter((m) => m.status === "active");
+  const activeCount = activeMembers.length;
+  const cancelledCount = members.filter((m) => m.status === "cancelled").length;
+  const highRiskCount = activeMembers.filter((m) => m.risk === "high").length;
+  const noContactCount = activeMembers.filter((m) => m.daysSinceContact === null || m.daysSinceContact > 7).length;
+  const newCount = activeMembers.filter((m) => m.tenureDays <= 60).length;
+  const highValueCount = activeMembers.filter((m) => m.isHighValue).length;
+
+  let filtered = members.filter(
     (m) =>
       m.name.toLowerCase().includes(search.toLowerCase()) ||
       m.email?.toLowerCase().includes(search.toLowerCase())
   );
 
-  const activeCount = members.filter((m) => m.status === "active").length;
-  const cancelledCount = members.filter((m) => m.status === "cancelled").length;
+  if (activeFilter === "high-risk") filtered = filtered.filter((m) => m.risk === "high" && m.status === "active");
+  else if (activeFilter === "no-contact") filtered = filtered.filter((m) => (m.daysSinceContact === null || m.daysSinceContact > 7) && m.status === "active");
+  else if (activeFilter === "new") filtered = filtered.filter((m) => m.tenureDays <= 60 && m.status === "active");
+  else if (activeFilter === "high-value") filtered = filtered.filter((m) => m.isHighValue && m.status === "active");
+  else if (activeFilter === "pre-60") filtered = filtered.filter((m) => m.tenureDays > 14 && m.tenureDays <= 60 && m.status === "active");
+
+  const riskOrder = { high: 0, medium: 1, low: 2 };
+  filtered.sort((a, b) => {
+    if (a.status === "active" && b.status !== "active") return -1;
+    if (a.status !== "active" && b.status === "active") return 1;
+    return riskOrder[a.risk] - riskOrder[b.risk];
+  });
+
+  const pre60Count = activeMembers.filter((m) => m.tenureDays > 14 && m.tenureDays <= 60).length;
+
+  const filters: { key: MemberFilter; label: string; count: number }[] = [
+    { key: "all", label: "All", count: members.length },
+    { key: "high-risk", label: "High Risk", count: highRiskCount },
+    { key: "no-contact", label: "Needs Outreach", count: noContactCount },
+    { key: "new", label: "New (< 60 days)", count: newCount },
+    { key: "high-value", label: "High Value", count: highValueCount },
+    { key: "pre-60", label: "Pre-Habit Window", count: pre60Count },
+  ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 sticky top-0 z-40 bg-background pb-3 pt-1 border-b">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary" data-testid="badge-active-count">
-            {activeCount} active
-          </Badge>
-          <Badge variant="outline" data-testid="badge-cancelled-count">
-            {cancelledCount} cancelled
-          </Badge>
+          <Badge variant="secondary" data-testid="badge-active-count">{activeCount} active</Badge>
+          <Badge variant="outline" data-testid="badge-cancelled-count">{cancelledCount} cancelled</Badge>
+          {highRiskCount > 0 && (
+            <Badge variant="destructive" data-testid="badge-risk-count">
+              {highRiskCount} at risk
+            </Badge>
+          )}
         </div>
         <div className="relative w-full sm:w-64">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -776,44 +848,312 @@ function MembersView({ gymId }: { gymId: string }) {
         </div>
       </div>
 
+      <div className="flex flex-wrap gap-2" data-testid="section-member-filters">
+        {filters.map((f) => (
+          <Button
+            key={f.key}
+            size="sm"
+            variant={activeFilter === f.key ? "default" : "outline"}
+            onClick={() => setActiveFilter(f.key)}
+            data-testid={`filter-${f.key}`}
+          >
+            {f.label}
+            <span className="ml-1.5 text-xs opacity-70">{f.count}</span>
+          </Button>
+        ))}
+      </div>
+
       <Card>
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Joined</TableHead>
+                <TableHead className="w-[90px]">Risk</TableHead>
+                <TableHead>Last Contact</TableHead>
+                <TableHead>Tenure</TableHead>
                 <TableHead>Monthly Rate</TableHead>
+                <TableHead className="w-[40px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.map((member) => (
-                <TableRow key={member.id} data-testid={`row-member-${member.id}`}>
-                  <TableCell className="font-medium">{member.name}</TableCell>
-                  <TableCell className="text-muted-foreground text-sm">{member.email || "\u2014"}</TableCell>
+                <TableRow
+                  key={member.id}
+                  className="cursor-pointer hover-elevate"
+                  onClick={() => setSelectedMember(member)}
+                  data-testid={`row-member-${member.id}`}
+                >
                   <TableCell>
-                    <Badge
-                      variant={member.status === "active" ? "default" : "outline"}
-                      className="text-xs"
-                    >
-                      {member.status}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <RiskDot risk={member.status === "active" ? member.risk : "low"} />
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm truncate">{member.name}</p>
+                        {member.email && (
+                          <p className="text-[11px] text-muted-foreground truncate">{member.email}</p>
+                        )}
+                      </div>
+                      {member.isHighValue && member.status === "active" && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div>
+                              <Star className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 flex-shrink-0" />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent className="text-xs">Top 20% revenue</TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
                   </TableCell>
-                  <TableCell className="text-sm">
-                    {new Date(member.joinDate + "T00:00:00").toLocaleDateString()}
+                  <TableCell>
+                    {member.status === "active" ? (
+                      <RiskBadge risk={member.risk} />
+                    ) : (
+                      <Badge variant="outline" className="text-[10px]">Cancelled</Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <ContactRecency daysSinceContact={member.daysSinceContact} lastContacted={member.lastContacted} />
+                  </TableCell>
+                  <TableCell>
+                    <TenureDisplay tenureMonths={member.tenureMonths} tenureDays={member.tenureDays} />
                   </TableCell>
                   <TableCell className="font-mono text-sm">
-                    ${Number(member.monthlyRate).toFixed(2)}
+                    ${Number(member.monthlyRate).toFixed(0)}
+                  </TableCell>
+                  <TableCell>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
                   </TableCell>
                 </TableRow>
               ))}
+              {filtered.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    No members match the current filters.
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </div>
       </Card>
+
+      <MemberDrawer
+        member={selectedMember}
+        gymId={gymId}
+        onClose={() => setSelectedMember(null)}
+      />
     </div>
+  );
+}
+
+function RiskDot({ risk }: { risk: "low" | "medium" | "high" }) {
+  const colors = {
+    high: "bg-red-500 dark:bg-red-400",
+    medium: "bg-amber-500 dark:bg-amber-400",
+    low: "bg-emerald-500 dark:bg-emerald-400",
+  };
+  return <div className={`w-2 h-2 rounded-full flex-shrink-0 ${colors[risk]}`} />;
+}
+
+function RiskBadge({ risk }: { risk: "low" | "medium" | "high" }) {
+  const config = {
+    high: { variant: "destructive" as const, icon: ShieldAlert, label: "High" },
+    medium: { variant: "secondary" as const, icon: Shield, label: "Medium" },
+    low: { variant: "outline" as const, icon: ShieldCheck, label: "Low" },
+  };
+  const c = config[risk];
+  return (
+    <Badge variant={c.variant} className="text-[10px] gap-1">
+      <c.icon className="w-3 h-3" />
+      {c.label}
+    </Badge>
+  );
+}
+
+function ContactRecency({ daysSinceContact, lastContacted }: { daysSinceContact: number | null; lastContacted: string | null }) {
+  if (daysSinceContact === null || !lastContacted) {
+    return <span className="text-xs text-muted-foreground">No contact</span>;
+  }
+  const color = daysSinceContact <= 3
+    ? "text-emerald-600 dark:text-emerald-400"
+    : daysSinceContact <= 7
+      ? "text-amber-600 dark:text-amber-400"
+      : "text-red-500 dark:text-red-400";
+
+  const label = daysSinceContact === 0
+    ? "Today"
+    : daysSinceContact === 1
+      ? "Yesterday"
+      : `${daysSinceContact}d ago`;
+
+  return <span className={`text-xs font-mono ${color}`}>{label}</span>;
+}
+
+function TenureDisplay({ tenureMonths, tenureDays }: { tenureMonths: number; tenureDays: number }) {
+  if (tenureDays < 30) {
+    return <span className="text-xs font-mono">{tenureDays}d</span>;
+  }
+  return (
+    <span className="text-xs font-mono">
+      {tenureMonths} {tenureMonths === 1 ? "mo" : "mos"}
+    </span>
+  );
+}
+
+function MemberDrawer({ member, gymId, onClose }: { member: EnrichedMember | null; gymId: string; onClose: () => void }) {
+  const { toast } = useToast();
+  const [note, setNote] = useState("");
+
+  const { data: contactHistory } = useQuery<MemberContact[]>({
+    queryKey: ["/api/gyms", gymId, "members", member?.id, "contacts"],
+    queryFn: async () => {
+      const res = await fetch(`/api/gyms/${gymId}/members/${member!.id}/contacts`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: !!member,
+  });
+
+  const contactMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/gyms/${gymId}/members/${member!.id}/contact`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ note: note || "Touchpoint logged" }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Touchpoint logged", description: `Contact with ${member!.name} recorded.` });
+      setNote("");
+      queryClient.invalidateQueries({ queryKey: ["/api/gyms", gymId, "members", "enriched"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/gyms", gymId, "members", member!.id, "contacts"] });
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        window.location.href = "/api/login";
+        return;
+      }
+      toast({ title: "Error", description: "Failed to log contact.", variant: "destructive" });
+    },
+  });
+
+  const rate = member ? Number(member.monthlyRate) : 0;
+
+  return (
+    <Sheet open={!!member} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
+        {member && (
+          <>
+            <SheetHeader className="space-y-1 pr-8">
+              <SheetTitle className="flex items-center gap-2">
+                <RiskDot risk={member.status === "active" ? member.risk : "low"} />
+                {member.name}
+                {member.isHighValue && member.status === "active" && (
+                  <Star className="w-4 h-4 text-amber-500 dark:text-amber-400" />
+                )}
+              </SheetTitle>
+              <SheetDescription>
+                {member.email || "No email on file"}
+              </SheetDescription>
+            </SheetHeader>
+
+            <div className="mt-6 space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Status</p>
+                  <Badge variant={member.status === "active" ? "default" : "outline"} className="text-xs">
+                    {member.status}
+                  </Badge>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Risk</p>
+                  <RiskBadge risk={member.risk} />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Tenure</p>
+                  <p className="text-sm font-mono font-medium">
+                    {member.tenureMonths > 0 ? `${member.tenureMonths} months` : `${member.tenureDays} days`}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Monthly Rate</p>
+                  <p className="text-sm font-mono font-medium">${rate.toFixed(0)}/mo</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Total Revenue</p>
+                  <p className="text-sm font-mono font-medium">${member.totalRevenue.toLocaleString()}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Joined</p>
+                  <p className="text-sm">
+                    {new Date(member.joinDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  </p>
+                </div>
+              </div>
+
+              {member.riskReasons.length > 0 && member.status === "active" && (
+                <div className="space-y-2">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Risk Signals</p>
+                  <div className="flex flex-wrap gap-1">
+                    {member.riskReasons.map((r, i) => (
+                      <Badge key={i} variant="outline" className="text-[10px]">
+                        {r}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="border-t pt-4 space-y-3">
+                <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Log Touchpoint</p>
+                <Textarea
+                  placeholder="Quick note about this interaction..."
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  className="text-sm resize-none"
+                  rows={2}
+                  data-testid="input-contact-note"
+                />
+                <Button
+                  size="sm"
+                  onClick={() => contactMutation.mutate()}
+                  disabled={contactMutation.isPending}
+                  data-testid="button-log-touchpoint"
+                >
+                  <Phone className="w-3.5 h-3.5 mr-1" />
+                  {contactMutation.isPending ? "Logging..." : "Log Touchpoint"}
+                </Button>
+              </div>
+
+              <div className="border-t pt-4 space-y-3">
+                <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Contact History</p>
+                {(!contactHistory || contactHistory.length === 0) ? (
+                  <p className="text-xs text-muted-foreground">No contact history yet.</p>
+                ) : (
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                    {contactHistory.slice(0, 20).map((c) => (
+                      <div key={c.id} className="flex items-start gap-2 text-xs">
+                        <MessageSquare className="w-3 h-3 text-muted-foreground mt-0.5 flex-shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-muted-foreground">
+                            {c.contactedAt ? new Date(c.contactedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Unknown"}
+                          </p>
+                          {c.note && <p className="text-foreground mt-0.5">{c.note}</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
   );
 }
 

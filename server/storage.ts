@@ -22,6 +22,7 @@ export interface IStorage {
 
   logContact(contact: InsertMemberContact): Promise<MemberContact>;
   getLatestContacts(gymId: string): Promise<MemberContact[]>;
+  getContactsForMember(memberId: string): Promise<MemberContact[]>;
 
   upsertMonthlyMetrics(metrics: InsertGymMonthlyMetrics): Promise<GymMonthlyMetrics>;
   getMonthlyMetrics(gymId: string, monthStart: string): Promise<GymMonthlyMetrics | undefined>;
@@ -131,6 +132,14 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(memberContacts)
       .where(eq(memberContacts.gymId, gymId))
+      .orderBy(desc(memberContacts.contactedAt));
+  }
+
+  async getContactsForMember(memberId: string): Promise<MemberContact[]> {
+    return db
+      .select()
+      .from(memberContacts)
+      .where(eq(memberContacts.memberId, memberId))
       .orderBy(desc(memberContacts.contactedAt));
   }
 
