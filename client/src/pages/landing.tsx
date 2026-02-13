@@ -123,7 +123,7 @@ export default function LandingPage() {
                     <p className="text-sm leading-relaxed">
                       If churn decreases from 6.8% to 5.0%:
                     </p>
-                    <p className="text-lg font-bold font-mono text-primary">
+                    <p className="font-bold font-mono text-primary text-[22px]">
                       +$42,000/year unlocked
                     </p>
                   </CardContent>
