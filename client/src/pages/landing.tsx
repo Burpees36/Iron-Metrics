@@ -187,7 +187,7 @@ export default function LandingPage() {
             <PrincipleCard
               icon={Shield}
               title="Reduce volatility"
-              body="Understand exactly where revenue risk lives and what to do about it."
+              body="Know where revenue risk lives. Know how to reduce it."
             />
             <PrincipleCard
               icon={Users}
