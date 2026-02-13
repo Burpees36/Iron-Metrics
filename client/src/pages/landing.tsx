@@ -25,7 +25,7 @@ const modules = [
     icon: BarChart3,
     title: "Revenue Stability Panel",
     description:
-      "Know where volatility lives. See what's driving it. Know what to do next.",
+      "Monthly churn, net member growth, revenue per member, tier distribution, and volatility indicators. Every number includes what it means, why it matters, and what to do next.",
   },
   {
     icon: Radar,
@@ -37,13 +37,13 @@ const modules = [
     icon: TrendingUp,
     title: "Lifetime Value Engine",
     description:
-      "See how small retention improvements unlock real revenue. Make stability measurable.",
+      "True average LTV, revenue unlocked per 1% churn improvement, and long-term projection scenarios. Makes the financial impact of retention tangible.",
   },
   {
     icon: LineChart,
     title: "Coach Impact Layer",
     description:
-      "See which classes build long-term retention. Strengthen what keeps members coming back.",
+      "Class attendance retention, engagement stickiness by class type, and time-block patterns. Not coach ranking. Retention leverage insight.",
   },
 ];
 
@@ -137,28 +137,32 @@ export default function LandingPage() {
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight" data-testid="text-stack-title">The  Stability Framework</h2>
             <p className="text-muted-foreground max-w-xl mx-auto leading-relaxed">Five systems working together to protect your revenue.</p>
           </div>
-          <div className="space-y-10">
-            <div className="space-y-3">
-              <p className="text-muted-foreground uppercase tracking-widest text-[13px] font-medium">Layer 1 — Stability Core</p>
-              <div className="grid sm:grid-cols-2 gap-6">
-                <ModuleCard icon={modules[0].icon} title={modules[0].title} description={modules[0].description} />
-                <ModuleCard icon={modules[1].icon} title={modules[1].title} description={modules[1].description} />
-              </div>
-            </div>
-            <div className="space-y-3">
-              <p className="text-muted-foreground uppercase tracking-widest text-[13px] font-black">Layer 2 — Risk Control</p>
-              <div className="grid sm:grid-cols-2 gap-6">
-                <ModuleCard icon={modules[2].icon} title={modules[2].title} description={modules[2].description} />
-                <ModuleCard icon={modules[4].icon} title={modules[4].title} description={modules[4].description} />
-              </div>
-            </div>
-            <div className="space-y-3">
-              <p className="text-muted-foreground uppercase tracking-widest text-[13px] font-black">Layer 3 — Leverage</p>
-              <div className="grid sm:grid-cols-2 gap-6">
-                <ModuleCard icon={modules[3].icon} title={modules[3].title} description={modules[3].description} />
-                <ModuleCard icon={Target} title="Every Metric, Translated" description="No raw numbers. No guessing. If it doesn't drive action, it doesn't exist." />
-              </div>
-            </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {modules.map((item) => (
+              <Card key={item.title} className="hover-elevate">
+                <CardContent className="p-6 space-y-4">
+                  <div className="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center">
+                    <item.icon className="w-5 h-5 text-primary" />
+                  </div>
+                  <h3 className="font-semibold text-sm">{item.title}</h3>
+                  <p className="text-muted-foreground text-sm leading-relaxed">
+                    {item.description}
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+            <Card className="hover-elevate">
+              <CardContent className="p-6 space-y-4 flex flex-col justify-center h-full">
+                <div className="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center">
+                  <Target className="w-5 h-5 text-primary" />
+                </div>
+                <h3 className="font-semibold text-sm">Every Metric, Translated</h3>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  Value. Target. 90-day trend. Interpretation. Recommended action.
+                  If it does not drive action, it is not shown.
+                </p>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </section>
@@ -183,12 +187,11 @@ export default function LandingPage() {
       </section>
       <section className="py-20 sm:py-28 border-t">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-center text-xl sm:text-2xl font-bold tracking-tight mb-10">Stability changes how you lead.</h2>
           <div className="grid sm:grid-cols-3 gap-6 max-w-3xl mx-auto">
             <PrincipleCard
               icon={Shield}
               title="Reduce volatility"
-              body="Know where revenue risk lives. Know how to reduce it."
+              body="Understand exactly where revenue risk lives and what to do about it."
             />
             <PrincipleCard
               icon={Users}
@@ -208,11 +211,11 @@ export default function LandingPage() {
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
             Stability is strategy.
           </h2>
-          <div className="text-muted-foreground max-w-lg mx-auto leading-relaxed space-y-2">
-            <p>Strong gyms create strong communities.</p>
-            <p>Strong communities create healthy lives.</p>
-            <p>Financial stability protects both.</p>
-          </div>
+          <p className="text-muted-foreground max-w-lg mx-auto leading-relaxed">
+            Strong gyms create strong communities.
+            Strong communities create healthy lives.
+            Financial stability protects both.
+          </p>
           <a href="/api/login">
             <Button size="lg" data-testid="button-cta-bottom">
               Build Stability
@@ -262,20 +265,6 @@ function MetricBlock({
         </div>
         <p className="text-xs text-primary font-medium font-mono">{trend}</p>
         <p className="text-xs text-muted-foreground leading-relaxed">{interpretation}</p>
-      </CardContent>
-    </Card>
-  );
-}
-
-function ModuleCard({ icon: Icon, title, description }: { icon: typeof Gauge; title: string; description: string }) {
-  return (
-    <Card className="hover-elevate">
-      <CardContent className="p-6 space-y-4">
-        <div className="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center">
-          <Icon className="w-5 h-5 text-primary" />
-        </div>
-        <h3 className="font-semibold text-sm">{title}</h3>
-        <p className="text-muted-foreground text-sm leading-relaxed">{description}</p>
       </CardContent>
     </Card>
   );
