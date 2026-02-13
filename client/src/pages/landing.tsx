@@ -205,11 +205,12 @@ export default function LandingPage() {
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
             Stability is strategy.
           </h2>
-          <p className="text-muted-foreground max-w-lg mx-auto leading-relaxed">
-            Strong gyms create strong communities.
-            Strong communities create healthy lives.
-            Financial stability protects both.
-          </p>
+          <div className="max-w-lg mx-auto space-y-3">
+            <p className="text-xs font-medium text-primary uppercase tracking-widest mb-4">The Iron Metrics Creed</p>
+            <p className="text-muted-foreground leading-relaxed">Strong gyms create strong communities.</p>
+            <p className="text-muted-foreground leading-relaxed">Strong communities create healthy lives.</p>
+            <p className="font-medium leading-relaxed">Financial stability protects both.</p>
+          </div>
           <a href="/api/login">
             <Button size="lg" data-testid="button-cta-bottom">
               Build Stability
