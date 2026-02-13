@@ -146,7 +146,7 @@ export default function LandingPage() {
               </div>
             </div>
             <div className="space-y-3">
-              <p className="font-medium text-muted-foreground uppercase tracking-widest text-[13px]">Layer 2 — Risk Control</p>
+              <p className="text-muted-foreground uppercase tracking-widest text-[13px] font-black">Layer 2 — Risk Control</p>
               <div className="grid sm:grid-cols-2 gap-6">
                 <ModuleCard icon={modules[2].icon} title={modules[2].title} description={modules[2].description} />
                 <ModuleCard icon={modules[4].icon} title={modules[4].title} description={modules[4].description} />
