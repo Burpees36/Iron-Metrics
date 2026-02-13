@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { parseMembersCsv } from "./csv-parser";
-import { recomputeAllMetrics, generateMetricReports, generateForecast } from "./metrics";
+import { recomputeAllMetrics, generateMetricReports, generateForecast, generateTrendIntelligence } from "./metrics";
 import { insertGymSchema } from "@shared/schema";
 import multer from "multer";
 
@@ -361,6 +361,21 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error logging contact:", error);
       res.status(500).json({ message: "Failed to log contact" });
+    }
+  });
+
+  app.get("/api/gyms/:id/trends/intelligence", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      const metrics = await storage.getAllMonthlyMetrics(req.params.id);
+      const intelligence = generateTrendIntelligence(metrics);
+      res.json(intelligence);
+    } catch (error) {
+      console.error("Error generating trend intelligence:", error);
+      res.status(500).json({ message: "Failed to generate trend intelligence" });
     }
   });
 

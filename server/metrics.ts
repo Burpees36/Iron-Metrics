@@ -157,6 +157,15 @@ function computeRiskCount(activeMembers: Member[], monthDate: Date): number {
   return riskCount;
 }
 
+function countConsecutiveAbove(values: number[], threshold: number): number {
+  let count = 0;
+  for (let i = values.length - 1; i >= 0; i--) {
+    if (values[i] >= threshold) count++;
+    else break;
+  }
+  return count;
+}
+
 function getPrevMonth(monthStart: string, monthsBack: number): string {
   const d = new Date(monthStart + "T00:00:00");
   d.setMonth(d.getMonth() - monthsBack);
@@ -504,4 +513,400 @@ export function generateForecast(metricsHistory: {
     },
     outlook,
   };
+}
+
+export interface TrendInsight {
+  chartKey: string;
+  status: "positive" | "warning" | "critical" | "neutral";
+  headline: string;
+  detail: string;
+}
+
+export interface TrendProjection {
+  month: string;
+  mrr: number | null;
+  members: number | null;
+  churn: number | null;
+  rsi: number | null;
+  arm: number | null;
+  netGrowth: number | null;
+  projected: boolean;
+}
+
+export interface CorrelationInsight {
+  title: string;
+  detail: string;
+  status: "positive" | "warning" | "neutral";
+}
+
+export interface TrendIntelligence {
+  insights: TrendInsight[];
+  projections: TrendProjection[];
+  correlations: CorrelationInsight[];
+  stabilityVerdict: {
+    status: "strengthening" | "plateauing" | "drifting";
+    headline: string;
+    detail: string;
+  };
+}
+
+export function generateTrendIntelligence(
+  metricsHistory: {
+    monthStart: string;
+    activeMembers: number;
+    churnRate: string | number;
+    mrr: string | number;
+    arm: string | number;
+    rsi: number;
+    newMembers: number;
+    cancels: number;
+    ltv: string | number;
+    memberRiskCount: number;
+  }[]
+): TrendIntelligence {
+  const sorted = [...metricsHistory].sort((a, b) => a.monthStart.localeCompare(b.monthStart));
+  const insights: TrendInsight[] = [];
+  const correlations: CorrelationInsight[] = [];
+
+  if (sorted.length === 0) {
+    return {
+      insights: [],
+      projections: [],
+      correlations: [],
+      stabilityVerdict: { status: "plateauing", headline: "Insufficient data", detail: "Import members and recompute to generate intelligence." },
+    };
+  }
+
+  const latest = sorted[sorted.length - 1];
+  const latestChurn = Number(latest.churnRate);
+  const latestRsi = latest.rsi;
+  const latestMrr = Number(latest.mrr);
+  const latestArm = Number(latest.arm);
+  const latestMembers = latest.activeMembers;
+
+  const rsiValues = sorted.map((m) => m.rsi);
+  const consecutiveStable = countConsecutiveAbove(rsiValues, 80);
+  if (consecutiveStable >= 3) {
+    insights.push({
+      chartKey: "rsi",
+      status: "positive",
+      headline: `Retention stable for ${consecutiveStable} consecutive months`,
+      detail: "Your retention ecosystem is healthy and consistent. Members are staying and building habits.",
+    });
+  } else if (latestRsi >= 80) {
+    insights.push({
+      chartKey: "rsi",
+      status: "positive",
+      headline: "Retention is healthy this month",
+      detail: "RSI is in the stable zone. Continue current retention practices.",
+    });
+  } else if (latestRsi >= 60) {
+    insights.push({
+      chartKey: "rsi",
+      status: "warning",
+      headline: "Retention needs attention",
+      detail: `RSI at ${latestRsi} is below the stability threshold of 80. Investigate early cancellation patterns.`,
+    });
+  } else {
+    insights.push({
+      chartKey: "rsi",
+      status: "critical",
+      headline: "Retention is unstable",
+      detail: `RSI at ${latestRsi} signals significant membership volatility. Immediate action on onboarding and engagement required.`,
+    });
+  }
+
+  if (sorted.length >= 2) {
+    const prev = sorted[sorted.length - 2];
+    const prevChurn = Number(prev.churnRate);
+    const churnDelta = latestChurn - prevChurn;
+
+    if (churnDelta > 2) {
+      insights.push({
+        chartKey: "churn",
+        status: "critical",
+        headline: `Churn spike detected: ${prevChurn.toFixed(1)}% to ${latestChurn.toFixed(1)}%`,
+        detail: "A sharp increase in cancellations suggests a systemic issue. Check for seasonal patterns, pricing changes, or service quality shifts.",
+      });
+    } else if (latestChurn <= 5) {
+      const belowTarget = sorted.filter((m) => Number(m.churnRate) <= 5).length;
+      insights.push({
+        chartKey: "churn",
+        status: "positive",
+        headline: `Churn within target at ${latestChurn.toFixed(1)}%`,
+        detail: belowTarget >= 3
+          ? `Churn has been at or below 5% for ${belowTarget} months. Strong retention discipline.`
+          : "Churn is under control this month. Maintain outreach to at-risk members.",
+      });
+    } else if (latestChurn > 7) {
+      insights.push({
+        chartKey: "churn",
+        status: "critical",
+        headline: `Churn elevated at ${latestChurn.toFixed(1)}%`,
+        detail: "Above 7% monthly churn erodes revenue faster than most gyms can acquire new members. This is the top priority.",
+      });
+    } else {
+      insights.push({
+        chartKey: "churn",
+        status: "warning",
+        headline: `Churn at ${latestChurn.toFixed(1)}% — above 5% target`,
+        detail: "Moderately elevated churn. Focus on members in their first 60 days — that's where most cancellations originate.",
+      });
+    }
+
+    const prevMrr = Number(prev.mrr);
+    const mrrGrowth = prevMrr > 0 ? ((latestMrr - prevMrr) / prevMrr) * 100 : 0;
+    if (mrrGrowth > 3) {
+      insights.push({
+        chartKey: "mrr",
+        status: "positive",
+        headline: `MRR growing: +${mrrGrowth.toFixed(1)}% month-over-month`,
+        detail: `Revenue increased from $${prevMrr.toLocaleString()} to $${latestMrr.toLocaleString()}. Momentum is building.`,
+      });
+    } else if (mrrGrowth < -3) {
+      insights.push({
+        chartKey: "mrr",
+        status: "critical",
+        headline: `MRR declining: ${mrrGrowth.toFixed(1)}% month-over-month`,
+        detail: `Revenue dropped from $${prevMrr.toLocaleString()} to $${latestMrr.toLocaleString()}. Address churn before investing in acquisition.`,
+      });
+    } else {
+      insights.push({
+        chartKey: "mrr",
+        status: "neutral",
+        headline: `MRR holding steady at $${latestMrr.toLocaleString()}`,
+        detail: "Revenue is flat. Growth requires either more members or higher revenue per member.",
+      });
+    }
+
+    const prevMembers = prev.activeMembers;
+    const memberDelta = latestMembers - prevMembers;
+    if (memberDelta > 0) {
+      insights.push({
+        chartKey: "members",
+        status: "positive",
+        headline: `Roster growing: +${memberDelta} members this month`,
+        detail: "New signups are outpacing cancellations. Ensure onboarding keeps up with growth.",
+      });
+    } else if (memberDelta < -2) {
+      insights.push({
+        chartKey: "members",
+        status: "warning",
+        headline: `Roster contracting: ${memberDelta} members this month`,
+        detail: "More members leaving than joining. Without correction, this compounds monthly.",
+      });
+    } else {
+      insights.push({
+        chartKey: "members",
+        status: "neutral",
+        headline: `Roster stable at ${latestMembers} active members`,
+        detail: "No significant change in member count. Consider acquisition strategies to build forward momentum.",
+      });
+    }
+
+    const prevArm = Number(prev.arm);
+    const armDelta = latestArm - prevArm;
+    if (armDelta > 5) {
+      insights.push({
+        chartKey: "arm",
+        status: "positive",
+        headline: `Revenue per member increasing: $${latestArm.toFixed(0)}`,
+        detail: "Average revenue per member is trending up. This may reflect premium tier adoption or pricing adjustments.",
+      });
+    } else if (armDelta < -5) {
+      insights.push({
+        chartKey: "arm",
+        status: "warning",
+        headline: `Revenue per member declining: $${latestArm.toFixed(0)}`,
+        detail: "ARM is dropping — likely driven by lower-tier signups or promotional pricing. Monitor pricing mix.",
+      });
+    } else {
+      insights.push({
+        chartKey: "arm",
+        status: "neutral",
+        headline: `Revenue per member steady at $${latestArm.toFixed(0)}`,
+        detail: latestArm >= 150 ? "ARM is in a healthy range. Focus on retention over pricing changes." : "ARM is below the $150 target. Consider introducing premium programming or pricing adjustments.",
+      });
+    }
+
+    const netGrowth = latest.newMembers - latest.cancels;
+    if (netGrowth > 0) {
+      insights.push({
+        chartKey: "netGrowth",
+        status: "positive",
+        headline: `Positive net growth: +${netGrowth} members`,
+        detail: `${latest.newMembers} new joins vs ${latest.cancels} cancellations. Forward momentum is building.`,
+      });
+    } else if (netGrowth < 0) {
+      insights.push({
+        chartKey: "netGrowth",
+        status: "critical",
+        headline: `Negative net growth: ${netGrowth} members`,
+        detail: `Losing ${Math.abs(netGrowth)} members per month compounds rapidly. Retention must be the top priority.`,
+      });
+    } else {
+      insights.push({
+        chartKey: "netGrowth",
+        status: "neutral",
+        headline: "Net growth is flat",
+        detail: "Joins equal cancellations exactly. The gym is treading water — not growing, not shrinking.",
+      });
+    }
+  } else {
+    insights.push(
+      { chartKey: "churn", status: "neutral", headline: `Current churn: ${latestChurn.toFixed(1)}%`, detail: "Not enough history for trend analysis yet." },
+      { chartKey: "mrr", status: "neutral", headline: `Current MRR: $${latestMrr.toLocaleString()}`, detail: "Build more months of data to see revenue trends." },
+      { chartKey: "members", status: "neutral", headline: `${latestMembers} active members`, detail: "More data needed for member trend analysis." },
+      { chartKey: "arm", status: "neutral", headline: `ARM: $${latestArm.toFixed(0)}`, detail: "Track over time to identify pricing trends." },
+      { chartKey: "netGrowth", status: "neutral", headline: `Net: ${latest.newMembers - latest.cancels}`, detail: "More months needed for growth trend." },
+    );
+  }
+
+  const projections: TrendProjection[] = sorted.map((m) => ({
+    month: m.monthStart,
+    mrr: Number(m.mrr),
+    members: m.activeMembers,
+    churn: Number(m.churnRate),
+    rsi: m.rsi,
+    arm: Number(m.arm),
+    netGrowth: m.newMembers - m.cancels,
+    projected: false,
+  }));
+
+  if (sorted.length >= 2) {
+    const last = sorted[sorted.length - 1];
+    const churnDec = Number(last.churnRate) / 100;
+    const avgNewMembers = sorted.length >= 3
+      ? Math.round(sorted.slice(-3).reduce((s, m) => s + m.newMembers, 0) / 3)
+      : last.newMembers;
+    const arm = Number(last.arm);
+
+    let projMembers = last.activeMembers;
+    let projMrr = Number(last.mrr);
+    let projRsi = last.rsi;
+    let projChurn = Number(last.churnRate);
+
+    for (let i = 1; i <= 3; i++) {
+      const d = new Date(last.monthStart + "T00:00:00");
+      d.setMonth(d.getMonth() + i);
+      const monthStr = d.toISOString().slice(0, 10);
+
+      const lost = Math.round(projMembers * churnDec);
+      projMembers = Math.max(0, projMembers - lost + avgNewMembers);
+      projMrr = projMembers * arm;
+      const netGrowth = avgNewMembers - lost;
+
+      if (projChurn > 7) projRsi = Math.max(0, projRsi - 3);
+      else if (projChurn > 5) projRsi = Math.max(0, projRsi - 1);
+      else projRsi = Math.min(100, projRsi + 1);
+
+      projections.push({
+        month: monthStr,
+        mrr: Math.round(projMrr),
+        members: projMembers,
+        churn: parseFloat(projChurn.toFixed(1)),
+        rsi: Math.round(projRsi),
+        arm: Math.round(arm),
+        netGrowth,
+        projected: true,
+      });
+    }
+  }
+
+  if (sorted.length >= 3) {
+    const recent3 = sorted.slice(-3);
+    const mrrValues = recent3.map((m) => Number(m.mrr));
+    const memberValues = recent3.map((m) => m.activeMembers);
+    const armValues = recent3.map((m) => Number(m.arm));
+    const churnValues = recent3.map((m) => Number(m.churnRate));
+
+    const mrrGrowing = mrrValues[2] > mrrValues[0];
+    const membersGrowing = memberValues[2] > memberValues[0];
+    const armGrowing = armValues[2] > armValues[0];
+
+    if (mrrGrowing && membersGrowing && !armGrowing) {
+      correlations.push({
+        title: "MRR growth driven by member count, not pricing",
+        detail: "Revenue is increasing because you're adding members, but average revenue per member isn't rising. Consider premium tier opportunities.",
+        status: "neutral",
+      });
+    } else if (mrrGrowing && armGrowing && !membersGrowing) {
+      correlations.push({
+        title: "MRR growth driven by pricing, not volume",
+        detail: "Revenue is up because existing members are paying more on average. This is efficient but has a ceiling — growth will require new members eventually.",
+        status: "positive",
+      });
+    } else if (mrrGrowing && membersGrowing && armGrowing) {
+      correlations.push({
+        title: "Dual-engine growth: more members AND higher revenue each",
+        detail: "Both member count and average revenue are rising. This is the strongest possible growth pattern.",
+        status: "positive",
+      });
+    }
+
+    const churnRising = churnValues[2] > churnValues[0] + 1;
+    const membersDecreasing = memberValues[2] < memberValues[0];
+    if (churnRising && membersDecreasing) {
+      correlations.push({
+        title: "Churn spike correlates with member decline",
+        detail: "Rising cancellation rates are directly causing roster contraction. Retention should be prioritized over acquisition.",
+        status: "warning",
+      });
+    }
+
+    const newMemberTrend = recent3.map((m) => m.newMembers);
+    const mrrRising = mrrValues[2] > mrrValues[0];
+    if (newMemberTrend[2] > newMemberTrend[0] && mrrRising) {
+      correlations.push({
+        title: "New member influx is lifting revenue",
+        detail: "Acquisition momentum is translating into revenue growth. Ensure onboarding quality keeps pace with volume.",
+        status: "positive",
+      });
+    }
+
+    const riskValues = recent3.map((m) => m.memberRiskCount);
+    if (riskValues[2] > riskValues[0] + 2) {
+      correlations.push({
+        title: "At-risk member count is rising",
+        detail: "More members are entering the risk window (first 60 days). This may precede a churn spike in 1-2 months if not addressed.",
+        status: "warning",
+      });
+    }
+  }
+
+  let stabilityVerdict: TrendIntelligence["stabilityVerdict"];
+  if (sorted.length >= 3) {
+    const recent = sorted.slice(-3);
+    const rsiTrend = recent[2].rsi - recent[0].rsi;
+    const mrrTrend = Number(recent[2].mrr) - Number(recent[0].mrr);
+    const churnAvg = recent.reduce((s, m) => s + Number(m.churnRate), 0) / 3;
+
+    if (rsiTrend > 5 && mrrTrend > 0 && churnAvg <= 5) {
+      stabilityVerdict = {
+        status: "strengthening",
+        headline: "This business is strengthening",
+        detail: "RSI is trending up, revenue is growing, and churn is controlled. Your retention systems are working. Stay the course.",
+      };
+    } else if (rsiTrend < -5 || churnAvg > 7) {
+      stabilityVerdict = {
+        status: "drifting",
+        headline: "This business is drifting toward instability",
+        detail: "Key stability indicators are declining. Without intervention, expect revenue erosion and community fragility within 90 days.",
+      };
+    } else {
+      stabilityVerdict = {
+        status: "plateauing",
+        headline: "This business is plateauing",
+        detail: "Metrics are flat — not declining, but not building momentum. A plateau often precedes drift if left unaddressed.",
+      };
+    }
+  } else {
+    stabilityVerdict = {
+      status: "plateauing",
+      headline: "Building your stability baseline",
+      detail: "More months of data will reveal whether this business is strengthening, plateauing, or drifting.",
+    };
+  }
+
+  return { insights, projections, correlations, stabilityVerdict };
 }

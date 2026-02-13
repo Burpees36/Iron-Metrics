@@ -69,6 +69,8 @@ import {
   ResponsiveContainer,
   Area,
   AreaChart,
+  ReferenceLine,
+  ReferenceArea,
 } from "recharts";
 
 interface MetricReport {
@@ -124,6 +126,41 @@ interface Forecast {
     revenueAtRisk: number;
   };
   outlook: string;
+}
+
+interface TrendInsight {
+  chartKey: string;
+  status: "positive" | "warning" | "critical" | "neutral";
+  headline: string;
+  detail: string;
+}
+
+interface TrendProjection {
+  month: string;
+  mrr: number | null;
+  members: number | null;
+  churn: number | null;
+  rsi: number | null;
+  arm: number | null;
+  netGrowth: number | null;
+  projected: boolean;
+}
+
+interface CorrelationInsight {
+  title: string;
+  detail: string;
+  status: "positive" | "warning" | "neutral";
+}
+
+interface TrendIntelligence {
+  insights: TrendInsight[];
+  projections: TrendProjection[];
+  correlations: CorrelationInsight[];
+  stabilityVerdict: {
+    status: "strengthening" | "plateauing" | "drifting";
+    headline: string;
+    detail: string;
+  };
 }
 
 export default function GymDetail() {
@@ -870,7 +907,7 @@ function MembersView({ gymId }: { gymId: string }) {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead className="w-[90px]">Risk</TableHead>
-                <TableHead>Last Contact</TableHead>
+                <TableHead>Last Touchpoint</TableHead>
                 <TableHead>Tenure</TableHead>
                 <TableHead>Monthly Rate</TableHead>
                 <TableHead className="w-[40px]"></TableHead>
@@ -1158,15 +1195,22 @@ function MemberDrawer({ member, gymId, onClose }: { member: EnrichedMember | nul
 }
 
 function TrendsView({ gymId }: { gymId: string }) {
-  const { data: allMetrics, isLoading } = useQuery<GymMonthlyMetrics[]>({
-    queryKey: ["/api/gyms", gymId, "metrics"],
+  const { data: intelligence, isLoading: intellLoading } = useQuery<TrendIntelligence>({
+    queryKey: ["/api/gyms", gymId, "trends", "intelligence"],
   });
 
-  if (isLoading) {
-    return <Skeleton className="h-80 rounded-md" />;
+  if (intellLoading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-24 rounded-md" />
+        <div className="grid lg:grid-cols-2 gap-6">
+          {Array(6).fill(0).map((_, i) => <Skeleton key={i} className="h-80 rounded-md" />)}
+        </div>
+      </div>
+    );
   }
 
-  if (!allMetrics || allMetrics.length === 0) {
+  if (!intelligence || intelligence.projections.length === 0) {
     return (
       <Card>
         <CardContent className="p-10 text-center space-y-4">
@@ -1175,101 +1219,247 @@ function TrendsView({ gymId }: { gymId: string }) {
             Not enough data for trend analysis.
           </p>
           <p className="text-sm text-muted-foreground">
-            Import members and recompute metrics to build your 90-day trend.
+            Import members and recompute metrics to build your intelligence layer.
           </p>
         </CardContent>
       </Card>
     );
   }
 
-  const chartData = allMetrics
-    .sort((a, b) => a.monthStart.localeCompare(b.monthStart))
-    .map((m) => ({
-      month: new Date(m.monthStart + "T00:00:00").toLocaleDateString("en-US", {
-        month: "short",
-        year: "2-digit",
-      }),
-      mrr: Number(m.mrr),
-      members: m.activeMembers,
-      churn: Number(m.churnRate),
-      rsi: m.rsi,
-      arm: Number(m.arm),
-      netGrowth: m.newMembers - m.cancels,
-    }));
+  const { insights, projections, correlations, stabilityVerdict } = intelligence;
+  const getInsight = (key: string) => insights.find((i) => i.chartKey === key);
+
+  const chartData = projections.map((p) => ({
+    month: new Date(p.month + "T00:00:00").toLocaleDateString("en-US", { month: "short", year: "2-digit" }),
+    mrr: p.projected ? null : p.mrr,
+    mrrProjected: p.projected ? p.mrr : null,
+    members: p.projected ? null : p.members,
+    membersProjected: p.projected ? p.members : null,
+    churn: p.projected ? null : p.churn,
+    churnProjected: p.projected ? p.churn : null,
+    rsi: p.projected ? null : p.rsi,
+    rsiProjected: p.projected ? p.rsi : null,
+    arm: p.projected ? null : p.arm,
+    armProjected: p.projected ? p.arm : null,
+    netGrowth: p.projected ? null : p.netGrowth,
+    netGrowthProjected: p.projected ? p.netGrowth : null,
+    projected: p.projected,
+  }));
+
+  const lastActualIdx = chartData.findIndex((d) => d.projected) - 1;
+  if (lastActualIdx >= 0 && lastActualIdx < chartData.length - 1) {
+    const bridgeVal = chartData[lastActualIdx];
+    chartData[lastActualIdx + 1] = {
+      ...chartData[lastActualIdx + 1],
+      mrrProjected: chartData[lastActualIdx + 1].mrrProjected ?? bridgeVal.mrr,
+      membersProjected: chartData[lastActualIdx + 1].membersProjected ?? bridgeVal.members,
+      churnProjected: chartData[lastActualIdx + 1].churnProjected ?? bridgeVal.churn,
+      rsiProjected: chartData[lastActualIdx + 1].rsiProjected ?? bridgeVal.rsi,
+      armProjected: chartData[lastActualIdx + 1].armProjected ?? bridgeVal.arm,
+      netGrowthProjected: chartData[lastActualIdx + 1].netGrowthProjected ?? bridgeVal.netGrowth,
+    };
+    chartData[lastActualIdx] = {
+      ...bridgeVal,
+      mrrProjected: bridgeVal.mrr,
+      membersProjected: bridgeVal.members,
+      churnProjected: bridgeVal.churn,
+      rsiProjected: bridgeVal.rsi,
+      armProjected: bridgeVal.arm,
+      netGrowthProjected: bridgeVal.netGrowth,
+    };
+  }
+
+  const verdictColors = {
+    strengthening: { bg: "bg-emerald-500/10 dark:bg-emerald-500/15", border: "border-emerald-500/30", text: "text-emerald-700 dark:text-emerald-400", dot: "bg-emerald-500" },
+    plateauing: { bg: "bg-amber-500/10 dark:bg-amber-500/15", border: "border-amber-500/30", text: "text-amber-700 dark:text-amber-400", dot: "bg-amber-500" },
+    drifting: { bg: "bg-red-500/10 dark:bg-red-500/15", border: "border-red-500/30", text: "text-red-700 dark:text-red-400", dot: "bg-red-500" },
+  };
+  const vc = verdictColors[stabilityVerdict.status];
 
   return (
     <div className="space-y-6">
+      <Card className={`${vc.bg} border ${vc.border}`} data-testid="section-stability-verdict">
+        <CardContent className="p-6 space-y-2">
+          <div className="flex items-center gap-3">
+            <div className={`w-2.5 h-2.5 rounded-full ${vc.dot}`} style={{ boxShadow: `0 0 8px 2px currentColor` }} />
+            <h2 className={`text-lg font-bold ${vc.text}`} data-testid="text-verdict-headline">
+              {stabilityVerdict.headline}
+            </h2>
+          </div>
+          <p className="text-sm text-muted-foreground leading-relaxed" data-testid="text-verdict-detail">
+            {stabilityVerdict.detail}
+          </p>
+        </CardContent>
+      </Card>
+
       <div className="grid lg:grid-cols-2 gap-6">
-        <TrendChart
+        <IntelligentChart
           title="Retention Stability Index"
-          data={chartData}
+          insight={getInsight("rsi")}
           dataKey="rsi"
+          projectedKey="rsiProjected"
           gradientId="rsiGrad"
           color="hsl(var(--chart-1))"
+          data={chartData}
           domain={[0, 100]}
           formatter={(v: number) => [`${v}/100`, "RSI"]}
+          referenceArea={{ y1: 80, y2: 100, label: "Stable Zone" }}
+          testId="chart-rsi"
         />
-        <TrendChart
+        <IntelligentChart
           title="Monthly Recurring Revenue"
-          data={chartData}
+          insight={getInsight("mrr")}
           dataKey="mrr"
+          projectedKey="mrrProjected"
           gradientId="mrrGrad"
           color="hsl(var(--chart-2))"
+          data={chartData}
           yFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`}
           formatter={(v: number) => [`$${v.toLocaleString()}`, "MRR"]}
+          testId="chart-mrr"
         />
-        <TrendChart
+        <IntelligentChart
           title="Active Members"
-          data={chartData}
+          insight={getInsight("members")}
           dataKey="members"
+          projectedKey="membersProjected"
           gradientId="memGrad"
           color="hsl(var(--chart-5))"
-        />
-        <ChurnTrendChart data={chartData} />
-        <TrendChart
-          title="Revenue per Member"
           data={chartData}
+          testId="chart-members"
+        />
+        <IntelligentChurnChart
+          insight={getInsight("churn")}
+          data={chartData}
+          testId="chart-churn"
+        />
+        <IntelligentChart
+          title="Revenue per Member"
+          insight={getInsight("arm")}
           dataKey="arm"
+          projectedKey="armProjected"
           gradientId="armGrad"
           color="hsl(var(--chart-4))"
-          formatter={(v: number) => [`$${v.toFixed(0)}`, "ARM"]}
-        />
-        <TrendChart
-          title="Net Member Growth"
           data={chartData}
+          formatter={(v: number) => [`$${v.toFixed(0)}`, "ARM"]}
+          referenceLine={{ y: 150, label: "Target" }}
+          testId="chart-arm"
+        />
+        <IntelligentChart
+          title="Net Member Growth"
+          insight={getInsight("netGrowth")}
           dataKey="netGrowth"
+          projectedKey="netGrowthProjected"
           gradientId="netGrad"
           color="hsl(var(--chart-3))"
+          data={chartData}
           formatter={(v: number) => [`${v >= 0 ? "+" : ""}${v}`, "Net"]}
+          referenceLine={{ y: 0, label: "Break Even" }}
+          testId="chart-net-growth"
         />
       </div>
+
+      {correlations.length > 0 && (
+        <Card data-testid="section-correlations">
+          <CardContent className="p-6 space-y-4">
+            <div className="flex items-center gap-2">
+              <Activity className="w-4 h-4 text-muted-foreground" />
+              <h3 className="font-semibold text-sm">Correlation Intelligence</h3>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-4">
+              {correlations.map((c, i) => {
+                const cColors = {
+                  positive: { dot: "bg-emerald-500", text: "text-emerald-700 dark:text-emerald-400" },
+                  warning: { dot: "bg-amber-500", text: "text-amber-700 dark:text-amber-400" },
+                  neutral: { dot: "bg-muted-foreground", text: "" },
+                };
+                const cc = cColors[c.status];
+                return (
+                  <div key={i} className="rounded-md border p-4 space-y-2" data-testid={`correlation-${i}`}>
+                    <div className="flex items-center gap-2">
+                      <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cc.dot}`} />
+                      <p className={`text-sm font-medium ${cc.text}`}>{c.title}</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{c.detail}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
 
-function TrendChart({
+function InsightHeader({ insight }: { insight?: TrendInsight }) {
+  if (!insight) return null;
+  const statusConfig = {
+    positive: { dot: "bg-emerald-500", text: "text-emerald-700 dark:text-emerald-400" },
+    warning: { dot: "bg-amber-500", text: "text-amber-700 dark:text-amber-400" },
+    critical: { dot: "bg-red-500", text: "text-red-700 dark:text-red-400" },
+    neutral: { dot: "bg-muted-foreground", text: "text-muted-foreground" },
+  };
+  const sc = statusConfig[insight.status];
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-2">
+        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${sc.dot}`} />
+        <p className={`text-sm font-semibold ${sc.text}`} data-testid="text-insight-headline">
+          {insight.headline}
+        </p>
+      </div>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <p className="text-xs text-muted-foreground truncate cursor-help max-w-md">
+            {insight.detail}
+          </p>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="max-w-xs text-xs">
+          {insight.detail}
+        </TooltipContent>
+      </Tooltip>
+    </div>
+  );
+}
+
+function IntelligentChart({
   title,
+  insight,
   data,
   dataKey,
+  projectedKey,
   gradientId,
   color,
   domain,
   yFormatter,
   formatter,
+  referenceArea,
+  referenceLine,
+  testId,
 }: {
   title: string;
+  insight?: TrendInsight;
   data: any[];
   dataKey: string;
+  projectedKey: string;
   gradientId: string;
   color: string;
   domain?: [number, number];
   yFormatter?: (v: number) => string;
   formatter?: (v: number) => [string, string];
+  referenceArea?: { y1: number; y2: number; label: string };
+  referenceLine?: { y: number; label: string };
+  testId: string;
 }) {
   return (
-    <Card>
+    <Card data-testid={testId}>
       <CardContent className="p-6 space-y-4">
-        <h3 className="font-semibold text-sm">{title}</h3>
+        <div className="space-y-2">
+          <h3 className="font-semibold text-sm">{title}</h3>
+          <InsightHeader insight={insight} />
+        </div>
         <div className="h-56">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={data}>
@@ -1286,20 +1476,42 @@ function TrendChart({
                 contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12 }}
                 formatter={formatter}
               />
-              <Area type="monotone" dataKey={dataKey} stroke={color} fill={`url(#${gradientId})`} strokeWidth={2} />
+              {referenceArea && (
+                <ReferenceArea y1={referenceArea.y1} y2={referenceArea.y2} fill="#10b981" fillOpacity={0.06} stroke="#10b981" strokeOpacity={0.15} strokeDasharray="3 3" />
+              )}
+              {referenceLine && (
+                <ReferenceLine y={referenceLine.y} stroke="hsl(var(--muted-foreground))" strokeDasharray="6 4" strokeOpacity={0.5} label={{ value: referenceLine.label, position: "right", fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
+              )}
+              <Area type="monotone" dataKey={dataKey} stroke={color} fill={`url(#${gradientId})`} strokeWidth={2} connectNulls={false} />
+              <Area type="monotone" dataKey={projectedKey} stroke={color} fill="none" strokeWidth={2} strokeDasharray="6 4" strokeOpacity={0.5} connectNulls={false} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
+        {data.some((d) => d.projected) && (
+          <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <span className="w-4 h-px inline-block" style={{ backgroundColor: color }} />
+              Actual
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-4 h-px inline-block border-t border-dashed" style={{ borderColor: color }} />
+              Projected
+            </span>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
 }
 
-function ChurnTrendChart({ data }: { data: any[] }) {
+function IntelligentChurnChart({ insight, data, testId }: { insight?: TrendInsight; data: any[]; testId: string }) {
   return (
-    <Card>
+    <Card data-testid={testId}>
       <CardContent className="p-6 space-y-4">
-        <h3 className="font-semibold text-sm">Churn Rate (%)</h3>
+        <div className="space-y-2">
+          <h3 className="font-semibold text-sm">Churn Rate (%)</h3>
+          <InsightHeader insight={insight} />
+        </div>
         <div className="h-56">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data}>
@@ -1310,10 +1522,25 @@ function ChurnTrendChart({ data }: { data: any[] }) {
                 contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12 }}
                 formatter={(value: number) => [`${value}%`, "Churn"]}
               />
-              <Line type="monotone" dataKey="churn" stroke="hsl(var(--chart-3))" strokeWidth={2} dot={{ r: 3 }} />
+              <ReferenceLine y={5} stroke="#f59e0b" strokeDasharray="6 4" strokeOpacity={0.6} label={{ value: "5% Target", position: "right", fontSize: 10, fill: "#f59e0b" }} />
+              <ReferenceArea y1={7} y2={15} fill="#ef4444" fillOpacity={0.04} stroke="#ef4444" strokeOpacity={0.1} strokeDasharray="3 3" />
+              <Line type="monotone" dataKey="churn" stroke="hsl(var(--chart-3))" strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
+              <Line type="monotone" dataKey="churnProjected" stroke="hsl(var(--chart-3))" strokeWidth={2} strokeDasharray="6 4" strokeOpacity={0.5} dot={false} connectNulls={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>
+        {data.some((d) => d.projected) && (
+          <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <span className="w-4 h-px inline-block bg-[hsl(var(--chart-3))]" />
+              Actual
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-4 h-px inline-block border-t border-dashed border-[hsl(var(--chart-3))]" />
+              Projected
+            </span>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

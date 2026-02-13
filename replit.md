@@ -77,6 +77,7 @@ shared/
 - `GET /api/gyms/:id/heartbeat?month=YYYY-MM-DD` - Monthly heartbeat metrics
 - `GET /api/gyms/:id/metrics` - All monthly metrics history
 - `GET /api/gyms/:id/report?month=YYYY-MM-DD` - Full report with 90-day trends, forecast, interpretations, actions
+- `GET /api/gyms/:id/trends/intelligence` - Trend intelligence with insights, projections, correlations, stability verdict
 - `POST /api/gyms/:id/recompute` - Recompute all metrics
 
 ## Design Tokens
