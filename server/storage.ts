@@ -1,9 +1,10 @@
 import {
-  gyms, members, gymMonthlyMetrics, memberContacts,
+  gyms, members, gymMonthlyMetrics, memberContacts, importJobs,
   type Gym, type InsertGym,
   type Member, type InsertMember,
   type GymMonthlyMetrics, type InsertGymMonthlyMetrics,
   type MemberContact, type InsertMemberContact,
+  type ImportJob, type InsertImportJob,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, sql, gte, lte, desc } from "drizzle-orm";
@@ -27,6 +28,12 @@ export interface IStorage {
   upsertMonthlyMetrics(metrics: InsertGymMonthlyMetrics): Promise<GymMonthlyMetrics>;
   getMonthlyMetrics(gymId: string, monthStart: string): Promise<GymMonthlyMetrics | undefined>;
   getAllMonthlyMetrics(gymId: string): Promise<GymMonthlyMetrics[]>;
+
+  createImportJob(job: InsertImportJob): Promise<ImportJob>;
+  getImportJob(id: string): Promise<ImportJob | undefined>;
+  getImportJobsByGym(gymId: string): Promise<ImportJob[]>;
+  updateImportJob(id: string, updates: Partial<ImportJob>): Promise<ImportJob>;
+  findImportByHash(gymId: string, fileHash: string): Promise<ImportJob | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -186,6 +193,41 @@ export class DatabaseStorage implements IStorage {
       .from(gymMonthlyMetrics)
       .where(eq(gymMonthlyMetrics.gymId, gymId))
       .orderBy(desc(gymMonthlyMetrics.monthStart));
+  }
+
+  async createImportJob(job: InsertImportJob): Promise<ImportJob> {
+    const [created] = await db.insert(importJobs).values(job).returning();
+    return created;
+  }
+
+  async getImportJob(id: string): Promise<ImportJob | undefined> {
+    const [job] = await db.select().from(importJobs).where(eq(importJobs.id, id));
+    return job;
+  }
+
+  async getImportJobsByGym(gymId: string): Promise<ImportJob[]> {
+    return db
+      .select()
+      .from(importJobs)
+      .where(eq(importJobs.gymId, gymId))
+      .orderBy(desc(importJobs.createdAt));
+  }
+
+  async updateImportJob(id: string, updates: Partial<ImportJob>): Promise<ImportJob> {
+    const [updated] = await db
+      .update(importJobs)
+      .set(updates)
+      .where(eq(importJobs.id, id))
+      .returning();
+    return updated;
+  }
+
+  async findImportByHash(gymId: string, fileHash: string): Promise<ImportJob | undefined> {
+    const [job] = await db
+      .select()
+      .from(importJobs)
+      .where(and(eq(importJobs.gymId, gymId), eq(importJobs.fileHash, fileHash)));
+    return job;
   }
 }
 

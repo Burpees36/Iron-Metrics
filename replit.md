@@ -37,7 +37,18 @@ If it does not drive action, it is not shown.
 ## Key Features
 - Replit Auth for authentication
 - Multi-tenant gym management (each gym scoped by owner_id)
-- CSV member import with idempotent upsert (by email)
+- **Robust Data Ingestion System** (Import Wizard):
+  - Multi-step wizard: Upload → Map Columns → Validate → Import
+  - Intelligent column auto-detection with confidence indicators (high/medium/low)
+  - Supports 50+ column name synonyms (Wodify, PushPress, Zen Planner, etc.)
+  - Multi-format date parsing (ISO, US, EU, named months, short years)
+  - Row-level validation with actionable error messages and partial success
+  - File fingerprinting for duplicate file detection
+  - Raw CSV preservation in import_jobs table for audit/reprocessing
+  - Import history tracking with status, counts, and error details
+  - Idempotent upsert by email to prevent data duplication
+  - Input sanitization (CSV injection protection, email validation)
+  - 10 MB file size limit with file type enforcement
 - Performance Stack metrics computation with 90-day trend tracking
 - 7 report cards: Monthly Churn, RSI, Revenue/Member, LTVE, Risk Radar, Net Growth
 - LTVE scenario visualization ("If churn drops from X to Y: +$Z per member")
@@ -63,7 +74,7 @@ server/
   replit_integrations/auth/ - Replit Auth module
 
 shared/
-  schema.ts      - Drizzle schemas (gyms, members, gym_monthly_metrics)
+  schema.ts      - Drizzle schemas (gyms, members, import_jobs, gym_monthly_metrics)
   models/auth.ts - Auth schemas (users, sessions)
 ```
 
@@ -75,7 +86,11 @@ shared/
 - `GET /api/gyms/:id/members/enriched` - Enriched members with risk scores, tenure, contact recency, high-value flags
 - `GET /api/gyms/:id/members/:memberId/contacts` - Contact history for a member
 - `POST /api/gyms/:id/members/:memberId/contact` - Log a touchpoint/contact
-- `POST /api/gyms/:id/import/members` - CSV member import (multipart)
+- `POST /api/gyms/:id/import/preview` - Preview CSV with auto-detected mapping, validation summary, duplicate check
+- `POST /api/gyms/:id/import/commit` - Commit import with confirmed column mapping, creates import job
+- `POST /api/gyms/:id/import/members` - Legacy direct CSV import (multipart)
+- `GET /api/gyms/:id/imports` - Import history (list of past import jobs)
+- `GET /api/gyms/:id/imports/:jobId` - Import job details with errors
 - `GET /api/gyms/:id/heartbeat?month=YYYY-MM-DD` - Monthly heartbeat metrics
 - `GET /api/gyms/:id/metrics` - All monthly metrics history
 - `GET /api/gyms/:id/report?month=YYYY-MM-DD` - Full report with 90-day trends, forecast, interpretations, actions

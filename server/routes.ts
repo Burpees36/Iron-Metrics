@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
-import { parseMembersCsv } from "./csv-parser";
+import { parseMembersCsv, previewCsv, parseAllRows, computeFileHash, type ColumnMapping } from "./csv-parser";
 import { recomputeAllMetrics, generateMetricReports, generateForecast, generateTrendIntelligence } from "./metrics";
 import { generatePredictiveIntelligence } from "./predictive";
 import { insertGymSchema } from "@shared/schema";
@@ -167,6 +167,160 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/gyms/:id/import/preview", isAuthenticated, upload.single("file"), async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+
+      const csvText = req.file.buffer.toString("utf-8");
+      const fileHash = computeFileHash(csvText);
+
+      const existingImport = await storage.findImportByHash(req.params.id, fileHash);
+      const isDuplicate = existingImport && existingImport.status === "completed";
+
+      const customMapping = req.body.mapping ? JSON.parse(req.body.mapping) as Partial<ColumnMapping> : undefined;
+      const preview = previewCsv(csvText, customMapping);
+
+      res.json({
+        ...preview,
+        fileHash,
+        isDuplicate,
+        duplicateJobId: isDuplicate ? existingImport.id : null,
+        duplicateDate: isDuplicate ? existingImport.createdAt : null,
+      });
+    } catch (error: any) {
+      console.error("Error previewing import:", error);
+      res.status(400).json({ message: error.message || "Failed to preview file" });
+    }
+  });
+
+  app.post("/api/gyms/:id/import/commit", isAuthenticated, upload.single("file"), async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+
+      const csvText = req.file.buffer.toString("utf-8");
+      const fileHash = computeFileHash(csvText);
+
+      let mapping: ColumnMapping;
+      try {
+        mapping = req.body.mapping ? JSON.parse(req.body.mapping) : null;
+      } catch {
+        return res.status(400).json({ message: "Invalid column mapping format" });
+      }
+
+      if (!mapping || typeof mapping !== "object") {
+        return res.status(400).json({ message: "Column mapping is required" });
+      }
+      if (typeof mapping.name !== "number" || mapping.name < 0) {
+        return res.status(400).json({ message: "Name column mapping is required" });
+      }
+      if (typeof mapping.joinDate !== "number" || mapping.joinDate < 0) {
+        return res.status(400).json({ message: "Join Date column mapping is required" });
+      }
+
+      const result = parseAllRows(csvText, mapping);
+
+      if (result.validRows === 0) {
+        const job = await storage.createImportJob({
+          gymId: req.params.id,
+          uploadedBy: req.user.claims.sub,
+          filename: req.file.originalname || "import.csv",
+          fileHash,
+          rawCsv: csvText,
+          columnMapping: JSON.stringify(mapping),
+          status: "failed",
+          totalRows: result.totalRows,
+          importedCount: 0,
+          updatedCount: 0,
+          skippedCount: 0,
+          errorCount: result.errorRows,
+          errors: result.errors.length > 0 ? JSON.stringify(result.errors.slice(0, 200)) : null,
+        });
+
+        return res.status(400).json({
+          jobId: job.id,
+          message: "No valid rows to import. All rows had validation errors.",
+          errorCount: result.errorRows,
+          errors: result.errors.slice(0, 50),
+        });
+      }
+
+      const job = await storage.createImportJob({
+        gymId: req.params.id,
+        uploadedBy: req.user.claims.sub,
+        filename: req.file.originalname || "import.csv",
+        fileHash,
+        rawCsv: csvText,
+        columnMapping: JSON.stringify(mapping),
+        status: "processing",
+        totalRows: result.totalRows,
+        importedCount: 0,
+        updatedCount: 0,
+        skippedCount: 0,
+        errorCount: 0,
+        errors: null,
+      });
+
+      let imported = 0;
+      let updated = 0;
+      let skipped = 0;
+
+      for (const member of result.members) {
+        try {
+          const r = await storage.upsertMember({
+            gymId: req.params.id,
+            name: member.name,
+            email: member.email,
+            status: member.status,
+            joinDate: member.joinDate,
+            cancelDate: member.cancelDate,
+            monthlyRate: member.monthlyRate,
+          });
+          if (r.action === "inserted") imported++;
+          else updated++;
+        } catch {
+          skipped++;
+        }
+      }
+
+      const updatedJob = await storage.updateImportJob(job.id, {
+        status: "completed",
+        totalRows: result.totalRows,
+        importedCount: imported,
+        updatedCount: updated,
+        skippedCount: skipped,
+        errorCount: result.errorRows,
+        errors: result.errors.length > 0 ? JSON.stringify(result.errors.slice(0, 200)) : null,
+        completedAt: new Date(),
+      });
+
+      recomputeAllMetrics(req.params.id).catch((err) =>
+        console.error("Background metrics recompute failed:", err)
+      );
+
+      res.json({
+        jobId: updatedJob.id,
+        imported,
+        updated,
+        skipped,
+        errorCount: result.errorRows,
+        errors: result.errors.slice(0, 50),
+        totalRows: result.totalRows,
+        validRows: result.validRows,
+      });
+    } catch (error: any) {
+      console.error("Error committing import:", error);
+      res.status(400).json({ message: error.message || "Import failed" });
+    }
+  });
+
   app.post("/api/gyms/:id/import/members", isAuthenticated, upload.single("file"), async (req: any, res) => {
     try {
       const gym = await storage.getGym(req.params.id);
@@ -208,6 +362,61 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("Error importing members:", error);
       res.status(400).json({ message: error.message || "Import failed" });
+    }
+  });
+
+  app.get("/api/gyms/:id/imports", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      const jobs = await storage.getImportJobsByGym(req.params.id);
+      const sanitized = jobs.map(j => ({
+        id: j.id,
+        filename: j.filename,
+        status: j.status,
+        totalRows: j.totalRows,
+        importedCount: j.importedCount,
+        updatedCount: j.updatedCount,
+        skippedCount: j.skippedCount,
+        errorCount: j.errorCount,
+        createdAt: j.createdAt,
+        completedAt: j.completedAt,
+      }));
+      res.json(sanitized);
+    } catch (error) {
+      console.error("Error fetching import history:", error);
+      res.status(500).json({ message: "Failed to fetch import history" });
+    }
+  });
+
+  app.get("/api/gyms/:id/imports/:jobId", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      const job = await storage.getImportJob(req.params.jobId);
+      if (!job || job.gymId !== req.params.id) return res.status(404).json({ message: "Import job not found" });
+
+      res.json({
+        id: job.id,
+        filename: job.filename,
+        status: job.status,
+        totalRows: job.totalRows,
+        importedCount: job.importedCount,
+        updatedCount: job.updatedCount,
+        skippedCount: job.skippedCount,
+        errorCount: job.errorCount,
+        errors: job.errors ? JSON.parse(job.errors) : [],
+        columnMapping: job.columnMapping ? JSON.parse(job.columnMapping) : null,
+        createdAt: job.createdAt,
+        completedAt: job.completedAt,
+      });
+    } catch (error) {
+      console.error("Error fetching import job:", error);
+      res.status(500).json({ message: "Failed to fetch import job" });
     }
   });
 

@@ -66,6 +66,36 @@ export const insertMemberContactSchema = createInsertSchema(memberContacts).omit
 export type InsertMemberContact = z.infer<typeof insertMemberContactSchema>;
 export type MemberContact = typeof memberContacts.$inferSelect;
 
+export const importJobs = pgTable("import_jobs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gymId: varchar("gym_id").notNull().references(() => gyms.id),
+  uploadedBy: varchar("uploaded_by").notNull(),
+  filename: text("filename").notNull(),
+  fileHash: text("file_hash").notNull(),
+  rawCsv: text("raw_csv").notNull(),
+  columnMapping: text("column_mapping"),
+  status: text("status").notNull().default("pending"),
+  totalRows: integer("total_rows").notNull().default(0),
+  importedCount: integer("imported_count").notNull().default(0),
+  updatedCount: integer("updated_count").notNull().default(0),
+  skippedCount: integer("skipped_count").notNull().default(0),
+  errorCount: integer("error_count").notNull().default(0),
+  errors: text("errors"),
+  createdAt: timestamp("created_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+}, (table) => [
+  index("idx_import_jobs_gym").on(table.gymId),
+  index("idx_import_jobs_hash").on(table.fileHash),
+]);
+
+export const importJobsRelations = relations(importJobs, ({ one }) => ({
+  gym: one(gyms, { fields: [importJobs.gymId], references: [gyms.id] }),
+}));
+
+export const insertImportJobSchema = createInsertSchema(importJobs).omit({ id: true, createdAt: true, completedAt: true });
+export type InsertImportJob = z.infer<typeof insertImportJobSchema>;
+export type ImportJob = typeof importJobs.$inferSelect;
+
 export const gymMonthlyMetrics = pgTable("gym_monthly_metrics", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   gymId: varchar("gym_id").notNull().references(() => gyms.id),
