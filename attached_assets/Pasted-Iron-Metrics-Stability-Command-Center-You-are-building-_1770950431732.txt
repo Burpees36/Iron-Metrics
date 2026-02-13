@@ -1,0 +1,257 @@
+Iron Metrics — Stability Command Center
+
+You are building a production-grade SaaS platform called Iron Metrics.
+
+Iron Metrics is the Stability Command Center for CrossFit gyms.
+
+It is not a generic analytics dashboard.
+
+It is a financial resilience operating system designed to:
+
+• Reduce revenue volatility
+• Improve retention stability
+• Lower owner stress
+• Strengthen community longevity
+
+The long-term evolution of this system is to become preventative care infrastructure.
+But Phase 1 is CrossFit financial stability dominance.
+
+Everything you build must align with that.
+
+PRODUCT IDENTITY
+
+Iron Metrics is the operating system for financially resilient gyms.
+
+Retention is the heartbeat.
+Community is the soul.
+Stability is engineered.
+
+The system must feel:
+
+• Calm
+• Minimal
+• Structured
+• Authoritative
+• Precise
+• Intentional
+
+Not flashy.
+Not startup-hyped.
+Not cluttered.
+
+PHASE 1 GOAL
+
+Build the Stability Command Center for CrossFit gyms using Wodify-style data.
+
+Core focus:
+Retention + revenue stability + risk detection.
+
+This is not a reporting tool.
+
+It is a decision engine.
+
+CORE MODULES TO BUILD
+1. Retention Stability Index (Primary North Star)
+
+Single composite score (1–100) based on:
+
+• Monthly churn rate
+• Early cancellation trends
+• Membership age distribution
+• Attendance decay patterns
+
+Must show:
+
+• Current score
+• 90-day trend
+• Target benchmark
+• Clear interpretation
+• Suggested action
+
+2. Revenue Stability Panel
+
+Metrics:
+
+• Monthly churn %
+• Net member growth
+• Revenue per member
+• Tier distribution
+• Volatility indicator
+
+Must include:
+
+“What this means”
+“Why it matters”
+“What to do next”
+
+No unexplained numbers.
+
+3. Member Risk Radar
+
+Predictive early-warning system:
+
+Flag members based on:
+
+• Attendance drop-off
+• Tenure stage risk
+• Payment irregularities
+• Engagement decay
+
+Must show:
+
+• Risk tier (Low / Moderate / High)
+• Intervention window recommendation
+• Outreach priority ranking
+
+This is proactive, not reactive.
+
+4. Lifetime Value Engine
+
+Calculate:
+
+• True average LTV
+• Revenue unlocked per 1% churn improvement
+• Long-term revenue projection scenarios
+
+Visualize:
+
+“If churn decreases from 6.8% to 5%:
+
+$X per year unlocked”
+
+Make impact tangible.
+
+5. Coach Impact Layer
+
+Analyze:
+
+• Class attendance retention by coach
+• Engagement stickiness by class type
+• Attendance patterns by time block
+
+Important:
+
+Do NOT frame as coach ranking.
+Frame as retention leverage insight.
+
+UI / UX REQUIREMENTS
+
+Design philosophy:
+
+Minimal dark interface
+High contrast numbers
+Deep steel blue accent
+Generous whitespace
+
+No cluttered charts.
+No excessive animations.
+
+Every metric block must contain:
+
+• Metric value
+• Target
+• 90-day trend
+• Interpretation
+• Recommended action
+
+If it doesn’t drive action, remove it.
+
+FEATURE FILTER
+
+Before implementing any feature, validate:
+
+Does this improve financial stability?
+
+Does this improve retention clarity?
+
+Does this reduce owner stress?
+
+Does this strengthen community longevity?
+
+If no — exclude.
+
+DATA ARCHITECTURE (IMPORTANT)
+
+Design system to support:
+
+• Multi-tenant gyms
+• Strict data isolation
+• Cache-driven metric reads
+• Nightly recalculations
+• Background job processing
+• Fast <500ms dashboard load
+
+Prepare schema to expand later into:
+
+• Health engagement metrics
+• Employer wellness integration
+• Longitudinal community impact tracking
+
+Future-proof architecture now.
+
+TONE OF COPY
+
+All product copy must be:
+
+Declarative
+Calm
+Minimal
+Authoritative
+
+Avoid:
+
+Exclamation points
+Marketing hype
+“Scale fast” language
+Growth hacker tone
+
+We are building financial discipline software.
+
+LONG-TERM ARCHITECTURE PREPARATION
+
+Design in a way that future modules can support:
+
+• Preventative care adherence scoring
+• Employer partnership dashboards
+• Community health impact analytics
+• Retention-health correlations
+
+But do NOT build those yet.
+
+Just architect clean expansion paths.
+
+PRODUCT NORTH STAR
+
+Success =
+
+If a gym improves retention by 1–2%:
+
+• Revenue volatility drops
+• Owner stress drops
+• Coach stability improves
+• Member consistency improves
+• Community longevity increases
+
+That is success.
+
+Not feature count.
+Not dashboard complexity.
+
+Stability is strategy.
+Stability is engineered.
+
+FINAL INSTRUCTION TO BASE44
+
+Build Iron Metrics as:
+
+The Stability Command Center for CrossFit gyms.
+
+Not an analytics dashboard.
+Not a consulting tool.
+
+Build infrastructure.
+
+Minimal.
+Precise.
+Action-driven.
+Future-proof.

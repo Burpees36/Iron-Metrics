@@ -153,6 +153,28 @@ export async function registerRoutes(
       const metrics = await storage.getMonthlyMetrics(req.params.id, month);
       if (!metrics) return res.status(404).json({ message: "No metrics for this month" });
 
+      const getPrevMonth = (m: string, back: number) => {
+        const d = new Date(m + "T00:00:00");
+        d.setMonth(d.getMonth() - back);
+        return d.toISOString().slice(0, 10);
+      };
+
+      const [prev1, prev2, prev3] = await Promise.all([
+        storage.getMonthlyMetrics(req.params.id, getPrevMonth(month, 1)),
+        storage.getMonthlyMetrics(req.params.id, getPrevMonth(month, 2)),
+        storage.getMonthlyMetrics(req.params.id, getPrevMonth(month, 3)),
+      ]);
+
+      const toTrend = (m: typeof prev1) => m ? {
+        rsi: m.rsi,
+        churnRate: Number(m.churnRate),
+        mrr: Number(m.mrr),
+        arm: Number(m.arm),
+        ltv: Number(m.ltv),
+        memberRiskCount: m.memberRiskCount,
+        activeMembers: m.activeMembers,
+      } : undefined;
+
       const reports = generateMetricReports({
         activeMembers: metrics.activeMembers,
         churnRate: Number(metrics.churnRate),
@@ -166,6 +188,10 @@ export async function registerRoutes(
         rollingChurn3m: metrics.rollingChurn3m ? Number(metrics.rollingChurn3m) : null,
         newMembers: metrics.newMembers,
         cancels: metrics.cancels,
+      }, {
+        prev1: toTrend(prev1),
+        prev2: toTrend(prev2),
+        prev3: toTrend(prev3),
       });
 
       res.json({ metrics, reports });

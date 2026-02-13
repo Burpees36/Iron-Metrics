@@ -1,11 +1,13 @@
 # Iron Metrics
 
 ## Overview
-Multi-tenant gym revenue intelligence platform. Empowers gyms with financial clarity and retention intelligence so they can remain pillars of strength, health, and transformation in their communities.
+The Stability Command Center for CrossFit gyms. A financial resilience operating system designed to reduce revenue volatility, improve retention stability, lower owner stress, and strengthen community longevity.
 
-**Mission**: Make gyms financially resilient so they can stand at the center of preventative health for generations to come.
+**Identity**: Not an analytics dashboard. Not a reporting tool. A decision engine.
 
 **Core Belief**: Retention is the heartbeat of a gym business.
+
+**Tone**: Declarative. Calm. Minimal. Authoritative. Precise. Intentional.
 
 ## Architecture
 - **Frontend**: React + Vite + Tailwind CSS + shadcn/ui + Recharts
@@ -13,29 +15,39 @@ Multi-tenant gym revenue intelligence platform. Empowers gyms with financial cla
 - **Auth**: Replit Auth (OpenID Connect)
 - **Routing**: wouter (frontend), Express routes (backend)
 
-## The Iron Metrics Performance Stack
-1. **RSI** (Retention Stability Index) - Score 1-100 from churn, early cancellation, membership age distribution
-2. **RES** (Revenue Efficiency Score) - Revenue per member, tier distribution
-3. **LTVE** (Lifetime Value Engine) - True LTV + impact of 1% churn reduction
-4. **CII** (Coach Impact Index) - Retention by class type, attendance patterns
-5. **MRR** (Member Risk Radar) - Early-stage risk flagging for new members
+## Core Modules
+1. **Retention Stability Index (RSI)** - Primary north star. Composite score 1-100 from churn, early cancellation, membership age distribution, growth rate.
+2. **Revenue Stability Panel** - Monthly churn %, net member growth, revenue per member (ARM), volatility indicators.
+3. **Member Risk Radar** - Predictive early-warning. Risk tiers (Low/Moderate/High), intervention windows, outreach priority.
+4. **Lifetime Value Engine (LTVE)** - True LTV, revenue unlocked per 1% churn improvement, scenario projections.
+5. **Coach Impact Layer** - Retention leverage by class type and attendance patterns (future: requires attendance data).
 
 ## Report Format
-Every metric follows: Current / Target / Impact + "What This Means" + "Recommended Action"
+Every metric block contains:
+- Metric value
+- Target benchmark
+- 90-day trend (direction + percentage)
+- "What This Means" (interpretation)
+- "Why It Matters" (context)
+- "What To Do Next" (recommended action)
+
+If it does not drive action, it is not shown.
 
 ## Key Features
 - Replit Auth for authentication
 - Multi-tenant gym management (each gym scoped by owner_id)
 - CSV member import with idempotent upsert (by email)
-- Performance Stack metrics computation (RSI, RES, LTVE, MRR)
-- Interpretive reports with actionable recommendations
-- Trend visualization with Recharts
-- Dark steel / charcoal visual identity with dark mode
+- Performance Stack metrics computation with 90-day trend tracking
+- 7 report cards: Monthly Churn, RSI, Revenue/Member, LTVE, Risk Radar, Net Growth
+- LTVE scenario visualization ("If churn drops from X to Y: +$Z per member")
+- Risk tier classification (Low/Moderate/High)
+- Trend charts: RSI, MRR, Active Members, Churn, Revenue/Member, Net Growth
+- Dark steel / charcoal visual identity
 
 ## Project Structure
 ```
 client/src/
-  pages/         - Landing, Dashboard, GymDetail, GymNew, CsvImport
+  pages/         - Landing, Dashboard (Command Center), GymDetail, GymNew, CsvImport
   components/    - AppSidebar, ThemeProvider, ThemeToggle, shadcn ui
   hooks/         - use-auth, use-toast
   lib/           - queryClient, auth-utils, utils
@@ -43,13 +55,13 @@ client/src/
 server/
   routes.ts      - All API endpoints
   storage.ts     - DatabaseStorage (IStorage interface)
-  metrics.ts     - Performance Stack computation + report generation
+  metrics.ts     - Metrics computation + report generation + 90-day trends
   csv-parser.ts  - CSV parsing for member imports
   db.ts          - Drizzle + pg pool
   replit_integrations/auth/ - Replit Auth module
 
 shared/
-  schema.ts      - Drizzle schemas (gyms, members, gym_monthly_metrics with RSI/RES/LTVE/MRR)
+  schema.ts      - Drizzle schemas (gyms, members, gym_monthly_metrics)
   models/auth.ts - Auth schemas (users, sessions)
 ```
 
@@ -61,7 +73,7 @@ shared/
 - `POST /api/gyms/:id/import/members` - CSV member import (multipart)
 - `GET /api/gyms/:id/heartbeat?month=YYYY-MM-DD` - Monthly heartbeat metrics
 - `GET /api/gyms/:id/metrics` - All monthly metrics history
-- `GET /api/gyms/:id/report?month=YYYY-MM-DD` - Full report with interpretations
+- `GET /api/gyms/:id/report?month=YYYY-MM-DD` - Full report with 90-day trends, interpretations, actions
 - `POST /api/gyms/:id/recompute` - Recompute all metrics
 
 ## Design Tokens
@@ -71,3 +83,11 @@ shared/
 - Dark mode: True operational control room feel
 - Red used minimally, only for risk alerts
 - Border radius: Small (0.375rem)
+
+## Feature Filter
+Before implementing any feature, validate:
+- Does this improve financial stability?
+- Does this improve retention clarity?
+- Does this reduce owner stress?
+- Does this strengthen community longevity?
+If no, exclude.

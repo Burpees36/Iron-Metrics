@@ -14,6 +14,7 @@ import {
   DollarSign,
   Users,
   Radar,
+  TrendingUp,
 } from "lucide-react";
 
 export default function Dashboard() {
@@ -30,14 +31,14 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-8">
+    <div className="p-8 max-w-6xl mx-auto space-y-10">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
+        <div className="space-y-1">
           <h1 className="text-xl font-bold tracking-tight" data-testid="text-dashboard-title">
-            Dashboard
+            Command Center
           </h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Your gym portfolio at a glance
+          <p className="text-muted-foreground text-sm">
+            Financial stability overview across your gyms.
           </p>
         </div>
         <Link href="/gyms/new">
@@ -48,7 +49,7 @@ export default function Dashboard() {
         </Link>
       </div>
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {gyms.map((gym) => (
           <GymCard key={gym.id} gym={gym} />
         ))}
@@ -70,10 +71,12 @@ function GymCard({ gym }: { gym: Gym }) {
     },
   });
 
+  const netGrowth = metrics ? metrics.newMembers - metrics.cancels : null;
+
   return (
     <Link href={`/gyms/${gym.id}`}>
       <Card className="hover-elevate cursor-pointer h-full" data-testid={`card-gym-${gym.id}`}>
-        <CardContent className="p-5 space-y-4">
+        <CardContent className="p-6 space-y-5">
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-1 min-w-0">
               <h3 className="font-semibold text-base truncate" data-testid={`text-gym-name-${gym.id}`}>
@@ -89,8 +92,8 @@ function GymCard({ gym }: { gym: Gym }) {
           </div>
 
           {metrics ? (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
                 <MiniMetric
                   icon={Gauge}
                   label="RSI"
@@ -110,19 +113,27 @@ function GymCard({ gym }: { gym: Gym }) {
                 />
                 <MiniMetric
                   icon={Users}
-                  label="Members"
+                  label="Active"
                   value={String(metrics.activeMembers)}
                 />
               </div>
-              {metrics.memberRiskCount > 0 && (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Radar className="w-3 h-3" />
-                  <span>{metrics.memberRiskCount} at-risk members</span>
-                </div>
-              )}
+              <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground pt-1 border-t">
+                {netGrowth !== null && (
+                  <span className="flex items-center gap-1">
+                    <TrendingUp className="w-3 h-3" />
+                    Net: {netGrowth >= 0 ? "+" : ""}{netGrowth}
+                  </span>
+                )}
+                {metrics.memberRiskCount > 0 && (
+                  <span className="flex items-center gap-1">
+                    <Radar className="w-3 h-3" />
+                    {metrics.memberRiskCount} at risk
+                  </span>
+                )}
+              </div>
             </div>
           ) : (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground py-3">
               <Activity className="w-3.5 h-3.5" />
               <span>Import members to see metrics</span>
             </div>
@@ -157,7 +168,7 @@ function MiniMetric({
       : "";
 
   return (
-    <div className="space-y-0.5">
+    <div className="space-y-1">
       <div className="flex items-center gap-1 text-muted-foreground">
         <Icon className="w-3 h-3" />
         <span className="text-xs">{label}</span>
@@ -170,16 +181,16 @@ function MiniMetric({
 function EmptyDashboard() {
   return (
     <div className="flex items-center justify-center min-h-[60vh]">
-      <div className="text-center space-y-6 max-w-md px-4">
+      <div className="text-center space-y-8 max-w-md px-4">
         <div className="w-16 h-16 rounded-md bg-primary/10 flex items-center justify-center mx-auto">
           <Activity className="w-8 h-8 text-primary" />
         </div>
-        <div className="space-y-2">
+        <div className="space-y-3">
           <h2 className="text-xl font-bold" data-testid="text-empty-title">
-            Welcome to Iron Metrics
+            Your Command Center
           </h2>
-          <p className="text-muted-foreground text-sm">
-            Add your first gym to start tracking retention, revenue, and member health.
+          <p className="text-muted-foreground text-sm leading-relaxed">
+            Add your first gym to start tracking retention stability, revenue health, and member risk.
             Financial clarity starts here.
           </p>
         </div>
@@ -196,17 +207,17 @@ function EmptyDashboard() {
 
 function DashboardSkeleton() {
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-8">
+    <div className="p-8 max-w-6xl mx-auto space-y-10">
       <div className="flex items-center justify-between">
         <div className="space-y-2">
-          <Skeleton className="h-7 w-32" />
-          <Skeleton className="h-4 w-48" />
+          <Skeleton className="h-7 w-40" />
+          <Skeleton className="h-4 w-56" />
         </div>
         <Skeleton className="h-9 w-28" />
       </div>
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {[1, 2, 3].map((i) => (
-          <Skeleton key={i} className="h-52 rounded-md" />
+          <Skeleton key={i} className="h-56 rounded-md" />
         ))}
       </div>
     </div>
