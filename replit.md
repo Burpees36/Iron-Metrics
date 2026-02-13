@@ -21,6 +21,7 @@ The Stability Command Center for CrossFit gyms. A financial resilience operating
 3. **Member Risk Radar** - Predictive early-warning. Risk tiers (Low/Moderate/High), intervention windows, outreach priority.
 4. **Lifetime Value Engine (LTVE)** - True LTV, revenue unlocked per 1% churn improvement, scenario projections.
 5. **Coach Impact Layer** - Retention leverage by class type and attendance patterns (future: requires attendance data).
+6. **Predictive Intelligence Stack** - Member-level churn prediction (0-1 probability, engagement classification, intervention types), cohort survival analysis, revenue scenario modeling (Monte Carlo-style), strategic brief generator with economically-quantified CrossFit-aware recommendations.
 
 ## Report Format
 Every metric block contains:
@@ -56,6 +57,7 @@ server/
   routes.ts      - All API endpoints
   storage.ts     - DatabaseStorage (IStorage interface)
   metrics.ts     - Metrics computation + report generation + 90-day trends
+  predictive.ts  - Predictive intelligence engine (member churn prediction, cohort analysis, revenue scenarios, strategic briefs)
   csv-parser.ts  - CSV parsing for member imports
   db.ts          - Drizzle + pg pool
   replit_integrations/auth/ - Replit Auth module
@@ -78,6 +80,7 @@ shared/
 - `GET /api/gyms/:id/metrics` - All monthly metrics history
 - `GET /api/gyms/:id/report?month=YYYY-MM-DD` - Full report with 90-day trends, forecast, interpretations, actions
 - `GET /api/gyms/:id/trends/intelligence` - Trend intelligence with insights, projections, correlations, stability verdict
+- `GET /api/gyms/:id/predictive` - Full predictive intelligence (member predictions, cohort intelligence, revenue scenarios, strategic brief)
 - `POST /api/gyms/:id/recompute` - Recompute all metrics
 
 ## Design Tokens

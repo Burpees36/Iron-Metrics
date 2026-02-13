@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { parseMembersCsv } from "./csv-parser";
 import { recomputeAllMetrics, generateMetricReports, generateForecast, generateTrendIntelligence } from "./metrics";
+import { generatePredictiveIntelligence } from "./predictive";
 import { insertGymSchema } from "@shared/schema";
 import multer from "multer";
 
@@ -376,6 +377,20 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error generating trend intelligence:", error);
       res.status(500).json({ message: "Failed to generate trend intelligence" });
+    }
+  });
+
+  app.get("/api/gyms/:id/predictive", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      const intelligence = await generatePredictiveIntelligence(req.params.id);
+      res.json(intelligence);
+    } catch (error) {
+      console.error("Error generating predictive intelligence:", error);
+      res.status(500).json({ message: "Failed to generate predictive intelligence" });
     }
   });
 

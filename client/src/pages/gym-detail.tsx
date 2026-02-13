@@ -59,6 +59,7 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
+import PredictiveIntelligenceView from "./predictive-intelligence";
 import {
   LineChart,
   Line,
@@ -262,6 +263,7 @@ export default function GymDetail() {
           <TabsTrigger value="report" data-testid="tab-report">Report</TabsTrigger>
           <TabsTrigger value="members" data-testid="tab-members">Members</TabsTrigger>
           <TabsTrigger value="trends" data-testid="tab-trends">Trends</TabsTrigger>
+          <TabsTrigger value="predictive" data-testid="tab-predictive">Predictive</TabsTrigger>
         </TabsList>
 
         <TabsContent value="report" className="mt-8">
@@ -274,6 +276,10 @@ export default function GymDetail() {
 
         <TabsContent value="trends" className="mt-8">
           <TrendsView gymId={gym.id} />
+        </TabsContent>
+
+        <TabsContent value="predictive" className="mt-8">
+          <PredictiveIntelligenceView gymId={gym.id} />
         </TabsContent>
       </Tabs>
     </div>
