@@ -522,6 +522,16 @@ export interface TrendInsight {
   detail: string;
 }
 
+export interface MicroKpi {
+  chartKey: string;
+  currentValue: string;
+  mom: string | null;
+  momDirection: "up" | "down" | "flat";
+  yoy: string | null;
+  yoyDirection: "up" | "down" | "flat";
+  trend: "accelerating" | "decelerating" | "stable";
+}
+
 export interface TrendProjection {
   month: string;
   mrr: number | null;
@@ -530,6 +540,9 @@ export interface TrendProjection {
   rsi: number | null;
   arm: number | null;
   netGrowth: number | null;
+  joins: number | null;
+  cancels: number | null;
+  cumulativeNetGrowth: number | null;
   projected: boolean;
 }
 
@@ -539,15 +552,92 @@ export interface CorrelationInsight {
   status: "positive" | "warning" | "neutral";
 }
 
+export interface NinetyDayOutlook {
+  revenue: { status: "stable" | "growing" | "at-risk" | "declining"; label: string };
+  memberCount: { status: "stable" | "growing" | "at-risk" | "declining"; label: string };
+  churn: { status: "within-tolerance" | "elevated" | "critical"; label: string };
+  interventionRequired: "none" | "low" | "moderate" | "high";
+}
+
+export interface TargetPath {
+  month: string;
+  currentTrajectory: number;
+  targetTrajectory: number;
+}
+
+export interface TimelineEvent {
+  month: string;
+  type: "churn-spike" | "growth-plateau" | "rsi-drop" | "mrr-inflection" | "milestone";
+  description: string;
+  severity: "info" | "warning" | "critical";
+}
+
+export interface StrategicRecommendation {
+  area: string;
+  status: "priority" | "maintain" | "monitor";
+  headline: string;
+  detail: string;
+}
+
 export interface TrendIntelligence {
   insights: TrendInsight[];
+  microKpis: MicroKpi[];
   projections: TrendProjection[];
   correlations: CorrelationInsight[];
-  stabilityVerdict: {
-    status: "strengthening" | "plateauing" | "drifting";
+  stabilityScore: {
+    score: number;
+    tier: "stable" | "plateau-risk" | "early-drift" | "instability-risk";
     headline: string;
     detail: string;
+    components: {
+      rsiSlope: { score: number; label: string };
+      churnAvg: { score: number; label: string };
+      netGrowth: { score: number; label: string };
+      revenueMomentum: { score: number; label: string };
+    };
   };
+  ninetyDayOutlook: NinetyDayOutlook;
+  targetPath: TargetPath[];
+  timelineEvents: TimelineEvent[];
+  strategicRecommendations: StrategicRecommendation[];
+  growthEngine: {
+    cumulativeData: { month: string; cumulative: number; joins: number; cancels: number }[];
+    totalNetGrowth: number;
+    totalMonths: number;
+  };
+}
+
+function linearSlope(values: number[]): number {
+  if (values.length < 2) return 0;
+  const n = values.length;
+  let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+  for (let i = 0; i < n; i++) {
+    sumX += i;
+    sumY += values[i];
+    sumXY += i * values[i];
+    sumX2 += i * i;
+  }
+  const denom = n * sumX2 - sumX * sumX;
+  if (denom === 0) return 0;
+  return (n * sumXY - sumX * sumY) / denom;
+}
+
+function pctChange(current: number, previous: number): { value: string; direction: "up" | "down" | "flat" } {
+  if (previous === 0 && current === 0) return { value: "0%", direction: "flat" };
+  if (previous === 0) return { value: current > 0 ? "+100%" : "-100%", direction: current > 0 ? "up" : "down" };
+  const pct = ((current - previous) / Math.abs(previous)) * 100;
+  if (Math.abs(pct) < 0.5) return { value: "0%", direction: "flat" };
+  return { value: `${pct > 0 ? "+" : ""}${pct.toFixed(1)}%`, direction: pct > 0 ? "up" : "down" };
+}
+
+function determineTrend(values: number[]): "accelerating" | "decelerating" | "stable" {
+  if (values.length < 3) return "stable";
+  const recent = values.slice(-3);
+  const d1 = recent[1] - recent[0];
+  const d2 = recent[2] - recent[1];
+  if (d2 > d1 + 0.5) return "accelerating";
+  if (d2 < d1 - 0.5) return "decelerating";
+  return "stable";
 }
 
 export function generateTrendIntelligence(
@@ -571,9 +661,15 @@ export function generateTrendIntelligence(
   if (sorted.length === 0) {
     return {
       insights: [],
+      microKpis: [],
       projections: [],
       correlations: [],
-      stabilityVerdict: { status: "plateauing", headline: "Insufficient data", detail: "Import members and recompute to generate intelligence." },
+      stabilityScore: { score: 0, tier: "plateau-risk", headline: "Insufficient data", detail: "Import members and recompute to generate intelligence.", components: { rsiSlope: { score: 0, label: "No data" }, churnAvg: { score: 0, label: "No data" }, netGrowth: { score: 0, label: "No data" }, revenueMomentum: { score: 0, label: "No data" } } },
+      ninetyDayOutlook: { revenue: { status: "stable", label: "Insufficient data" }, memberCount: { status: "stable", label: "Insufficient data" }, churn: { status: "within-tolerance", label: "Insufficient data" }, interventionRequired: "none" },
+      targetPath: [],
+      timelineEvents: [],
+      strategicRecommendations: [],
+      growthEngine: { cumulativeData: [], totalNetGrowth: 0, totalMonths: 0 },
     };
   }
 
@@ -584,36 +680,146 @@ export function generateTrendIntelligence(
   const latestArm = Number(latest.arm);
   const latestMembers = latest.activeMembers;
 
+  // ── STABILITY SCORE ENGINE ──
+  // Composite from 4 components, each scored 0-25, total 0-100
   const rsiValues = sorted.map((m) => m.rsi);
+  const churnValues = sorted.map((m) => Number(m.churnRate));
+  const mrrValues = sorted.map((m) => Number(m.mrr));
+  const memberValues = sorted.map((m) => m.activeMembers);
+
+  const recent3 = sorted.length >= 3 ? sorted.slice(-3) : sorted;
+  const churn3mo = recent3.reduce((s, m) => s + Number(m.churnRate), 0) / recent3.length;
+  const netGrowth3mo = recent3.reduce((s, m) => s + (m.newMembers - m.cancels), 0);
+
+  // Component 1: RSI Slope (0-25)
+  const rsiSlope3 = sorted.length >= 3 ? linearSlope(sorted.slice(-3).map((m) => m.rsi)) : 0;
+  let rsiSlopeScore: number;
+  let rsiSlopeLabel: string;
+  if (latestRsi >= 80 && rsiSlope3 >= -1) {
+    rsiSlopeScore = 25;
+    rsiSlopeLabel = "RSI stable in healthy zone";
+  } else if (latestRsi >= 80 && rsiSlope3 < -1) {
+    rsiSlopeScore = 20;
+    rsiSlopeLabel = "RSI healthy but trending down";
+  } else if (rsiSlope3 > 2) {
+    rsiSlopeScore = 22;
+    rsiSlopeLabel = "RSI recovering quickly";
+  } else if (rsiSlope3 > 0) {
+    rsiSlopeScore = 18;
+    rsiSlopeLabel = "RSI improving slowly";
+  } else if (latestRsi >= 60 && rsiSlope3 >= -2) {
+    rsiSlopeScore = 15;
+    rsiSlopeLabel = "RSI moderate, slight drift";
+  } else if (rsiSlope3 < -3) {
+    rsiSlopeScore = 5;
+    rsiSlopeLabel = "RSI declining rapidly";
+  } else {
+    rsiSlopeScore = 10;
+    rsiSlopeLabel = "RSI below target";
+  }
+
+  // Component 2: 3-Month Churn Average (0-25)
+  let churnAvgScore: number;
+  let churnAvgLabel: string;
+  if (churn3mo <= 2) {
+    churnAvgScore = 25;
+    churnAvgLabel = "Excellent retention";
+  } else if (churn3mo <= 4) {
+    churnAvgScore = 22;
+    churnAvgLabel = "Strong retention";
+  } else if (churn3mo <= 5) {
+    churnAvgScore = 18;
+    churnAvgLabel = "Within target";
+  } else if (churn3mo <= 7) {
+    churnAvgScore = 12;
+    churnAvgLabel = "Above target";
+  } else if (churn3mo <= 10) {
+    churnAvgScore = 6;
+    churnAvgLabel = "Elevated churn";
+  } else {
+    churnAvgScore = 2;
+    churnAvgLabel = "Critical churn";
+  }
+
+  // Component 3: Net Growth Trend (0-25)
+  let netGrowthScore: number;
+  let netGrowthLabel: string;
+  const avgNetGrowthPerMonth = netGrowth3mo / recent3.length;
+  if (avgNetGrowthPerMonth > 3) {
+    netGrowthScore = 25;
+    netGrowthLabel = "Strong positive growth";
+  } else if (avgNetGrowthPerMonth > 1) {
+    netGrowthScore = 22;
+    netGrowthLabel = "Moderate growth";
+  } else if (avgNetGrowthPerMonth > 0) {
+    netGrowthScore = 18;
+    netGrowthLabel = "Slight growth";
+  } else if (avgNetGrowthPerMonth >= -1) {
+    netGrowthScore = 14;
+    netGrowthLabel = "Flat — no momentum";
+  } else if (avgNetGrowthPerMonth >= -3) {
+    netGrowthScore = 8;
+    netGrowthLabel = "Contracting";
+  } else {
+    netGrowthScore = 3;
+    netGrowthLabel = "Rapid contraction";
+  }
+
+  // Component 4: Revenue Momentum (0-25)
+  const mrrSlope3 = sorted.length >= 3 ? linearSlope(sorted.slice(-3).map((m) => Number(m.mrr))) : 0;
+  const mrrPctChange = latestMrr > 0 ? (mrrSlope3 / latestMrr) * 100 : 0;
+  let revMomentumScore: number;
+  let revMomentumLabel: string;
+  if (mrrPctChange > 3) {
+    revMomentumScore = 25;
+    revMomentumLabel = "Revenue accelerating";
+  } else if (mrrPctChange > 1) {
+    revMomentumScore = 22;
+    revMomentumLabel = "Revenue growing";
+  } else if (mrrPctChange > -1) {
+    revMomentumScore = 18;
+    revMomentumLabel = "Revenue stable";
+  } else if (mrrPctChange > -3) {
+    revMomentumScore = 10;
+    revMomentumLabel = "Revenue softening";
+  } else {
+    revMomentumScore = 4;
+    revMomentumLabel = "Revenue declining";
+  }
+
+  const totalScore = rsiSlopeScore + churnAvgScore + netGrowthScore + revMomentumScore;
+
+  let tier: "stable" | "plateau-risk" | "early-drift" | "instability-risk";
+  let stabilityHeadline: string;
+  let stabilityDetail: string;
+  if (totalScore >= 75) {
+    tier = "stable";
+    stabilityHeadline = "This business is stable";
+    stabilityDetail = `Stability Score: ${totalScore}/100. Retention, revenue, and growth are all in healthy ranges. Continue current systems and invest in what's working.`;
+  } else if (totalScore >= 55) {
+    tier = "plateau-risk";
+    stabilityHeadline = "Plateau risk detected";
+    stabilityDetail = `Stability Score: ${totalScore}/100. Core metrics are holding but not building momentum. Without intentional growth, this position tends to erode over 3-6 months.`;
+  } else if (totalScore >= 35) {
+    tier = "early-drift";
+    stabilityHeadline = "Early drift — attention required";
+    stabilityDetail = `Stability Score: ${totalScore}/100. Multiple indicators are softening. Targeted interventions in the weakest areas can reverse this trend within 60-90 days.`;
+  } else {
+    tier = "instability-risk";
+    stabilityHeadline = "Instability risk — action required";
+    stabilityDetail = `Stability Score: ${totalScore}/100. Significant weakness across retention, growth, or revenue. Immediate focus on the lowest-scoring component is critical.`;
+  }
+
+  // ── INSIGHTS ──
   const consecutiveStable = countConsecutiveAbove(rsiValues, 80);
   if (consecutiveStable >= 3) {
-    insights.push({
-      chartKey: "rsi",
-      status: "positive",
-      headline: `Retention stable for ${consecutiveStable} consecutive months`,
-      detail: "Your retention ecosystem is healthy and consistent. Members are staying and building habits.",
-    });
+    insights.push({ chartKey: "rsi", status: "positive", headline: `Retention stable for ${consecutiveStable} consecutive months`, detail: "Your retention ecosystem is healthy and consistent. Members are staying and building habits." });
   } else if (latestRsi >= 80) {
-    insights.push({
-      chartKey: "rsi",
-      status: "positive",
-      headline: "Retention is healthy this month",
-      detail: "RSI is in the stable zone. Continue current retention practices.",
-    });
+    insights.push({ chartKey: "rsi", status: "positive", headline: "Retention is healthy this month", detail: "RSI is in the stable zone. Continue current retention practices." });
   } else if (latestRsi >= 60) {
-    insights.push({
-      chartKey: "rsi",
-      status: "warning",
-      headline: "Retention needs attention",
-      detail: `RSI at ${latestRsi} is below the stability threshold of 80. Investigate early cancellation patterns.`,
-    });
+    insights.push({ chartKey: "rsi", status: "warning", headline: "Retention needs attention", detail: `RSI at ${latestRsi} is below the stability threshold of 80. Investigate early cancellation patterns.` });
   } else {
-    insights.push({
-      chartKey: "rsi",
-      status: "critical",
-      headline: "Retention is unstable",
-      detail: `RSI at ${latestRsi} signals significant membership volatility. Immediate action on onboarding and engagement required.`,
-    });
+    insights.push({ chartKey: "rsi", status: "critical", headline: "Retention is unstable", detail: `RSI at ${latestRsi} signals significant membership volatility. Immediate action on onboarding and engagement required.` });
   }
 
   if (sorted.length >= 2) {
@@ -622,135 +828,53 @@ export function generateTrendIntelligence(
     const churnDelta = latestChurn - prevChurn;
 
     if (churnDelta > 2) {
-      insights.push({
-        chartKey: "churn",
-        status: "critical",
-        headline: `Churn spike detected: ${prevChurn.toFixed(1)}% to ${latestChurn.toFixed(1)}%`,
-        detail: "A sharp increase in cancellations suggests a systemic issue. Check for seasonal patterns, pricing changes, or service quality shifts.",
-      });
+      insights.push({ chartKey: "churn", status: "critical", headline: `Churn spike: ${prevChurn.toFixed(1)}% to ${latestChurn.toFixed(1)}%`, detail: "A sharp increase in cancellations suggests a systemic issue. Check for seasonal patterns, pricing changes, or service quality shifts." });
     } else if (latestChurn <= 5) {
       const belowTarget = sorted.filter((m) => Number(m.churnRate) <= 5).length;
-      insights.push({
-        chartKey: "churn",
-        status: "positive",
-        headline: `Churn within target at ${latestChurn.toFixed(1)}%`,
-        detail: belowTarget >= 3
-          ? `Churn has been at or below 5% for ${belowTarget} months. Strong retention discipline.`
-          : "Churn is under control this month. Maintain outreach to at-risk members.",
-      });
+      insights.push({ chartKey: "churn", status: "positive", headline: `Churn within target at ${latestChurn.toFixed(1)}%`, detail: belowTarget >= 3 ? `Churn has been at or below 5% for ${belowTarget} months. Strong retention discipline.` : "Churn is under control this month. Maintain outreach to at-risk members." });
     } else if (latestChurn > 7) {
-      insights.push({
-        chartKey: "churn",
-        status: "critical",
-        headline: `Churn elevated at ${latestChurn.toFixed(1)}%`,
-        detail: "Above 7% monthly churn erodes revenue faster than most gyms can acquire new members. This is the top priority.",
-      });
+      insights.push({ chartKey: "churn", status: "critical", headline: `Churn elevated at ${latestChurn.toFixed(1)}%`, detail: "Above 7% monthly churn erodes revenue faster than most gyms can acquire new members. This is the top priority." });
     } else {
-      insights.push({
-        chartKey: "churn",
-        status: "warning",
-        headline: `Churn at ${latestChurn.toFixed(1)}% — above 5% target`,
-        detail: "Moderately elevated churn. Focus on members in their first 60 days — that's where most cancellations originate.",
-      });
+      insights.push({ chartKey: "churn", status: "warning", headline: `Churn at ${latestChurn.toFixed(1)}% — above 5% target`, detail: "Moderately elevated churn. Focus on members in their first 60 days — that's where most cancellations originate." });
     }
 
     const prevMrr = Number(prev.mrr);
     const mrrGrowth = prevMrr > 0 ? ((latestMrr - prevMrr) / prevMrr) * 100 : 0;
     if (mrrGrowth > 3) {
-      insights.push({
-        chartKey: "mrr",
-        status: "positive",
-        headline: `MRR growing: +${mrrGrowth.toFixed(1)}% month-over-month`,
-        detail: `Revenue increased from $${prevMrr.toLocaleString()} to $${latestMrr.toLocaleString()}. Momentum is building.`,
-      });
+      insights.push({ chartKey: "mrr", status: "positive", headline: `MRR growing: +${mrrGrowth.toFixed(1)}% month-over-month`, detail: `Revenue increased from $${prevMrr.toLocaleString()} to $${latestMrr.toLocaleString()}. Momentum is building.` });
     } else if (mrrGrowth < -3) {
-      insights.push({
-        chartKey: "mrr",
-        status: "critical",
-        headline: `MRR declining: ${mrrGrowth.toFixed(1)}% month-over-month`,
-        detail: `Revenue dropped from $${prevMrr.toLocaleString()} to $${latestMrr.toLocaleString()}. Address churn before investing in acquisition.`,
-      });
+      insights.push({ chartKey: "mrr", status: "critical", headline: `MRR declining: ${mrrGrowth.toFixed(1)}% month-over-month`, detail: `Revenue dropped from $${prevMrr.toLocaleString()} to $${latestMrr.toLocaleString()}. Address churn before investing in acquisition.` });
     } else {
-      insights.push({
-        chartKey: "mrr",
-        status: "neutral",
-        headline: `MRR holding steady at $${latestMrr.toLocaleString()}`,
-        detail: "Revenue is flat. Growth requires either more members or higher revenue per member.",
-      });
+      insights.push({ chartKey: "mrr", status: "neutral", headline: `MRR holding steady at $${latestMrr.toLocaleString()}`, detail: "Revenue is flat. Growth requires either more members or higher revenue per member." });
     }
 
     const prevMembers = prev.activeMembers;
     const memberDelta = latestMembers - prevMembers;
     if (memberDelta > 0) {
-      insights.push({
-        chartKey: "members",
-        status: "positive",
-        headline: `Roster growing: +${memberDelta} members this month`,
-        detail: "New signups are outpacing cancellations. Ensure onboarding keeps up with growth.",
-      });
+      insights.push({ chartKey: "members", status: "positive", headline: `Roster growing: +${memberDelta} members this month`, detail: "New signups are outpacing cancellations. Ensure onboarding keeps up with growth." });
     } else if (memberDelta < -2) {
-      insights.push({
-        chartKey: "members",
-        status: "warning",
-        headline: `Roster contracting: ${memberDelta} members this month`,
-        detail: "More members leaving than joining. Without correction, this compounds monthly.",
-      });
+      insights.push({ chartKey: "members", status: "warning", headline: `Roster contracting: ${memberDelta} members this month`, detail: "More members leaving than joining. Without correction, this compounds monthly." });
     } else {
-      insights.push({
-        chartKey: "members",
-        status: "neutral",
-        headline: `Roster stable at ${latestMembers} active members`,
-        detail: "No significant change in member count. Consider acquisition strategies to build forward momentum.",
-      });
+      insights.push({ chartKey: "members", status: "neutral", headline: `Roster stable at ${latestMembers} active members`, detail: "No significant change in member count. Consider acquisition strategies to build forward momentum." });
     }
 
     const prevArm = Number(prev.arm);
     const armDelta = latestArm - prevArm;
     if (armDelta > 5) {
-      insights.push({
-        chartKey: "arm",
-        status: "positive",
-        headline: `Revenue per member increasing: $${latestArm.toFixed(0)}`,
-        detail: "Average revenue per member is trending up. This may reflect premium tier adoption or pricing adjustments.",
-      });
+      insights.push({ chartKey: "arm", status: "positive", headline: `Revenue per member increasing: $${latestArm.toFixed(0)}`, detail: "Average revenue per member is trending up. This may reflect premium tier adoption or pricing adjustments." });
     } else if (armDelta < -5) {
-      insights.push({
-        chartKey: "arm",
-        status: "warning",
-        headline: `Revenue per member declining: $${latestArm.toFixed(0)}`,
-        detail: "ARM is dropping — likely driven by lower-tier signups or promotional pricing. Monitor pricing mix.",
-      });
+      insights.push({ chartKey: "arm", status: "warning", headline: `Revenue per member declining: $${latestArm.toFixed(0)}`, detail: "ARM is dropping — likely driven by lower-tier signups or promotional pricing. Monitor pricing mix." });
     } else {
-      insights.push({
-        chartKey: "arm",
-        status: "neutral",
-        headline: `Revenue per member steady at $${latestArm.toFixed(0)}`,
-        detail: latestArm >= 150 ? "ARM is in a healthy range. Focus on retention over pricing changes." : "ARM is below the $150 target. Consider introducing premium programming or pricing adjustments.",
-      });
+      insights.push({ chartKey: "arm", status: "neutral", headline: `Revenue per member steady at $${latestArm.toFixed(0)}`, detail: latestArm >= 150 ? "ARM is in a healthy range. Focus on retention over pricing changes." : "ARM is below the $150 target. Consider introducing premium programming or pricing adjustments." });
     }
 
     const netGrowth = latest.newMembers - latest.cancels;
     if (netGrowth > 0) {
-      insights.push({
-        chartKey: "netGrowth",
-        status: "positive",
-        headline: `Positive net growth: +${netGrowth} members`,
-        detail: `${latest.newMembers} new joins vs ${latest.cancels} cancellations. Forward momentum is building.`,
-      });
+      insights.push({ chartKey: "netGrowth", status: "positive", headline: `Positive net growth: +${netGrowth} members`, detail: `${latest.newMembers} new joins vs ${latest.cancels} cancellations. Forward momentum is building.` });
     } else if (netGrowth < 0) {
-      insights.push({
-        chartKey: "netGrowth",
-        status: "critical",
-        headline: `Negative net growth: ${netGrowth} members`,
-        detail: `Losing ${Math.abs(netGrowth)} members per month compounds rapidly. Retention must be the top priority.`,
-      });
+      insights.push({ chartKey: "netGrowth", status: "critical", headline: `Negative net growth: ${netGrowth} members`, detail: `Losing ${Math.abs(netGrowth)} members per month compounds rapidly. Retention must be the top priority.` });
     } else {
-      insights.push({
-        chartKey: "netGrowth",
-        status: "neutral",
-        headline: "Net growth is flat",
-        detail: "Joins equal cancellations exactly. The gym is treading water — not growing, not shrinking.",
-      });
+      insights.push({ chartKey: "netGrowth", status: "neutral", headline: "Net growth is flat", detail: "Joins equal cancellations exactly. The gym is treading water — not growing, not shrinking." });
     }
   } else {
     insights.push(
@@ -762,16 +886,58 @@ export function generateTrendIntelligence(
     );
   }
 
-  const projections: TrendProjection[] = sorted.map((m) => ({
-    month: m.monthStart,
-    mrr: Number(m.mrr),
-    members: m.activeMembers,
-    churn: Number(m.churnRate),
-    rsi: m.rsi,
-    arm: Number(m.arm),
-    netGrowth: m.newMembers - m.cancels,
-    projected: false,
-  }));
+  // ── MICRO KPIs ──
+  const microKpis: MicroKpi[] = [];
+  const prev = sorted.length >= 2 ? sorted[sorted.length - 2] : null;
+  const yoyEntry = sorted.length >= 13 ? sorted[sorted.length - 13] : null;
+
+  function buildKpi(key: string, current: number, prevVal: number | null, yoyVal: number | null, formatter: (v: number) => string, values: number[]): MicroKpi {
+    const momChange = prevVal !== null ? pctChange(current, prevVal) : null;
+    const yoyChange = yoyVal !== null ? pctChange(current, yoyVal) : null;
+    return {
+      chartKey: key,
+      currentValue: formatter(current),
+      mom: momChange?.value ?? null,
+      momDirection: momChange?.direction ?? "flat",
+      yoy: yoyChange?.value ?? null,
+      yoyDirection: yoyChange?.direction ?? "flat",
+      trend: determineTrend(values),
+    };
+  }
+
+  microKpis.push(buildKpi("rsi", latestRsi, prev ? prev.rsi : null, yoyEntry ? yoyEntry.rsi : null, (v) => `${v}/100`, rsiValues));
+  microKpis.push(buildKpi("mrr", latestMrr, prev ? Number(prev.mrr) : null, yoyEntry ? Number(yoyEntry.mrr) : null, (v) => `$${v.toLocaleString()}`, mrrValues));
+  microKpis.push(buildKpi("members", latestMembers, prev ? prev.activeMembers : null, yoyEntry ? yoyEntry.activeMembers : null, (v) => `${v}`, memberValues));
+  microKpis.push(buildKpi("churn", latestChurn, prev ? Number(prev.churnRate) : null, yoyEntry ? Number(yoyEntry.churnRate) : null, (v) => `${v.toFixed(1)}%`, churnValues));
+  microKpis.push(buildKpi("arm", latestArm, prev ? Number(prev.arm) : null, yoyEntry ? Number(yoyEntry.arm) : null, (v) => `$${v.toFixed(0)}`, sorted.map((m) => Number(m.arm))));
+
+  // ── PROJECTIONS + GROWTH ENGINE ──
+  let cumulativeNet = 0;
+  const cumulativeData: { month: string; cumulative: number; joins: number; cancels: number }[] = [];
+
+  const projections: TrendProjection[] = sorted.map((m) => {
+    const net = m.newMembers - m.cancels;
+    cumulativeNet += net;
+    cumulativeData.push({
+      month: m.monthStart,
+      cumulative: cumulativeNet,
+      joins: m.newMembers,
+      cancels: m.cancels,
+    });
+    return {
+      month: m.monthStart,
+      mrr: Number(m.mrr),
+      members: m.activeMembers,
+      churn: Number(m.churnRate),
+      rsi: m.rsi,
+      arm: Number(m.arm),
+      netGrowth: net,
+      joins: m.newMembers,
+      cancels: m.cancels,
+      cumulativeNetGrowth: cumulativeNet,
+      projected: false,
+    };
+  });
 
   if (sorted.length >= 2) {
     const last = sorted[sorted.length - 1];
@@ -780,9 +946,7 @@ export function generateTrendIntelligence(
       ? Math.round(sorted.slice(-3).reduce((s, m) => s + m.newMembers, 0) / 3)
       : last.newMembers;
     const arm = Number(last.arm);
-
     let projMembers = last.activeMembers;
-    let projMrr = Number(last.mrr);
     let projRsi = last.rsi;
     let projChurn = Number(last.churnRate);
 
@@ -790,123 +954,223 @@ export function generateTrendIntelligence(
       const d = new Date(last.monthStart + "T00:00:00");
       d.setMonth(d.getMonth() + i);
       const monthStr = d.toISOString().slice(0, 10);
-
       const lost = Math.round(projMembers * churnDec);
       projMembers = Math.max(0, projMembers - lost + avgNewMembers);
-      projMrr = projMembers * arm;
+      const projMrr = projMembers * arm;
       const netGrowth = avgNewMembers - lost;
+      cumulativeNet += netGrowth;
 
       if (projChurn > 7) projRsi = Math.max(0, projRsi - 3);
       else if (projChurn > 5) projRsi = Math.max(0, projRsi - 1);
       else projRsi = Math.min(100, projRsi + 1);
 
-      projections.push({
-        month: monthStr,
-        mrr: Math.round(projMrr),
-        members: projMembers,
-        churn: parseFloat(projChurn.toFixed(1)),
-        rsi: Math.round(projRsi),
-        arm: Math.round(arm),
-        netGrowth,
-        projected: true,
-      });
+      projections.push({ month: monthStr, mrr: Math.round(projMrr), members: projMembers, churn: parseFloat(projChurn.toFixed(1)), rsi: Math.round(projRsi), arm: Math.round(arm), netGrowth, joins: avgNewMembers, cancels: lost, cumulativeNetGrowth: cumulativeNet, projected: true });
     }
   }
 
-  if (sorted.length >= 3) {
-    const recent3 = sorted.slice(-3);
-    const mrrValues = recent3.map((m) => Number(m.mrr));
-    const memberValues = recent3.map((m) => m.activeMembers);
-    const armValues = recent3.map((m) => Number(m.arm));
-    const churnValues = recent3.map((m) => Number(m.churnRate));
+  // ── 90-DAY OUTLOOK ──
+  const projected3 = projections.filter((p) => p.projected);
+  const lastActual = projections.filter((p) => !p.projected).slice(-1)[0];
+  let ninetyDayOutlook: NinetyDayOutlook;
 
-    const mrrGrowing = mrrValues[2] > mrrValues[0];
-    const membersGrowing = memberValues[2] > memberValues[0];
-    const armGrowing = armValues[2] > armValues[0];
+  if (projected3.length >= 3 && lastActual) {
+    const proj3Mrr = projected3[2].mrr ?? latestMrr;
+    const mrrDelta = proj3Mrr - latestMrr;
+    const mrrPct = latestMrr > 0 ? (mrrDelta / latestMrr) * 100 : 0;
 
-    if (mrrGrowing && membersGrowing && !armGrowing) {
-      correlations.push({
-        title: "MRR growth driven by member count, not pricing",
-        detail: "Revenue is increasing because you're adding members, but average revenue per member isn't rising. Consider premium tier opportunities.",
-        status: "neutral",
-      });
-    } else if (mrrGrowing && armGrowing && !membersGrowing) {
-      correlations.push({
-        title: "MRR growth driven by pricing, not volume",
-        detail: "Revenue is up because existing members are paying more on average. This is efficient but has a ceiling — growth will require new members eventually.",
-        status: "positive",
-      });
-    } else if (mrrGrowing && membersGrowing && armGrowing) {
-      correlations.push({
-        title: "Dual-engine growth: more members AND higher revenue each",
-        detail: "Both member count and average revenue are rising. This is the strongest possible growth pattern.",
-        status: "positive",
-      });
-    }
+    const proj3Members = projected3[2].members ?? latestMembers;
+    const memberDelta = proj3Members - latestMembers;
 
-    const churnRising = churnValues[2] > churnValues[0] + 1;
-    const membersDecreasing = memberValues[2] < memberValues[0];
-    if (churnRising && membersDecreasing) {
-      correlations.push({
-        title: "Churn spike correlates with member decline",
-        detail: "Rising cancellation rates are directly causing roster contraction. Retention should be prioritized over acquisition.",
-        status: "warning",
-      });
-    }
+    const revStatus: NinetyDayOutlook["revenue"]["status"] = mrrPct > 3 ? "growing" : mrrPct > -2 ? "stable" : mrrPct > -8 ? "at-risk" : "declining";
+    const memStatus: NinetyDayOutlook["memberCount"]["status"] = memberDelta > 3 ? "growing" : memberDelta >= -1 ? "stable" : memberDelta >= -5 ? "at-risk" : "declining";
+    const churnStatus: NinetyDayOutlook["churn"]["status"] = churn3mo <= 5 ? "within-tolerance" : churn3mo <= 7 ? "elevated" : "critical";
 
-    const newMemberTrend = recent3.map((m) => m.newMembers);
-    const mrrRising = mrrValues[2] > mrrValues[0];
-    if (newMemberTrend[2] > newMemberTrend[0] && mrrRising) {
-      correlations.push({
-        title: "New member influx is lifting revenue",
-        detail: "Acquisition momentum is translating into revenue growth. Ensure onboarding quality keeps pace with volume.",
-        status: "positive",
-      });
-    }
+    let interventionLevel: NinetyDayOutlook["interventionRequired"] = "none";
+    const negCount = [revStatus, memStatus].filter((s) => s === "at-risk" || s === "declining").length;
+    if (churnStatus === "critical" || negCount >= 2) interventionLevel = "high";
+    else if (churnStatus === "elevated" || negCount >= 1) interventionLevel = "moderate";
+    else if (revStatus === "stable" && memStatus === "stable") interventionLevel = "low";
 
-    const riskValues = recent3.map((m) => m.memberRiskCount);
-    if (riskValues[2] > riskValues[0] + 2) {
-      correlations.push({
-        title: "At-risk member count is rising",
-        detail: "More members are entering the risk window (first 60 days). This may precede a churn spike in 1-2 months if not addressed.",
-        status: "warning",
-      });
-    }
-  }
+    const revLabel = revStatus === "growing" ? `Likely growing (+${mrrPct.toFixed(1)}% projected)` : revStatus === "stable" ? "Likely stable" : revStatus === "at-risk" ? `Risk of decline (${mrrPct.toFixed(1)}% projected)` : `Declining (${mrrPct.toFixed(1)}% projected)`;
+    const memLabel = memStatus === "growing" ? `Growing (+${memberDelta} projected)` : memStatus === "stable" ? "Stable" : memStatus === "at-risk" ? `Risk of stagnation (${memberDelta} projected)` : `Declining (${memberDelta} projected)`;
+    const churnLabel = churnStatus === "within-tolerance" ? `Within tolerance (${churn3mo.toFixed(1)}% avg)` : churnStatus === "elevated" ? `Elevated (${churn3mo.toFixed(1)}% avg)` : `Critical (${churn3mo.toFixed(1)}% avg)`;
 
-  let stabilityVerdict: TrendIntelligence["stabilityVerdict"];
-  if (sorted.length >= 3) {
-    const recent = sorted.slice(-3);
-    const rsiTrend = recent[2].rsi - recent[0].rsi;
-    const mrrTrend = Number(recent[2].mrr) - Number(recent[0].mrr);
-    const churnAvg = recent.reduce((s, m) => s + Number(m.churnRate), 0) / 3;
-
-    if (rsiTrend > 5 && mrrTrend > 0 && churnAvg <= 5) {
-      stabilityVerdict = {
-        status: "strengthening",
-        headline: "This business is strengthening",
-        detail: "RSI is trending up, revenue is growing, and churn is controlled. Your retention systems are working. Stay the course.",
-      };
-    } else if (rsiTrend < -5 || churnAvg > 7) {
-      stabilityVerdict = {
-        status: "drifting",
-        headline: "This business is drifting toward instability",
-        detail: "Key stability indicators are declining. Without intervention, expect revenue erosion and community fragility within 90 days.",
-      };
-    } else {
-      stabilityVerdict = {
-        status: "plateauing",
-        headline: "This business is plateauing",
-        detail: "Metrics are flat — not declining, but not building momentum. A plateau often precedes drift if left unaddressed.",
-      };
-    }
+    ninetyDayOutlook = {
+      revenue: { status: revStatus, label: revLabel },
+      memberCount: { status: memStatus, label: memLabel },
+      churn: { status: churnStatus, label: churnLabel },
+      interventionRequired: interventionLevel,
+    };
   } else {
-    stabilityVerdict = {
-      status: "plateauing",
-      headline: "Building your stability baseline",
-      detail: "More months of data will reveal whether this business is strengthening, plateauing, or drifting.",
+    ninetyDayOutlook = {
+      revenue: { status: "stable", label: "Insufficient data for projection" },
+      memberCount: { status: "stable", label: "Insufficient data for projection" },
+      churn: { status: "within-tolerance", label: "Insufficient data for projection" },
+      interventionRequired: "none",
     };
   }
 
-  return { insights, projections, correlations, stabilityVerdict };
+  // ── TARGET PATH (MRR) ──
+  const targetPath: TargetPath[] = [];
+  if (sorted.length >= 2) {
+    const targetMrr = Math.max(latestMrr * 1.25, latestMrr + 500);
+    const last = sorted[sorted.length - 1];
+    const churnDec = Number(last.churnRate) / 100;
+    const avgNew = sorted.length >= 3 ? Math.round(sorted.slice(-3).reduce((s, m) => s + m.newMembers, 0) / 3) : last.newMembers;
+    const arm = Number(last.arm);
+    let currentMembers = latestMembers;
+
+    for (let i = 0; i <= 6; i++) {
+      const d = new Date(last.monthStart + "T00:00:00");
+      d.setMonth(d.getMonth() + i);
+      const monthStr = d.toISOString().slice(0, 10);
+      const currentTrajectory = currentMembers * arm;
+      const targetTrajectory = latestMrr + (targetMrr - latestMrr) * (i / 6);
+      targetPath.push({ month: monthStr, currentTrajectory: Math.round(currentTrajectory), targetTrajectory: Math.round(targetTrajectory) });
+      if (i < 6) {
+        const lost = Math.round(currentMembers * churnDec);
+        currentMembers = Math.max(0, currentMembers - lost + avgNew);
+      }
+    }
+  }
+
+  // ── CORRELATIONS ──
+  if (sorted.length >= 3) {
+    const r3 = sorted.slice(-3);
+    const r3Mrr = r3.map((m) => Number(m.mrr));
+    const r3Members = r3.map((m) => m.activeMembers);
+    const r3Arm = r3.map((m) => Number(m.arm));
+    const r3Churn = r3.map((m) => Number(m.churnRate));
+
+    const mrrGrowing = r3Mrr[2] > r3Mrr[0];
+    const membersGrowing = r3Members[2] > r3Members[0];
+    const armGrowing = r3Arm[2] > r3Arm[0];
+
+    if (mrrGrowing && membersGrowing && !armGrowing) {
+      correlations.push({ title: "MRR growth driven by member count, not pricing", detail: "Revenue is increasing because you're adding members, but average revenue per member isn't rising. Consider premium tier opportunities.", status: "neutral" });
+    } else if (mrrGrowing && armGrowing && !membersGrowing) {
+      correlations.push({ title: "MRR growth driven by pricing, not volume", detail: "Revenue is up because existing members are paying more on average. This is efficient but has a ceiling.", status: "positive" });
+    } else if (mrrGrowing && membersGrowing && armGrowing) {
+      correlations.push({ title: "Dual-engine growth: more members AND higher revenue each", detail: "Both member count and average revenue are rising. This is the strongest possible growth pattern.", status: "positive" });
+    }
+
+    if (r3Churn[2] > r3Churn[0] + 1 && r3Members[2] < r3Members[0]) {
+      correlations.push({ title: "Churn spike correlates with member decline", detail: "Rising cancellation rates are directly causing roster contraction. Retention should be prioritized over acquisition.", status: "warning" });
+    }
+
+    const r3New = r3.map((m) => m.newMembers);
+    if (r3New[2] > r3New[0] && r3Mrr[2] > r3Mrr[0]) {
+      correlations.push({ title: "New member influx is lifting revenue", detail: "Acquisition momentum is translating into revenue growth. Ensure onboarding quality keeps pace with volume.", status: "positive" });
+    }
+
+    const r3Risk = r3.map((m) => m.memberRiskCount);
+    if (r3Risk[2] > r3Risk[0] + 2) {
+      correlations.push({ title: "At-risk member count is rising", detail: "More members are entering the risk window (first 60 days). This may precede a churn spike in 1-2 months.", status: "warning" });
+    }
+  }
+
+  // ── TIMELINE EVENTS ──
+  const timelineEvents: TimelineEvent[] = [];
+  for (let i = 1; i < sorted.length; i++) {
+    const m = sorted[i];
+    const p = sorted[i - 1];
+    const mChurn = Number(m.churnRate);
+    const pChurn = Number(p.churnRate);
+    const mMrr = Number(m.mrr);
+    const pMrr = Number(p.mrr);
+
+    if (mChurn - pChurn > 2) {
+      timelineEvents.push({ month: m.monthStart, type: "churn-spike", description: `Churn jumped from ${pChurn.toFixed(1)}% to ${mChurn.toFixed(1)}%`, severity: "critical" });
+    }
+    if (m.rsi - p.rsi < -8) {
+      timelineEvents.push({ month: m.monthStart, type: "rsi-drop", description: `RSI dropped from ${p.rsi} to ${m.rsi}`, severity: "warning" });
+    }
+    if (pMrr > 0 && ((mMrr - pMrr) / pMrr) * 100 > 10) {
+      timelineEvents.push({ month: m.monthStart, type: "mrr-inflection", description: `MRR surged +${(((mMrr - pMrr) / pMrr) * 100).toFixed(0)}% to $${mMrr.toLocaleString()}`, severity: "info" });
+    } else if (pMrr > 0 && ((mMrr - pMrr) / pMrr) * 100 < -8) {
+      timelineEvents.push({ month: m.monthStart, type: "mrr-inflection", description: `MRR dropped ${(((mMrr - pMrr) / pMrr) * 100).toFixed(0)}% to $${mMrr.toLocaleString()}`, severity: "warning" });
+    }
+    if (i >= 3) {
+      const last3Net = sorted.slice(i - 2, i + 1).map((x) => x.newMembers - x.cancels);
+      if (last3Net.every((n) => Math.abs(n) <= 1)) {
+        const alreadyHas = timelineEvents.some((e) => e.type === "growth-plateau" && e.month === m.monthStart);
+        if (!alreadyHas) {
+          timelineEvents.push({ month: m.monthStart, type: "growth-plateau", description: "Net growth flat for 3 consecutive months", severity: "info" });
+        }
+      }
+    }
+  }
+
+  if (sorted.length >= 6) {
+    const mid = Math.floor(sorted.length / 2);
+    const firstHalfArm = sorted.slice(0, mid).reduce((s, m) => s + Number(m.arm), 0) / mid;
+    const secondHalfArm = sorted.slice(mid).reduce((s, m) => s + Number(m.arm), 0) / (sorted.length - mid);
+    if (secondHalfArm - firstHalfArm > 15) {
+      timelineEvents.push({ month: sorted[mid].monthStart, type: "milestone", description: `Average revenue per member shifted up ~$${Math.round(secondHalfArm - firstHalfArm)} (possible price increase)`, severity: "info" });
+    }
+  }
+
+  // ── STRATEGIC RECOMMENDATIONS ──
+  const strategicRecommendations: StrategicRecommendation[] = [];
+
+  if (avgNetGrowthPerMonth <= 0 && churn3mo <= 5) {
+    strategicRecommendations.push({ area: "Acquisition", status: "priority", headline: "Growth is flat — prioritize acquisition", detail: "Retention is solid but you're not adding members. Invest in referral programs, community events, or targeted marketing to build forward momentum." });
+  } else if (avgNetGrowthPerMonth > 2) {
+    strategicRecommendations.push({ area: "Acquisition", status: "maintain", headline: "Acquisition momentum is healthy", detail: "New members are outpacing cancellations. Continue current acquisition channels and focus on onboarding quality." });
+  } else {
+    strategicRecommendations.push({ area: "Acquisition", status: "monitor", headline: "Acquisition is steady but not accelerating", detail: "Growth exists but is modest. Consider testing new acquisition channels to find additional leverage." });
+  }
+
+  if (latestArm >= 150 && Math.abs(Number(prev?.arm ?? latestArm) - latestArm) < 5) {
+    strategicRecommendations.push({ area: "Pricing", status: "maintain", headline: "Revenue per member is steady — no pricing pressure", detail: "ARM is in a healthy range and stable. No immediate pricing adjustments needed. Focus on value delivery." });
+  } else if (latestArm < 120) {
+    strategicRecommendations.push({ area: "Pricing", status: "priority", headline: "Revenue per member is below potential", detail: "ARM suggests room for premium tier introduction or price adjustment. Even a modest increase compounds significantly across your membership base." });
+  } else {
+    strategicRecommendations.push({ area: "Pricing", status: "monitor", headline: "Revenue per member is moderate", detail: "ARM is acceptable but not optimized. Consider premium add-ons like nutrition coaching or personal training sessions." });
+  }
+
+  if (churn3mo <= 5 && latestRsi >= 80) {
+    strategicRecommendations.push({ area: "Retention", status: "maintain", headline: "Retention is strong — maintain systems", detail: "Churn is controlled and RSI is healthy. Continue your current engagement practices and monitor for early warning signals." });
+  } else if (churn3mo > 7 || latestRsi < 60) {
+    strategicRecommendations.push({ area: "Retention", status: "priority", headline: "Retention requires immediate attention", detail: "High churn or low RSI means members aren't embedding into your community. Focus on the first 90 days of membership with structured touchpoints." });
+  } else {
+    strategicRecommendations.push({ area: "Retention", status: "monitor", headline: "Retention has room for improvement", detail: "Metrics are acceptable but not robust. Strengthen member engagement through personal outreach and community events." });
+  }
+
+  const riskPct = latestMembers > 0 ? (latest.memberRiskCount / latestMembers) * 100 : 0;
+  if (riskPct > 15) {
+    strategicRecommendations.push({ area: "Risk Management", status: "priority", headline: "High exposure to new member churn", detail: `${riskPct.toFixed(0)}% of your roster is in the first-60-day risk window. Proactive outreach to these members has the highest retention ROI of any action.` });
+  } else if (riskPct > 8) {
+    strategicRecommendations.push({ area: "Risk Management", status: "monitor", headline: "Moderate new member risk exposure", detail: "A meaningful portion of members are in the early risk window. Ensure each has been personally contacted within their first two weeks." });
+  } else {
+    strategicRecommendations.push({ area: "Risk Management", status: "maintain", headline: "New member risk exposure is low", detail: "Most of your roster is past the critical 60-day window. Continue monitoring new signups as they come in." });
+  }
+
+  return {
+    insights,
+    microKpis,
+    projections,
+    correlations,
+    stabilityScore: {
+      score: totalScore,
+      tier,
+      headline: stabilityHeadline,
+      detail: stabilityDetail,
+      components: {
+        rsiSlope: { score: rsiSlopeScore, label: rsiSlopeLabel },
+        churnAvg: { score: churnAvgScore, label: churnAvgLabel },
+        netGrowth: { score: netGrowthScore, label: netGrowthLabel },
+        revenueMomentum: { score: revMomentumScore, label: revMomentumLabel },
+      },
+    },
+    ninetyDayOutlook,
+    targetPath,
+    timelineEvents,
+    strategicRecommendations,
+    growthEngine: {
+      cumulativeData,
+      totalNetGrowth: cumulativeNet,
+      totalMonths: sorted.length,
+    },
+  };
 }

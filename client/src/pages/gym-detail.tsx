@@ -71,6 +71,10 @@ import {
   AreaChart,
   ReferenceLine,
   ReferenceArea,
+  BarChart,
+  Bar,
+  ComposedChart,
+  Legend,
 } from "recharts";
 
 interface MetricReport {
@@ -135,6 +139,16 @@ interface TrendInsight {
   detail: string;
 }
 
+interface MicroKpi {
+  chartKey: string;
+  currentValue: string;
+  mom: string | null;
+  momDirection: "up" | "down" | "flat";
+  yoy: string | null;
+  yoyDirection: "up" | "down" | "flat";
+  trend: "accelerating" | "decelerating" | "stable";
+}
+
 interface TrendProjection {
   month: string;
   mrr: number | null;
@@ -143,6 +157,9 @@ interface TrendProjection {
   rsi: number | null;
   arm: number | null;
   netGrowth: number | null;
+  joins: number | null;
+  cancels: number | null;
+  cumulativeNetGrowth: number | null;
   projected: boolean;
 }
 
@@ -152,14 +169,58 @@ interface CorrelationInsight {
   status: "positive" | "warning" | "neutral";
 }
 
+interface NinetyDayOutlook {
+  revenue: { status: string; label: string };
+  memberCount: { status: string; label: string };
+  churn: { status: string; label: string };
+  interventionRequired: "none" | "low" | "moderate" | "high";
+}
+
+interface TargetPathPoint {
+  month: string;
+  currentTrajectory: number;
+  targetTrajectory: number;
+}
+
+interface TimelineEvent {
+  month: string;
+  type: string;
+  description: string;
+  severity: "info" | "warning" | "critical";
+}
+
+interface StrategicRecommendation {
+  area: string;
+  status: "priority" | "maintain" | "monitor";
+  headline: string;
+  detail: string;
+}
+
 interface TrendIntelligence {
   insights: TrendInsight[];
+  microKpis: MicroKpi[];
   projections: TrendProjection[];
   correlations: CorrelationInsight[];
-  stabilityVerdict: {
-    status: "strengthening" | "plateauing" | "drifting";
+  stabilityScore: {
+    score: number;
+    tier: "stable" | "plateau-risk" | "early-drift" | "instability-risk";
     headline: string;
     detail: string;
+    components: {
+      rsiSlope: { score: number; label: string };
+      churnAvg: { score: number; label: string };
+      netGrowth: { score: number; label: string };
+      revenueMomentum: { score: number; label: string };
+    };
+  };
+  ninetyDayOutlook: NinetyDayOutlook;
+  targetPath: TargetPathPoint[];
+  timelineEvents: TimelineEvent[];
+  strategicRecommendations: StrategicRecommendation[];
+  growthEngine: {
+    cumulativeData: { month: string; cumulative: number; joins: number; cancels: number }[];
+    totalNetGrowth: number;
+    totalMonths: number;
   };
 }
 
@@ -1198,11 +1259,13 @@ function TrendsView({ gymId }: { gymId: string }) {
   const { data: intelligence, isLoading: intellLoading } = useQuery<TrendIntelligence>({
     queryKey: ["/api/gyms", gymId, "trends", "intelligence"],
   });
+  const [showTargetPath, setShowTargetPath] = useState(false);
 
   if (intellLoading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-24 rounded-md" />
+        <Skeleton className="h-28 rounded-md" />
+        <Skeleton className="h-32 rounded-md" />
         <div className="grid lg:grid-cols-2 gap-6">
           {Array(6).fill(0).map((_, i) => <Skeleton key={i} className="h-80 rounded-md" />)}
         </div>
@@ -1215,22 +1278,21 @@ function TrendsView({ gymId }: { gymId: string }) {
       <Card>
         <CardContent className="p-10 text-center space-y-4">
           <TrendingUp className="w-10 h-10 text-muted-foreground mx-auto" />
-          <p className="text-muted-foreground">
-            Not enough data for trend analysis.
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Import members and recompute metrics to build your intelligence layer.
-          </p>
+          <p className="text-muted-foreground">Not enough data for trend analysis.</p>
+          <p className="text-sm text-muted-foreground">Import members and recompute metrics to build your intelligence layer.</p>
         </CardContent>
       </Card>
     );
   }
 
-  const { insights, projections, correlations, stabilityVerdict } = intelligence;
+  const { insights, microKpis, projections, correlations, stabilityScore, ninetyDayOutlook, targetPath, timelineEvents, strategicRecommendations, growthEngine } = intelligence;
   const getInsight = (key: string) => insights.find((i) => i.chartKey === key);
+  const getKpi = (key: string) => microKpis.find((k) => k.chartKey === key);
+
+  const fmtMonth = (m: string) => new Date(m + "T00:00:00").toLocaleDateString("en-US", { month: "short", year: "2-digit" });
 
   const chartData = projections.map((p) => ({
-    month: new Date(p.month + "T00:00:00").toLocaleDateString("en-US", { month: "short", year: "2-digit" }),
+    month: fmtMonth(p.month),
     mrr: p.projected ? null : p.mrr,
     mrrProjected: p.projected ? p.mrr : null,
     members: p.projected ? null : p.members,
@@ -1241,153 +1303,376 @@ function TrendsView({ gymId }: { gymId: string }) {
     rsiProjected: p.projected ? p.rsi : null,
     arm: p.projected ? null : p.arm,
     armProjected: p.projected ? p.arm : null,
-    netGrowth: p.projected ? null : p.netGrowth,
-    netGrowthProjected: p.projected ? p.netGrowth : null,
     projected: p.projected,
   }));
 
   const lastActualIdx = chartData.findIndex((d) => d.projected) - 1;
   if (lastActualIdx >= 0 && lastActualIdx < chartData.length - 1) {
-    const bridgeVal = chartData[lastActualIdx];
-    chartData[lastActualIdx + 1] = {
-      ...chartData[lastActualIdx + 1],
-      mrrProjected: chartData[lastActualIdx + 1].mrrProjected ?? bridgeVal.mrr,
-      membersProjected: chartData[lastActualIdx + 1].membersProjected ?? bridgeVal.members,
-      churnProjected: chartData[lastActualIdx + 1].churnProjected ?? bridgeVal.churn,
-      rsiProjected: chartData[lastActualIdx + 1].rsiProjected ?? bridgeVal.rsi,
-      armProjected: chartData[lastActualIdx + 1].armProjected ?? bridgeVal.arm,
-      netGrowthProjected: chartData[lastActualIdx + 1].netGrowthProjected ?? bridgeVal.netGrowth,
-    };
-    chartData[lastActualIdx] = {
-      ...bridgeVal,
-      mrrProjected: bridgeVal.mrr,
-      membersProjected: bridgeVal.members,
-      churnProjected: bridgeVal.churn,
-      rsiProjected: bridgeVal.rsi,
-      armProjected: bridgeVal.arm,
-      netGrowthProjected: bridgeVal.netGrowth,
-    };
+    const b = chartData[lastActualIdx];
+    chartData[lastActualIdx] = { ...b, mrrProjected: b.mrr, membersProjected: b.members, churnProjected: b.churn, rsiProjected: b.rsi, armProjected: b.arm };
+    const n = chartData[lastActualIdx + 1];
+    chartData[lastActualIdx + 1] = { ...n, mrrProjected: n.mrrProjected ?? b.mrr, membersProjected: n.membersProjected ?? b.members, churnProjected: n.churnProjected ?? b.churn, rsiProjected: n.rsiProjected ?? b.rsi, armProjected: n.armProjected ?? b.arm };
   }
 
-  const verdictColors = {
-    strengthening: { bg: "bg-emerald-500/10 dark:bg-emerald-500/15", border: "border-emerald-500/30", text: "text-emerald-700 dark:text-emerald-400", dot: "bg-emerald-500" },
-    plateauing: { bg: "bg-amber-500/10 dark:bg-amber-500/15", border: "border-amber-500/30", text: "text-amber-700 dark:text-amber-400", dot: "bg-amber-500" },
-    drifting: { bg: "bg-red-500/10 dark:bg-red-500/15", border: "border-red-500/30", text: "text-red-700 dark:text-red-400", dot: "bg-red-500" },
+  const tierColors = {
+    "stable": { bg: "bg-emerald-500/10 dark:bg-emerald-500/15", border: "border-emerald-500/30", text: "text-emerald-700 dark:text-emerald-400", dot: "bg-emerald-500", barColor: "#10b981" },
+    "plateau-risk": { bg: "bg-amber-500/10 dark:bg-amber-500/15", border: "border-amber-500/30", text: "text-amber-700 dark:text-amber-400", dot: "bg-amber-500", barColor: "#f59e0b" },
+    "early-drift": { bg: "bg-orange-500/10 dark:bg-orange-500/15", border: "border-orange-500/30", text: "text-orange-700 dark:text-orange-400", dot: "bg-orange-500", barColor: "#f97316" },
+    "instability-risk": { bg: "bg-red-500/10 dark:bg-red-500/15", border: "border-red-500/30", text: "text-red-700 dark:text-red-400", dot: "bg-red-500", barColor: "#ef4444" },
   };
-  const vc = verdictColors[stabilityVerdict.status];
+  const tc = tierColors[stabilityScore.tier];
+
+  const targetPathData = targetPath.map((t) => ({
+    month: fmtMonth(t.month),
+    current: t.currentTrajectory,
+    target: t.targetTrajectory,
+  }));
+
+  const growthData = growthEngine.cumulativeData.map((g) => ({
+    month: fmtMonth(g.month),
+    cumulative: g.cumulative,
+    joins: g.joins,
+    cancels: -g.cancels,
+  }));
+
+  const outlookStatusColor = (status: string) => {
+    if (status === "growing" || status === "within-tolerance") return "text-emerald-600 dark:text-emerald-400";
+    if (status === "stable") return "text-muted-foreground";
+    if (status === "at-risk" || status === "elevated") return "text-amber-600 dark:text-amber-400";
+    return "text-red-600 dark:text-red-400";
+  };
+
+  const interventionColors = {
+    none: { text: "text-emerald-600 dark:text-emerald-400", label: "None" },
+    low: { text: "text-muted-foreground", label: "Low" },
+    moderate: { text: "text-amber-600 dark:text-amber-400", label: "Moderate" },
+    high: { text: "text-red-600 dark:text-red-400", label: "High" },
+  };
 
   return (
-    <div className="space-y-6">
-      <Card className={`${vc.bg} border ${vc.border}`} data-testid="section-stability-verdict">
-        <CardContent className="p-6 space-y-2">
-          <div className="flex items-center gap-3">
-            <div className={`w-2.5 h-2.5 rounded-full ${vc.dot}`} style={{ boxShadow: `0 0 8px 2px currentColor` }} />
-            <h2 className={`text-lg font-bold ${vc.text}`} data-testid="text-verdict-headline">
-              {stabilityVerdict.headline}
-            </h2>
+    <div className="space-y-8">
+      {/* ── EXECUTIVE HEALTH + 90-DAY OUTLOOK ── */}
+      <Card className={`${tc.bg} border ${tc.border}`} data-testid="section-stability-score">
+        <CardContent className="p-6">
+          <div className="flex flex-col lg:flex-row lg:items-start gap-6">
+            <div className="flex-1 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className={`w-2.5 h-2.5 rounded-full ${tc.dot}`} />
+                <h2 className={`text-lg font-bold ${tc.text}`} data-testid="text-stability-headline">
+                  {stabilityScore.headline}
+                </h2>
+              </div>
+              <p className="text-sm text-muted-foreground leading-relaxed" data-testid="text-stability-detail">
+                {stabilityScore.detail}
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                {Object.entries(stabilityScore.components).map(([key, comp]) => (
+                  <div key={key} className="space-y-1">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                        {key === "rsiSlope" ? "RSI" : key === "churnAvg" ? "Churn" : key === "netGrowth" ? "Growth" : "Revenue"}
+                      </span>
+                      <span className="text-xs font-mono font-semibold">{comp.score}/25</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${(comp.score / 25) * 100}%`, backgroundColor: tc.barColor }} />
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">{comp.label}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="lg:w-72 lg:border-l lg:pl-6 border-t lg:border-t-0 pt-4 lg:pt-0 space-y-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <Target className="w-3.5 h-3.5" />
+                90-Day Outlook
+              </h3>
+              <div className="space-y-2" data-testid="section-90day-outlook">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-muted-foreground">Revenue</span>
+                  <span className={`text-xs font-medium ${outlookStatusColor(ninetyDayOutlook.revenue.status)}`} data-testid="text-outlook-revenue">{ninetyDayOutlook.revenue.label}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-muted-foreground">Member Count</span>
+                  <span className={`text-xs font-medium ${outlookStatusColor(ninetyDayOutlook.memberCount.status)}`} data-testid="text-outlook-members">{ninetyDayOutlook.memberCount.label}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-muted-foreground">Churn</span>
+                  <span className={`text-xs font-medium ${outlookStatusColor(ninetyDayOutlook.churn.status)}`} data-testid="text-outlook-churn">{ninetyDayOutlook.churn.label}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2 pt-1 border-t">
+                  <span className="text-xs font-medium">Intervention Required</span>
+                  <span className={`text-xs font-bold ${interventionColors[ninetyDayOutlook.interventionRequired].text}`} data-testid="text-outlook-intervention">
+                    {interventionColors[ninetyDayOutlook.interventionRequired].label}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
-          <p className="text-sm text-muted-foreground leading-relaxed" data-testid="text-verdict-detail">
-            {stabilityVerdict.detail}
-          </p>
         </CardContent>
       </Card>
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        <IntelligentChart
-          title="Retention Stability Index"
-          insight={getInsight("rsi")}
-          dataKey="rsi"
-          projectedKey="rsiProjected"
-          gradientId="rsiGrad"
-          color="hsl(var(--chart-1))"
-          data={chartData}
-          domain={[0, 100]}
-          formatter={(v: number) => [`${v}/100`, "RSI"]}
-          referenceArea={{ y1: 80, y2: 100, label: "Stable Zone" }}
-          testId="chart-rsi"
-        />
-        <IntelligentChart
-          title="Monthly Recurring Revenue"
-          insight={getInsight("mrr")}
-          dataKey="mrr"
-          projectedKey="mrrProjected"
-          gradientId="mrrGrad"
-          color="hsl(var(--chart-2))"
-          data={chartData}
-          yFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`}
-          formatter={(v: number) => [`$${v.toLocaleString()}`, "MRR"]}
-          testId="chart-mrr"
-        />
-        <IntelligentChart
-          title="Active Members"
-          insight={getInsight("members")}
-          dataKey="members"
-          projectedKey="membersProjected"
-          gradientId="memGrad"
-          color="hsl(var(--chart-5))"
-          data={chartData}
-          testId="chart-members"
-        />
-        <IntelligentChurnChart
-          insight={getInsight("churn")}
-          data={chartData}
-          testId="chart-churn"
-        />
-        <IntelligentChart
-          title="Revenue per Member"
-          insight={getInsight("arm")}
-          dataKey="arm"
-          projectedKey="armProjected"
-          gradientId="armGrad"
-          color="hsl(var(--chart-4))"
-          data={chartData}
-          formatter={(v: number) => [`$${v.toFixed(0)}`, "ARM"]}
-          referenceLine={{ y: 150, label: "Target" }}
-          testId="chart-arm"
-        />
-        <IntelligentChart
-          title="Net Member Growth"
-          insight={getInsight("netGrowth")}
-          dataKey="netGrowth"
-          projectedKey="netGrowthProjected"
-          gradientId="netGrad"
-          color="hsl(var(--chart-3))"
-          data={chartData}
-          formatter={(v: number) => [`${v >= 0 ? "+" : ""}${v}`, "Net"]}
-          referenceLine={{ y: 0, label: "Break Even" }}
-          testId="chart-net-growth"
-        />
+      {/* ── STABILITY & RETENTION ── */}
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+          <Shield className="w-3.5 h-3.5" /> Stability & Retention
+        </h3>
+        <div className="grid lg:grid-cols-2 gap-6">
+          <IntelligentChart title="Retention Stability Index" insight={getInsight("rsi")} kpi={getKpi("rsi")} dataKey="rsi" projectedKey="rsiProjected" gradientId="rsiGrad" color="hsl(var(--chart-1))" data={chartData} domain={[0, 100]} formatter={(v: number) => [`${v}/100`, "RSI"]} referenceArea={{ y1: 80, y2: 100, label: "Stable Zone" }} testId="chart-rsi" />
+          <IntelligentChurnChart insight={getInsight("churn")} kpi={getKpi("churn")} data={chartData} testId="chart-churn" />
+        </div>
       </div>
 
-      {correlations.length > 0 && (
-        <Card data-testid="section-correlations">
-          <CardContent className="p-6 space-y-4">
-            <div className="flex items-center gap-2">
-              <Activity className="w-4 h-4 text-muted-foreground" />
-              <h3 className="font-semibold text-sm">Correlation Intelligence</h3>
-            </div>
-            <div className="grid sm:grid-cols-2 gap-4">
-              {correlations.map((c, i) => {
-                const cColors = {
-                  positive: { dot: "bg-emerald-500", text: "text-emerald-700 dark:text-emerald-400" },
-                  warning: { dot: "bg-amber-500", text: "text-amber-700 dark:text-amber-400" },
-                  neutral: { dot: "bg-muted-foreground", text: "" },
-                };
-                const cc = cColors[c.status];
-                return (
-                  <div key={i} className="rounded-md border p-4 space-y-2" data-testid={`correlation-${i}`}>
-                    <div className="flex items-center gap-2">
-                      <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cc.dot}`} />
-                      <p className={`text-sm font-medium ${cc.text}`}>{c.title}</p>
-                    </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed">{c.detail}</p>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+      {/* ── REVENUE ENGINE ── */}
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+          <DollarSign className="w-3.5 h-3.5" /> Revenue Engine
+        </h3>
+        <div className="grid lg:grid-cols-2 gap-6">
+          <Card data-testid="chart-mrr">
+            <CardContent className="p-6 space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <h3 className="font-semibold text-sm">Monthly Recurring Revenue</h3>
+                  <Button variant="outline" size="sm" onClick={() => setShowTargetPath(!showTargetPath)} data-testid="button-toggle-target">
+                    {showTargetPath ? "Hide Target" : "Show Target Path"}
+                  </Button>
+                </div>
+                <KpiBadge kpi={getKpi("mrr")} />
+                <InsightHeader insight={getInsight("mrr")} />
+              </div>
+              {showTargetPath && targetPathData.length > 0 ? (
+                <div className="h-56">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={targetPathData}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                      <XAxis dataKey="month" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                      <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                      <RechartsTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12 }} formatter={(v: number) => [`$${v.toLocaleString()}`, ""]} />
+                      <Line type="monotone" dataKey="current" stroke="hsl(var(--chart-2))" strokeWidth={2} name="Current Trajectory" dot={{ r: 3 }} />
+                      <Line type="monotone" dataKey="target" stroke="#10b981" strokeWidth={2} strokeDasharray="6 4" name="Target Path" dot={false} />
+                      <Legend wrapperStyle={{ fontSize: 11 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <div className="h-56">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={chartData}>
+                      <defs>
+                        <linearGradient id="mrrGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(var(--chart-2))" stopOpacity={0.15} />
+                          <stop offset="95%" stopColor="hsl(var(--chart-2))" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                      <XAxis dataKey="month" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                      <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
+                      <RechartsTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12 }} formatter={(v: number) => [`$${v.toLocaleString()}`, "MRR"]} />
+                      <Area type="monotone" dataKey="mrr" stroke="hsl(var(--chart-2))" fill="url(#mrrGrad)" strokeWidth={2} connectNulls={false} />
+                      <Area type="monotone" dataKey="mrrProjected" stroke="hsl(var(--chart-2))" fill="none" strokeWidth={2} strokeDasharray="6 4" strokeOpacity={0.5} connectNulls={false} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          <IntelligentChart title="Revenue per Member" insight={getInsight("arm")} kpi={getKpi("arm")} dataKey="arm" projectedKey="armProjected" gradientId="armGrad" color="hsl(var(--chart-4))" data={chartData} formatter={(v: number) => [`$${v.toFixed(0)}`, "ARM"]} referenceLine={{ y: 150, label: "Target" }} testId="chart-arm" />
+        </div>
+      </div>
+
+      {/* ── GROWTH ENGINE ── */}
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+          <UserPlus className="w-3.5 h-3.5" /> Growth Engine
+        </h3>
+        <div className="grid lg:grid-cols-2 gap-6">
+          <Card data-testid="chart-cumulative-growth">
+            <CardContent className="p-6 space-y-4">
+              <div className="space-y-2">
+                <h3 className="font-semibold text-sm">Cumulative Net Growth</h3>
+                <InsightHeader insight={getInsight("netGrowth")} />
+              </div>
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={growthData}>
+                    <defs>
+                      <linearGradient id="cumGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(var(--chart-5))" stopOpacity={0.15} />
+                        <stop offset="95%" stopColor="hsl(var(--chart-5))" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                    <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                    <RechartsTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12 }} formatter={(v: number) => [`${v >= 0 ? "+" : ""}${v}`, "Net"]} />
+                    <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="6 4" strokeOpacity={0.4} />
+                    <Area type="monotone" dataKey="cumulative" stroke="hsl(var(--chart-5))" fill="url(#cumGrad)" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+              <p className="text-xs text-muted-foreground text-center">
+                {growthEngine.totalNetGrowth >= 0 ? "+" : ""}{growthEngine.totalNetGrowth} members over {growthEngine.totalMonths} months
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card data-testid="chart-joins-cancels">
+            <CardContent className="p-6 space-y-4">
+              <div className="space-y-2">
+                <h3 className="font-semibold text-sm">Monthly Joins vs Cancellations</h3>
+              </div>
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={growthData}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                    <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                    <RechartsTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12 }} formatter={(v: number, name: string) => [name === "cancels" ? `${Math.abs(v)}` : `${v}`, name === "cancels" ? "Cancellations" : "New Joins"]} />
+                    <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeOpacity={0.3} />
+                    <Bar dataKey="joins" fill="#10b981" radius={[3, 3, 0, 0]} name="joins" />
+                    <Bar dataKey="cancels" fill="#ef4444" radius={[0, 0, 3, 3]} name="cancels" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* ── LEADING INDICATORS ── */}
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+          <Radar className="w-3.5 h-3.5" /> Leading Indicators
+        </h3>
+        <div className="grid lg:grid-cols-2 gap-6">
+          <IntelligentChart title="Active Members" insight={getInsight("members")} kpi={getKpi("members")} dataKey="members" projectedKey="membersProjected" gradientId="memGrad" color="hsl(var(--chart-5))" data={chartData} testId="chart-members" />
+          {correlations.length > 0 && (
+            <Card data-testid="section-correlations">
+              <CardContent className="p-6 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-muted-foreground" />
+                  <h3 className="font-semibold text-sm">Correlation Intelligence</h3>
+                </div>
+                <div className="space-y-3">
+                  {correlations.map((c, i) => {
+                    const cColors = { positive: { dot: "bg-emerald-500", text: "text-emerald-700 dark:text-emerald-400" }, warning: { dot: "bg-amber-500", text: "text-amber-700 dark:text-amber-400" }, neutral: { dot: "bg-muted-foreground", text: "" } };
+                    const cc = cColors[c.status];
+                    return (
+                      <div key={i} className="rounded-md border p-3 space-y-1" data-testid={`correlation-${i}`}>
+                        <div className="flex items-center gap-2">
+                          <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cc.dot}`} />
+                          <p className={`text-xs font-medium ${cc.text}`}>{c.title}</p>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground leading-relaxed">{c.detail}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
+
+      {/* ── STABILITY TIMELINE ── */}
+      {timelineEvents.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+            <Clock className="w-3.5 h-3.5" /> Stability Timeline
+          </h3>
+          <Card data-testid="section-timeline">
+            <CardContent className="p-6">
+              <div className="relative">
+                <div className="absolute left-3 top-0 bottom-0 w-px bg-border" />
+                <div className="space-y-4">
+                  {timelineEvents.slice().reverse().map((event, i) => {
+                    const sevColors = { info: "bg-blue-500", warning: "bg-amber-500", critical: "bg-red-500" };
+                    return (
+                      <div key={i} className="flex items-start gap-4 pl-1" data-testid={`timeline-event-${i}`}>
+                        <div className={`w-[22px] h-[22px] rounded-full flex-shrink-0 ${sevColors[event.severity]} flex items-center justify-center z-10`}>
+                          <div className="w-2 h-2 rounded-full bg-white dark:bg-black" />
+                        </div>
+                        <div className="space-y-0.5 pt-0.5">
+                          <p className="text-xs font-medium">{event.description}</p>
+                          <p className="text-[10px] text-muted-foreground">{fmtMonth(event.month)}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
+
+      {/* ── STRATEGIC FOCUS ── */}
+      {strategicRecommendations.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+            <Target className="w-3.5 h-3.5" /> Strategic Focus Recommendation
+          </h3>
+          <div className="grid sm:grid-cols-2 gap-4" data-testid="section-strategic-focus">
+            {strategicRecommendations.map((rec, i) => {
+              const recColors = {
+                priority: { badge: "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30", icon: <AlertTriangle className="w-3.5 h-3.5" /> },
+                maintain: { badge: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30", icon: <ShieldCheck className="w-3.5 h-3.5" /> },
+                monitor: { badge: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30", icon: <Eye className="w-3.5 h-3.5" /> },
+              };
+              const rc = recColors[rec.status];
+              return (
+                <Card key={i} data-testid={`strategic-rec-${i}`}>
+                  <CardContent className="p-4 space-y-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{rec.area}</span>
+                      <Badge variant="outline" className={`text-[10px] ${rc.badge}`}>
+                        {rc.icon}
+                        <span className="ml-1 capitalize">{rec.status}</span>
+                      </Badge>
+                    </div>
+                    <p className="text-sm font-medium">{rec.headline}</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{rec.detail}</p>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SlopeIcon({ direction }: { direction: "up" | "down" | "flat" }) {
+  if (direction === "up") return <ArrowUp className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />;
+  if (direction === "down") return <ArrowDown className="w-3 h-3 text-red-600 dark:text-red-400" />;
+  return <Minus className="w-3 h-3 text-muted-foreground" />;
+}
+
+function KpiBadge({ kpi }: { kpi?: MicroKpi }) {
+  if (!kpi) return null;
+  const trendLabel = kpi.trend === "accelerating" ? "Accelerating" : kpi.trend === "decelerating" ? "Decelerating" : "Stable";
+  const trendColor = kpi.trend === "accelerating" ? "text-emerald-600 dark:text-emerald-400" : kpi.trend === "decelerating" ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground";
+  return (
+    <div className="flex items-center gap-3 flex-wrap" data-testid="kpi-badge">
+      {kpi.mom && (
+        <span className="inline-flex items-center gap-1 text-xs">
+          <SlopeIcon direction={kpi.momDirection} />
+          <span className="font-mono font-medium">{kpi.mom}</span>
+          <span className="text-muted-foreground">MoM</span>
+        </span>
+      )}
+      {kpi.yoy && (
+        <span className="inline-flex items-center gap-1 text-xs">
+          <SlopeIcon direction={kpi.yoyDirection} />
+          <span className="font-mono font-medium">{kpi.yoy}</span>
+          <span className="text-muted-foreground">YoY</span>
+        </span>
+      )}
+      <span className={`text-[10px] font-medium ${trendColor}`}>
+        Trend: {trendLabel}
+      </span>
     </div>
   );
 }
@@ -1401,63 +1686,31 @@ function InsightHeader({ insight }: { insight?: TrendInsight }) {
     neutral: { dot: "bg-muted-foreground", text: "text-muted-foreground" },
   };
   const sc = statusConfig[insight.status];
-
   return (
     <div className="space-y-1">
       <div className="flex items-center gap-2">
         <div className={`w-2 h-2 rounded-full flex-shrink-0 ${sc.dot}`} />
-        <p className={`text-sm font-semibold ${sc.text}`} data-testid="text-insight-headline">
-          {insight.headline}
-        </p>
+        <p className={`text-sm font-semibold ${sc.text}`} data-testid="text-insight-headline">{insight.headline}</p>
       </div>
       <Tooltip>
         <TooltipTrigger asChild>
-          <p className="text-xs text-muted-foreground truncate cursor-help max-w-md">
-            {insight.detail}
-          </p>
+          <p className="text-xs text-muted-foreground truncate cursor-help max-w-md">{insight.detail}</p>
         </TooltipTrigger>
-        <TooltipContent side="bottom" className="max-w-xs text-xs">
-          {insight.detail}
-        </TooltipContent>
+        <TooltipContent side="bottom" className="max-w-xs text-xs">{insight.detail}</TooltipContent>
       </Tooltip>
     </div>
   );
 }
 
-function IntelligentChart({
-  title,
-  insight,
-  data,
-  dataKey,
-  projectedKey,
-  gradientId,
-  color,
-  domain,
-  yFormatter,
-  formatter,
-  referenceArea,
-  referenceLine,
-  testId,
-}: {
-  title: string;
-  insight?: TrendInsight;
-  data: any[];
-  dataKey: string;
-  projectedKey: string;
-  gradientId: string;
-  color: string;
-  domain?: [number, number];
-  yFormatter?: (v: number) => string;
-  formatter?: (v: number) => [string, string];
-  referenceArea?: { y1: number; y2: number; label: string };
-  referenceLine?: { y: number; label: string };
-  testId: string;
+function IntelligentChart({ title, insight, kpi, data, dataKey, projectedKey, gradientId, color, domain, yFormatter, formatter, referenceArea, referenceLine, testId }: {
+  title: string; insight?: TrendInsight; kpi?: MicroKpi; data: any[]; dataKey: string; projectedKey: string; gradientId: string; color: string; domain?: [number, number]; yFormatter?: (v: number) => string; formatter?: (v: number) => [string, string]; referenceArea?: { y1: number; y2: number; label: string }; referenceLine?: { y: number; label: string }; testId: string;
 }) {
   return (
     <Card data-testid={testId}>
       <CardContent className="p-6 space-y-4">
         <div className="space-y-2">
           <h3 className="font-semibold text-sm">{title}</h3>
+          <KpiBadge kpi={kpi} />
           <InsightHeader insight={insight} />
         </div>
         <div className="h-56">
@@ -1472,44 +1725,26 @@ function IntelligentChart({
               <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
               <XAxis dataKey="month" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
               <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" domain={domain} tickFormatter={yFormatter} />
-              <RechartsTooltip
-                contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12 }}
-                formatter={formatter}
-              />
-              {referenceArea && (
-                <ReferenceArea y1={referenceArea.y1} y2={referenceArea.y2} fill="#10b981" fillOpacity={0.06} stroke="#10b981" strokeOpacity={0.15} strokeDasharray="3 3" />
-              )}
-              {referenceLine && (
-                <ReferenceLine y={referenceLine.y} stroke="hsl(var(--muted-foreground))" strokeDasharray="6 4" strokeOpacity={0.5} label={{ value: referenceLine.label, position: "right", fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
-              )}
+              <RechartsTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12 }} formatter={formatter} />
+              {referenceArea && <ReferenceArea y1={referenceArea.y1} y2={referenceArea.y2} fill="#10b981" fillOpacity={0.06} stroke="#10b981" strokeOpacity={0.15} strokeDasharray="3 3" />}
+              {referenceLine && <ReferenceLine y={referenceLine.y} stroke="hsl(var(--muted-foreground))" strokeDasharray="6 4" strokeOpacity={0.5} label={{ value: referenceLine.label, position: "right", fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />}
               <Area type="monotone" dataKey={dataKey} stroke={color} fill={`url(#${gradientId})`} strokeWidth={2} connectNulls={false} />
               <Area type="monotone" dataKey={projectedKey} stroke={color} fill="none" strokeWidth={2} strokeDasharray="6 4" strokeOpacity={0.5} connectNulls={false} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
-        {data.some((d) => d.projected) && (
-          <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <span className="w-4 h-px inline-block" style={{ backgroundColor: color }} />
-              Actual
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-4 h-px inline-block border-t border-dashed" style={{ borderColor: color }} />
-              Projected
-            </span>
-          </div>
-        )}
       </CardContent>
     </Card>
   );
 }
 
-function IntelligentChurnChart({ insight, data, testId }: { insight?: TrendInsight; data: any[]; testId: string }) {
+function IntelligentChurnChart({ insight, kpi, data, testId }: { insight?: TrendInsight; kpi?: MicroKpi; data: any[]; testId: string }) {
   return (
     <Card data-testid={testId}>
       <CardContent className="p-6 space-y-4">
         <div className="space-y-2">
           <h3 className="font-semibold text-sm">Churn Rate (%)</h3>
+          <KpiBadge kpi={kpi} />
           <InsightHeader insight={insight} />
         </div>
         <div className="h-56">
@@ -1518,10 +1753,7 @@ function IntelligentChurnChart({ insight, data, testId }: { insight?: TrendInsig
               <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
               <XAxis dataKey="month" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
               <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `${v}%`} />
-              <RechartsTooltip
-                contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12 }}
-                formatter={(value: number) => [`${value}%`, "Churn"]}
-              />
+              <RechartsTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12 }} formatter={(value: number) => [`${value}%`, "Churn"]} />
               <ReferenceLine y={5} stroke="#f59e0b" strokeDasharray="6 4" strokeOpacity={0.6} label={{ value: "5% Target", position: "right", fontSize: 10, fill: "#f59e0b" }} />
               <ReferenceArea y1={7} y2={15} fill="#ef4444" fillOpacity={0.04} stroke="#ef4444" strokeOpacity={0.1} strokeDasharray="3 3" />
               <Line type="monotone" dataKey="churn" stroke="hsl(var(--chart-3))" strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
@@ -1529,18 +1761,6 @@ function IntelligentChurnChart({ insight, data, testId }: { insight?: TrendInsig
             </LineChart>
           </ResponsiveContainer>
         </div>
-        {data.some((d) => d.projected) && (
-          <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <span className="w-4 h-px inline-block bg-[hsl(var(--chart-3))]" />
-              Actual
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-4 h-px inline-block border-t border-dashed border-[hsl(var(--chart-3))]" />
-              Projected
-            </span>
-          </div>
-        )}
       </CardContent>
     </Card>
   );
