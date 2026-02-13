@@ -73,7 +73,7 @@ export default function LandingPage() {
               <p className="text-sm font-medium text-primary tracking-wide uppercase">
                 Stability Command Center
               </p>
-              <h1
+              <h2
                 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight leading-tight"
                 data-testid="text-hero-headline"
               >
@@ -82,7 +82,7 @@ export default function LandingPage() {
                 <span className="text-primary">heartbeat</span> of
                 <br />
                 your gym.
-              </h1>
+              </h2>
               <p className="text-muted-foreground text-base sm:text-lg max-w-md leading-relaxed">
                 Iron Metrics is the financial resilience operating system for CrossFit gyms.
                 Reduce revenue volatility. Improve retention stability. Lower owner stress.
