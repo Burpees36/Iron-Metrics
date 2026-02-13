@@ -137,31 +137,28 @@ export default function LandingPage() {
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight" data-testid="text-stack-title">The  Stability Framework</h2>
             <p className="text-muted-foreground max-w-xl mx-auto leading-relaxed">Five systems working together to protect your revenue.</p>
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {modules.map((item) => (
-              <Card key={item.title} className="hover-elevate">
-                <CardContent className="p-6 space-y-4">
-                  <div className="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center">
-                    <item.icon className="w-5 h-5 text-primary" />
-                  </div>
-                  <h3 className="font-semibold text-sm">{item.title}</h3>
-                  <p className="text-muted-foreground text-sm leading-relaxed">
-                    {item.description}
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
-            <Card className="hover-elevate">
-              <CardContent className="p-6 space-y-4 flex flex-col justify-center h-full">
-                <div className="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center">
-                  <Target className="w-5 h-5 text-primary" />
-                </div>
-                <h3 className="font-semibold text-sm">Every Metric, Translated</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">
-                  No raw numbers. No guessing. If it doesn't drive action, it doesn't exist.
-                </p>
-              </CardContent>
-            </Card>
+          <div className="space-y-10">
+            <div className="space-y-3">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">Layer 1 — Stability Core</p>
+              <div className="grid sm:grid-cols-2 gap-6">
+                <ModuleCard icon={modules[0].icon} title={modules[0].title} description={modules[0].description} />
+                <ModuleCard icon={modules[1].icon} title={modules[1].title} description={modules[1].description} />
+              </div>
+            </div>
+            <div className="space-y-3">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">Layer 2 — Risk Control</p>
+              <div className="grid sm:grid-cols-2 gap-6">
+                <ModuleCard icon={modules[2].icon} title={modules[2].title} description={modules[2].description} />
+                <ModuleCard icon={modules[4].icon} title={modules[4].title} description={modules[4].description} />
+              </div>
+            </div>
+            <div className="space-y-3">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">Layer 3 — Leverage</p>
+              <div className="grid sm:grid-cols-2 gap-6">
+                <ModuleCard icon={modules[3].icon} title={modules[3].title} description={modules[3].description} />
+                <ModuleCard icon={Target} title="Every Metric, Translated" description="No raw numbers. No guessing. If it doesn't drive action, it doesn't exist." />
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -264,6 +261,20 @@ function MetricBlock({
         </div>
         <p className="text-xs text-primary font-medium font-mono">{trend}</p>
         <p className="text-xs text-muted-foreground leading-relaxed">{interpretation}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ModuleCard({ icon: Icon, title, description }: { icon: typeof Gauge; title: string; description: string }) {
+  return (
+    <Card className="hover-elevate">
+      <CardContent className="p-6 space-y-4">
+        <div className="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center">
+          <Icon className="w-5 h-5 text-primary" />
+        </div>
+        <h3 className="font-semibold text-sm">{title}</h3>
+        <p className="text-muted-foreground text-sm leading-relaxed">{description}</p>
       </CardContent>
     </Card>
   );
