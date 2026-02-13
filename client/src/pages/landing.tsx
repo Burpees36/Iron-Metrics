@@ -19,7 +19,7 @@ const modules = [
     icon: Gauge,
     title: "Retention Stability Index",
     description:
-      "Single composite score (1-100) synthesizing churn rate, early cancellation trends, membership age distribution, and attendance decay. Your north star for retention health.",
+      "A single score that shows how steady your membership truly is. Your early warning before churn becomes a problem.",
   },
   {
     icon: BarChart3,
