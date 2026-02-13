@@ -165,9 +165,7 @@ export default function LandingPage() {
       <section className="py-20 sm:py-28 border-t">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl mx-auto text-center space-y-6">
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
-              Built for gym owners who care about longevity.
-            </h2>
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Built for gym owners who want clarity, not chaos.</h2>
             <div className="space-y-4 text-muted-foreground leading-relaxed">
               <p>
                 You built a community. You coach people through transformations.
