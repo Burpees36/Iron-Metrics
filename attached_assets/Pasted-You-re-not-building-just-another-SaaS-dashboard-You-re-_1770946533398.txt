@@ -1,0 +1,271 @@
+You’re not building “just another SaaS dashboard.”
+
+You’re building financial infrastructure for gyms.
+
+Here is the complete articulation of **Iron Metrics** — aligned with how you’ve been architecting it.
+
+---
+
+# Iron Metrics
+
+**Multi-Tenant Gym Revenue Intelligence Platform**
+
+Retention is the heartbeat of a gym business.
+
+---
+
+## What Iron Metrics Is
+
+Iron Metrics is a **multi-tenant SaaS platform** that gives gym owners financial clarity, retention intelligence, and revenue stability.
+
+It transforms messy membership exports into:
+
+* Retention metrics
+* Revenue insights
+* Churn visibility
+* Predictable growth indicators
+
+It is performance-first, cache-driven, tenant-safe, and architected for scale.
+
+This is not a marketing analytics tool.
+This is not a vanity KPI dashboard.
+
+This is a **financial command center for gyms.**
+
+---
+
+# Mission
+
+> Empower gyms with financial clarity and retention intelligence so they can remain pillars of strength, health, and transformation in their communities.
+
+Iron Metrics exists because:
+
+* Most gyms operate blind.
+* Owners feel revenue pressure but can’t see churn patterns.
+* Retention is discussed emotionally, not analytically.
+
+We fix that.
+
+---
+
+# Vision
+
+> Make gyms financially resilient so they can stand at the center of preventative health for generations.
+
+Strong gyms create strong communities.
+Strong communities create healthy lives.
+Financial stability protects both.
+
+Iron Metrics becomes the operating system behind that stability.
+
+---
+
+# Core Belief
+
+Retention is the heartbeat of a gym business.
+
+If you stabilize retention:
+
+* Revenue stabilizes.
+* Staffing stabilizes.
+* Programming improves.
+* Community strengthens.
+* Impact compounds.
+
+Everything in Iron Metrics orbits around this truth.
+
+---
+
+# What the App Is Meant to Do
+
+## 1. Ingest Gym Data (Multi-Tenant Secure)
+
+* Member exports (CSV)
+* Attendance exports (CSV)
+* Revenue data (future sprint)
+* Plan data (future sprint)
+
+Each gym’s data is:
+
+* Strictly tenant-scoped
+* Hard-filtered by `gym_id`
+* Protected by deterministic 400 vs 403 enforcement
+* Fully idempotent on re-import
+
+No data leakage.
+No accidental cross-gym contamination.
+
+---
+
+## 2. Compute Monthly Heartbeat Metrics
+
+After ingestion, background jobs compute:
+
+* Active members
+* Cancels in month
+* Monthly churn %
+* Rolling 3-month churn
+* MRR (Monthly Recurring Revenue)
+* ARM (Average Revenue per Member)
+* LTV (Lifetime Value)
+* Active start of month
+* Generated_at timestamp
+* Metrics versioning
+
+These are stored in:
+
+`gym_monthly_metrics_cache`
+
+The API never recomputes live.
+All reads are cache-only.
+Performance is predictable.
+
+---
+
+## 3. Provide a “Heartbeat” View
+
+Endpoint:
+
+```
+GET /api/gyms/{gym_id}/heartbeat?month=YYYY-MM-01
+```
+
+Returns:
+
+* Cached metrics
+* Deterministic 404 if cache miss
+* <500ms warm response
+
+The UI displays:
+
+* Current month health
+* Trend indicators
+* Early churn warning signals
+
+This becomes the owner’s monthly pulse check.
+
+---
+
+## 4. Enforce Multi-Tenant Discipline
+
+Non-negotiable architecture rules:
+
+* Every query filtered by `gym_id`
+* Header/path mismatch = 400
+* No access = 403
+* Cache table indexed on `(gym_id, month_start)`
+* UNIQUE constraint enforced
+
+Iron Metrics is architected as if it already has 1,000 gyms onboarded.
+
+---
+
+## 5. Operate in Performance-First Mode
+
+* Background RQ workers
+* Async recompute after import
+* No heavy request-path computation
+* Deterministic cache reads
+* Indexed queries only
+
+This is infrastructure-grade thinking, not hobby SaaS.
+
+---
+
+# Strategic Roadmap (High-Level)
+
+### Sprint 1–2
+
+* Auth
+* Tenancy enforcement
+* Member ingestion
+* Attendance ingestion
+* Idempotency
+* Demo scripts
+* Tests
+
+### Sprint 3
+
+* Monthly metrics cache
+* Background recompute
+* Cache-only heartbeat endpoint
+* Heartbeat UI
+* Integration test
+
+### Future Sprints
+
+* Cohort retention curves
+* Attendance-risk flags
+* Revenue forecasting
+* Plan segmentation
+* Retention scoring
+* Benchmarking across anonymized cohorts
+* Owner alerts (“Retention instability detected”)
+* AI-assisted churn explanation (long-term)
+
+---
+
+# Who It Serves
+
+### Primary:
+
+Independent CrossFit and boutique gym owners.
+
+### Secondary:
+
+Multi-location operators.
+
+### Long-term:
+
+Franchise-level operators needing standardized retention intelligence.
+
+---
+
+# Emotional Layer (The Real Why)
+
+You know this world.
+
+Gym owners:
+
+* Care deeply.
+* Work insane hours.
+* Feel pressure every month.
+* Don’t always know why revenue dips.
+
+Iron Metrics removes guesswork.
+
+It gives calm.
+It gives clarity.
+It gives control.
+
+That matters.
+
+---
+
+# Brand Tone
+
+* Professional
+* Gym-aware
+* Calm
+* Strong and steady
+* No hype
+* No fluff
+* No Silicon Valley nonsense
+
+This is built by someone who understands barbells and balance sheets.
+
+---
+
+# One-Sentence Positioning
+
+> Iron Metrics is the financial heartbeat monitor for independent gyms.
+
+---
+
+If you’d like, next I can:
+
+* Turn this into a landing page draft
+* Write a one-page investor brief
+* Or craft the product narrative for early adopters
+
+CEO Architect Mode remains engaged.
