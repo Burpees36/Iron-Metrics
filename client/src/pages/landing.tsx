@@ -73,7 +73,7 @@ export default function LandingPage() {
               <p className="text-sm font-medium text-primary tracking-wide uppercase">
                 Stability Command Center
               </p>
-              <h2
+              <h1
                 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight leading-tight"
                 data-testid="text-hero-headline"
               >
@@ -82,15 +82,12 @@ export default function LandingPage() {
                 <span className="text-primary">heartbeat</span> of
                 <br />
                 your gym.
-              </h2>
-              <p className="text-muted-foreground text-base sm:text-lg max-w-md leading-relaxed">
-                Iron Metrics is the financial resilience operating system for CrossFit gyms.
-                Reduce revenue volatility. Improve retention stability. Lower owner stress.
-              </p>
+              </h1>
+              <p className="text-muted-foreground text-base sm:text-lg max-w-md leading-relaxed">Iron Metrics is the financial resilience operating system for gyms. Reduce revenue volatility. Improve retention stability. Lower owner stress.</p>
               <div className="flex flex-wrap items-center gap-3">
                 <a href="/api/login">
                   <Button size="lg" data-testid="button-get-started">
-                    Start Your Command Center
+                    Build Stability
                     <ArrowRight className="w-4 h-4 ml-1" />
                   </Button>
                 </a>
@@ -225,7 +222,7 @@ export default function LandingPage() {
           </p>
           <a href="/api/login">
             <Button size="lg" data-testid="button-cta-bottom">
-              Start Your Command Center
+              Build Stability
               <ArrowRight className="w-4 h-4 ml-1" />
             </Button>
           </a>
@@ -237,7 +234,7 @@ export default function LandingPage() {
             <Activity className="w-4 h-4 text-primary" />
             <span className="font-semibold text-foreground">Iron Metrics</span>
           </div>
-          <p>The Stability Command Center for CrossFit gyms.</p>
+          <p>The Stability Command Center for gyms.</p>
         </div>
       </footer>
     </div>
