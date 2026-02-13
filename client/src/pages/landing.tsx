@@ -66,7 +66,6 @@ export default function LandingPage() {
           </div>
         </div>
       </nav>
-
       <section className="pt-32 pb-20 sm:pt-40 sm:pb-28">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
@@ -117,7 +116,7 @@ export default function LandingPage() {
                   interpretation="Above stability threshold. Revenue volatility risk over the next 6-12 months."
                 />
                 <Card className="bg-muted/30">
-                  <CardContent className="p-4 space-y-3">
+                  <CardContent className="p-4 space-y-3 text-[18px]">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                       Lifetime Value Impact
                     </p>
@@ -134,7 +133,6 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
-
       <section className="py-20 sm:py-28 border-t">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16 space-y-4">
@@ -175,7 +173,6 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
-
       <section className="py-20 sm:py-28 border-t">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl mx-auto text-center space-y-6">
@@ -195,7 +192,6 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
-
       <section className="py-20 sm:py-28 border-t">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid sm:grid-cols-3 gap-6 max-w-3xl mx-auto">
@@ -217,7 +213,6 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
-
       <section className="py-20 sm:py-28 border-t">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-8">
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
@@ -236,7 +231,6 @@ export default function LandingPage() {
           </a>
         </div>
       </section>
-
       <footer className="border-t py-10">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-wrap items-center justify-between gap-4 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
