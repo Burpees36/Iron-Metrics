@@ -153,7 +153,7 @@ export default function LandingPage() {
               </div>
             </div>
             <div className="space-y-3">
-              <p className="font-medium text-muted-foreground uppercase tracking-widest text-[13px]">Layer 3 — Leverage</p>
+              <p className="text-muted-foreground uppercase tracking-widest text-[13px] font-black">Layer 3 — Leverage</p>
               <div className="grid sm:grid-cols-2 gap-6">
                 <ModuleCard icon={modules[3].icon} title={modules[3].title} description={modules[3].description} />
                 <ModuleCard icon={Target} title="Every Metric, Translated" description="No raw numbers. No guessing. If it doesn't drive action, it doesn't exist." />
