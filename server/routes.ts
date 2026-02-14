@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { parseMembersCsv, previewCsv, parseAllRows, computeFileHash, type ColumnMapping } from "./csv-parser";
-import { recomputeAllMetrics, generateMetricReports, generateForecast, generateTrendIntelligence } from "./metrics";
+import { recomputeAllMetrics, computeMonthlyMetrics, generateMetricReports, generateForecast, generateTrendIntelligence } from "./metrics";
 import { generatePredictiveIntelligence } from "./predictive";
 import { insertGymSchema } from "@shared/schema";
 import multer from "multer";
@@ -429,8 +429,14 @@ export async function registerRoutes(
       const month = req.query.month as string;
       if (!month) return res.status(400).json({ message: "month query parameter required (YYYY-MM-DD)" });
 
-      const metrics = await storage.getMonthlyMetrics(req.params.id, month);
-      if (!metrics) return res.status(404).json({ message: "No metrics for this month" });
+      let metrics = await storage.getMonthlyMetrics(req.params.id, month);
+      if (!metrics) {
+        const members = await storage.getMembersByGym(req.params.id);
+        if (members.length === 0) {
+          return res.status(404).json({ message: "No members found. Import members first." });
+        }
+        metrics = await computeMonthlyMetrics(req.params.id, month);
+      }
 
       res.json(metrics);
     } catch (error) {
@@ -462,8 +468,14 @@ export async function registerRoutes(
       const month = req.query.month as string;
       if (!month) return res.status(400).json({ message: "month query parameter required (YYYY-MM-DD)" });
 
-      const metrics = await storage.getMonthlyMetrics(req.params.id, month);
-      if (!metrics) return res.status(404).json({ message: "No metrics for this month" });
+      let metrics = await storage.getMonthlyMetrics(req.params.id, month);
+      if (!metrics) {
+        const members = await storage.getMembersByGym(req.params.id);
+        if (members.length === 0) {
+          return res.status(404).json({ message: "No members found. Import members first." });
+        }
+        metrics = await computeMonthlyMetrics(req.params.id, month);
+      }
 
       const getPrevMonth = (m: string, back: number) => {
         const d = new Date(m + "T00:00:00");
