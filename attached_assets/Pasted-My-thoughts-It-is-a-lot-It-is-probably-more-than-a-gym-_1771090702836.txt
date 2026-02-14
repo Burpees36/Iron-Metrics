@@ -1,0 +1,300 @@
+My thoughts: It is a lot. It is probably more than a gym owner would understand how to use and would be a little overwhelming. There are a lot of pages and numbers thrown around. I think it could be more concise. The RSI score needs to be on the same scale across all pages (1-100, or 1-25), sentences like: "Every percentage point above target erodes predictable income and increases acquisition cost pressure." should become more human. The stability timeline doesn't have much value in my eyes and at the very least is in a poor format, recomendations are scattered everywhere and it might be nice to consolidate them (or keep them but also have a what to do section that has all of them in one area), I like the interactive graphs. I like the predictive pages and think they are what is going to be the biggest draw for customers. However, the strategic brief needs to be more strategic. It gives a lot of good info but it needs to decide what the gym actually needs and gives specific feedback and not throwing everything at it. They are also pretty wordy and hard to know what the actual title is for the block. There is redundant data that needs to be cut out to make what is actually there pop more. The member risk section is awesome, but interventions say things like "invite to lead warmup" for members that are doing well--this is a big no go and I would never go to a gym that allowed members to lead the warmup. These need to be better without a doubt. The screenshot showing Bergeron's awareness concept... we can't be saying where it comes from because if people don't like the coach then they'll dismiss the info even if its good, we also want them to know it is coming from us. For members deemed not a risk we need something better to say under intervention like "Keep coaching, refining movement". Cohort Intelligence and Revenue scenarios seem like they could be condensed and placed strategically in the reports section (or taken out completely). 
+I think there is a lot of good information that we need to be selective about what to include--wodify has a lot of info but just throws everything at the people and they don't know how to use it. This will be so much better, useful and give tactical feedback on what to do for x member, or how what to do when they see retention rates starting to drop, or when things are going well what they are doing and how to continue the momentum 
+
+
+Hunter — first off, this is serious work. This is not a toy dashboard. This feels like infrastructure. You can tell it was built by someone who understands both data and how CrossFit gyms actually operate.
+
+Now let me give you structured feedback at the level this deserves.
+
+🔥 What It Does Extremely Well
+1️⃣ It Feels Intelligent, Not Just Analytical
+
+Most dashboards show numbers.
+
+This shows:
+
+Context
+
+Meaning
+
+Consequence
+
+Suggested action
+
+That alone separates it from Wodify-style reporting.
+
+Especially strong:
+
+Member Risk probability + urgency
+
+Revenue scenario modeling
+
+30–60 day window insight framing
+
+ROI projections tied to action
+
+That is rare.
+
+2️⃣ Predictive Side Is the Differentiator
+
+The Revenue Scenarios + Break-Even Risk + Probability framing is your biggest moat.
+
+This part feels:
+
+Strategic
+
+Owner-level
+
+Forward-looking
+
+High-value
+
+Gym owners don’t wake up worrying about MoM churn percentages.
+They worry about:
+
+“Will I be okay in 6 months?”
+
+This answers that.
+
+Keep this. Polish it. Lead with it.
+
+3️⃣ Member Risk Section Is Strong
+
+This is very good.
+
+Probabilities
+
+Risk driver
+
+Urgency label
+
+Specific intervention suggestion
+
+This is actionable.
+
+It moves from:
+
+“You have churn.”
+
+to:
+
+“Call Mason this week. Here’s why.”
+
+That’s powerful.
+
+4️⃣ The Tone Is Close to Correct
+
+It’s strong. Calm. Non-hype.
+
+But it needs refinement (more on that below).
+
+🧠 Where You're 100% Right
+
+You are correct on almost every instinct you listed.
+
+This is currently:
+
+Too much intelligence presented all at once.
+
+It feels like:
+
+MBA-level analytics
+
+Consulting deck
+
+Data science output
+
+Most gym owners:
+
+Skim
+
+Want 1–3 priorities
+
+Don’t want 18 panels
+
+You are building something elite.
+Now it needs editorial discipline.
+
+🚨 Biggest Structural Issues
+1️⃣ Too Many Pages
+
+Report
+Members
+Trends
+Predictive
+Then predictive has 4 sub-pages.
+
+That’s a lot.
+
+You don’t need this much surface area.
+
+Too many clicks = cognitive fatigue.
+
+2️⃣ RSI Inconsistency
+
+You nailed it.
+
+Pick one:
+
+0–100
+
+Or 0–25
+
+Use it everywhere.
+
+Consistency builds trust.
+
+3️⃣ Recommendations Are Scattered
+
+This is a major UX issue.
+
+Right now recommendations appear:
+
+In report
+
+In strategic brief
+
+In member risk
+
+In growth
+
+In retention
+
+In culture
+
+In community
+
+In coaching
+
+In revenue scenario
+
+It feels like:
+
+“Here are 17 good ideas.”
+
+Instead of:
+
+“Here are your 3 priorities this month.”
+
+That’s the shift.
+
+4️⃣ Strategic Brief Isn’t Decisive Enough
+
+You said it perfectly:
+
+It gives a lot of good info but it needs to decide what the gym actually needs.
+
+Exactly.
+
+A strategic brief should feel like:
+
+We evaluated your gym.
+Here is the one lever that moves everything.
+
+Right now it still feels analytical.
+It needs to feel executive.
+
+5️⃣ Stability Timeline — Low Value
+
+I agree.
+
+It’s:
+
+Busy
+
+Historical
+
+Not very actionable
+
+Visually long
+
+It doesn’t feel like a decision tool.
+
+Cut it or radically compress it.
+
+6️⃣ Wordiness
+
+This is important.
+
+Lines like:
+
+“Every percentage point above target erodes predictable income and increases acquisition cost pressure.”
+
+That’s MBA language.
+
+Gym owner version:
+
+“If churn creeps up, you’ll feel it fast. You’ll need more new members just to stay even.”
+
+Human.
+Direct.
+Clear.
+
+7️⃣ Interventions Need Domain Intelligence Upgrade
+
+You’re absolutely right about:
+
+“Invite to lead warm-up.”
+
+That would damage credibility instantly.
+
+For healthy members, interventions should look like:
+
+Reinforce movement quality
+
+Encourage goal setting
+
+Assign specific skill progression
+
+Check in quarterly
+
+Invite to specialty workshop
+
+Encourage competition participation
+
+Celebrate anniversary publicly
+
+Interventions must reflect high-level CrossFit coaching standards.
+
+8️⃣ Attributions to Specific Coaches
+
+You're correct again.
+
+You can’t cite:
+
+Bergeron
+
+Nicole Christensen
+
+Etc.
+
+Because:
+
+Some owners love them
+
+Some hate them
+
+Some don’t care
+
+It weakens authority.
+
+This must feel like:
+
+Iron Metrics Intelligence
+
+Not:
+
+“Borrowed philosophy.”
+
+9️⃣ Cohort + Revenue Scenarios Might Be Overexposed
+
+They’re strong.
+But maybe they live:
+
+As expandable sections
+
+Or integrated into Strategic Brief
+
+Not separate pages
+
+Right now the surface area is too large.
