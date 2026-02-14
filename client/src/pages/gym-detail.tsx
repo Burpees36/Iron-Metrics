@@ -1390,29 +1390,57 @@ function TrendsView({ gymId }: { gymId: string }) {
                 })}
               </div>
             </div>
-            <div className="lg:w-72 lg:border-l lg:pl-6 border-t lg:border-t-0 pt-4 lg:pt-0 space-y-3">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <Target className="w-3.5 h-3.5" />
-                90-Day Outlook
-              </h3>
-              <div className="space-y-2" data-testid="section-90day-outlook">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs text-muted-foreground">Revenue</span>
-                  <span className={`text-xs font-medium ${outlookStatusColor(ninetyDayOutlook.revenue.status)}`} data-testid="text-outlook-revenue">{ninetyDayOutlook.revenue.label}</span>
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs text-muted-foreground">Member Count</span>
-                  <span className={`text-xs font-medium ${outlookStatusColor(ninetyDayOutlook.memberCount.status)}`} data-testid="text-outlook-members">{ninetyDayOutlook.memberCount.label}</span>
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs text-muted-foreground">Churn</span>
-                  <span className={`text-xs font-medium ${outlookStatusColor(ninetyDayOutlook.churn.status)}`} data-testid="text-outlook-churn">{ninetyDayOutlook.churn.label}</span>
-                </div>
-                <div className="flex items-center justify-between gap-2 pt-1 border-t">
-                  <span className="text-xs font-medium">Intervention Required</span>
-                  <span className={`text-xs font-bold ${interventionColors[ninetyDayOutlook.interventionRequired].text}`} data-testid="text-outlook-intervention">
-                    {interventionColors[ninetyDayOutlook.interventionRequired].label}
-                  </span>
+            <div className="lg:w-80 space-y-3">
+              <div className={`rounded-md p-4 space-y-3 border-l-[3px] ${
+                ninetyDayOutlook.interventionRequired === "none" ? "bg-emerald-500/5 border-l-emerald-500/50" :
+                ninetyDayOutlook.interventionRequired === "low" ? "bg-muted/50 border-l-muted-foreground/30" :
+                ninetyDayOutlook.interventionRequired === "moderate" ? "bg-amber-500/5 border-l-amber-500/50" :
+                "bg-red-500/5 border-l-red-500/50"
+              }`}>
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <Target className="w-3.5 h-3.5" />
+                  90-Day Outlook
+                </h3>
+                <div className="space-y-2.5" data-testid="section-90day-outlook">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-1.5 h-1.5 rounded-full ${
+                        ninetyDayOutlook.revenue.status === "growing" || ninetyDayOutlook.revenue.status === "within-tolerance" ? "bg-emerald-500" :
+                        ninetyDayOutlook.revenue.status === "stable" ? "bg-muted-foreground/50" :
+                        ninetyDayOutlook.revenue.status === "at-risk" || ninetyDayOutlook.revenue.status === "elevated" ? "bg-amber-500" : "bg-red-500"
+                      }`} />
+                      <span className="text-xs text-muted-foreground">Revenue</span>
+                    </div>
+                    <span className={`text-xs font-semibold ${outlookStatusColor(ninetyDayOutlook.revenue.status)}`} data-testid="text-outlook-revenue">{ninetyDayOutlook.revenue.label}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-1.5 h-1.5 rounded-full ${
+                        ninetyDayOutlook.memberCount.status === "growing" || ninetyDayOutlook.memberCount.status === "within-tolerance" ? "bg-emerald-500" :
+                        ninetyDayOutlook.memberCount.status === "stable" ? "bg-muted-foreground/50" :
+                        ninetyDayOutlook.memberCount.status === "at-risk" || ninetyDayOutlook.memberCount.status === "elevated" ? "bg-amber-500" : "bg-red-500"
+                      }`} />
+                      <span className="text-xs text-muted-foreground">Member Count</span>
+                    </div>
+                    <span className={`text-xs font-semibold ${outlookStatusColor(ninetyDayOutlook.memberCount.status)}`} data-testid="text-outlook-members">{ninetyDayOutlook.memberCount.label}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-1.5 h-1.5 rounded-full ${
+                        ninetyDayOutlook.churn.status === "growing" || ninetyDayOutlook.churn.status === "within-tolerance" ? "bg-emerald-500" :
+                        ninetyDayOutlook.churn.status === "stable" ? "bg-muted-foreground/50" :
+                        ninetyDayOutlook.churn.status === "at-risk" || ninetyDayOutlook.churn.status === "elevated" ? "bg-amber-500" : "bg-red-500"
+                      }`} />
+                      <span className="text-xs text-muted-foreground">Churn</span>
+                    </div>
+                    <span className={`text-xs font-semibold ${outlookStatusColor(ninetyDayOutlook.churn.status)}`} data-testid="text-outlook-churn">{ninetyDayOutlook.churn.label}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 pt-2 mt-1 border-t border-border/50">
+                    <span className="text-xs font-semibold">Intervention</span>
+                    <Badge variant="outline" className={`text-[10px] font-bold ${interventionColors[ninetyDayOutlook.interventionRequired].text}`} data-testid="text-outlook-intervention">
+                      {interventionColors[ninetyDayOutlook.interventionRequired].label}
+                    </Badge>
+                  </div>
                 </div>
               </div>
             </div>

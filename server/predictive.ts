@@ -689,11 +689,30 @@ function computeCohortIntelligence(
   }
 
   const currentMonth = now.getMonth();
+
   if (currentMonth >= 0 && currentMonth <= 3) {
-    crossfitInsights.push(`The CrossFit Open (Feb-March) is the most powerful retention and growth event of the year. Use this window to energize every member, create shared goals through Friday Night Lights and intramural teams, and bring non-members through the door. Open participation correlates with a 6-12 month retention boost.`);
+    crossfitInsights.push(`The CrossFit Open (Feb-March) is your biggest retention and growth window. Run Friday Night Lights, form intramural teams, and invite non-members to watch or try a workout. Open participation correlates with 6-12 months of stronger retention.`);
   }
 
-  crossfitInsights.push(`Coaching consistency drives retention. If members get a different experience depending on which coach leads class, your culture has a crack. All coaches need training, shadowing, and feedback loops. They should deliver the same standard every class.`);
+  if (currentMonth >= 3 && currentMonth <= 5) {
+    crossfitInsights.push(`Spring is prime time for specialty seminars — Olympic weightlifting clinics, gymnastics skill sessions, or mobility workshops. These events re-engage drifting members by giving them a new goal. Charge a small fee or make them member-exclusive to reinforce the value of membership.`);
+  }
+
+  if (currentMonth >= 5 && currentMonth <= 7) {
+    crossfitInsights.push(`Summer brings schedule disruptions and travel. Counter this with Hero WODs on Memorial Day, July 4th partner workouts, or outdoor community events. These create moments members talk about and don't want to miss.`);
+  }
+
+  if (currentMonth >= 8 && currentMonth <= 9) {
+    crossfitInsights.push(`Fall is your second-best acquisition window after January. Launch a 6-week nutrition challenge or a "Back to Basics" foundations series. Members returning from summer are looking for structure — give it to them before they drift further.`);
+  }
+
+  if (currentMonth >= 10 && currentMonth <= 11) {
+    crossfitInsights.push(`Holiday season means cancellation risk. Run a "12 Days of Christmas" WOD series, Thanksgiving partner workouts, or a year-end goal-setting event. Give members a reason to stay engaged through the holidays instead of waiting for January to restart.`);
+  }
+
+  crossfitInsights.push(`Events are your highest-leverage retention tool. Rotate through: yoga or mobility clinics, nutrition challenges, weightlifting or gymnastics seminars, Hero WODs, bring-a-friend days, and internal competitions. Aim for at least one community event per month — members who participate in events cancel at half the rate.`);
+
+  crossfitInsights.push(`Coaching consistency drives retention. If members get a different experience depending on which coach leads class, your culture has a crack. Invest in coach development, shadowing, and regular feedback. Every class should feel like the same gym.`);
 
   return { cohorts, retentionWindows: windows, survivalCurve, insights, crossfitInsights };
 }

@@ -202,13 +202,9 @@ export default function PredictiveIntelligenceView({ gymId }: { gymId: string })
             <Brain className="w-4 h-4 mr-1" />
             Member Risk
           </TabsTrigger>
-          <TabsTrigger value="cohorts" data-testid="tab-cohorts">
-            <Users className="w-4 h-4 mr-1" />
-            Cohort Intelligence
-          </TabsTrigger>
-          <TabsTrigger value="scenarios" data-testid="tab-scenarios">
-            <BarChart3 className="w-4 h-4 mr-1" />
-            Revenue Scenarios
+          <TabsTrigger value="planning" data-testid="tab-planning">
+            <Target className="w-4 h-4 mr-1" />
+            Future Planning
           </TabsTrigger>
         </TabsList>
 
@@ -220,12 +216,8 @@ export default function PredictiveIntelligenceView({ gymId }: { gymId: string })
           <MemberRiskView predictions={data.memberPredictions} gymId={gymId} />
         </TabsContent>
 
-        <TabsContent value="cohorts" className="mt-6">
-          <CohortView cohorts={data.cohortIntelligence} />
-        </TabsContent>
-
-        <TabsContent value="scenarios" className="mt-6">
-          <ScenarioView scenario={data.revenueScenario} />
+        <TabsContent value="planning" className="mt-6">
+          <FuturePlanningView cohorts={data.cohortIntelligence} scenario={data.revenueScenario} />
         </TabsContent>
       </Tabs>
     </div>
@@ -626,6 +618,7 @@ function MemberRiskView({ predictions, gymId }: { predictions: PredictiveIntelli
   const { summary, members } = predictions;
   const [search, setSearch] = useState("");
   const [selectedMember, setSelectedMember] = useState<EnrichedMember | null>(null);
+  const [selectedPrediction, setSelectedPrediction] = useState<MemberPrediction | null>(null);
 
   const { data: enrichedMembers } = useQuery<EnrichedMember[]>({
     queryKey: ["/api/gyms", gymId, "members", "enriched"],
@@ -796,7 +789,10 @@ function MemberRiskView({ predictions, gymId }: { predictions: PredictiveIntelli
                   className="cursor-pointer"
                   onClick={() => {
                     const enriched = enrichedMembers?.find(em => em.id === m.memberId);
-                    if (enriched) setSelectedMember(enriched);
+                    if (enriched) {
+                      setSelectedMember(enriched);
+                      setSelectedPrediction(m);
+                    }
                   }}
                 >
                   <TableCell>
@@ -876,7 +872,280 @@ function MemberRiskView({ predictions, gymId }: { predictions: PredictiveIntelli
         <p className="text-xs text-muted-foreground text-center">Showing top 50 of {filteredMembers.length} members by risk</p>
       )}
 
-      <PredictiveMemberDrawer member={selectedMember} gymId={gymId} onClose={() => setSelectedMember(null)} />
+      <PredictiveMemberDrawer 
+        member={selectedMember} 
+        prediction={selectedPrediction}
+        gymId={gymId} 
+        onClose={() => { setSelectedMember(null); setSelectedPrediction(null); }} 
+      />
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FUTURE PLANNING VIEW (merged Cohort + Scenario)
+// ═══════════════════════════════════════════════════════════════
+
+function FuturePlanningView({ cohorts, scenario }: {
+  cohorts: PredictiveIntelligence["cohortIntelligence"];
+  scenario: PredictiveIntelligence["revenueScenario"];
+}) {
+  const riskColors: Record<string, string> = {
+    low: "text-emerald-600 dark:text-emerald-400",
+    moderate: "text-amber-600 dark:text-amber-400",
+    high: "text-orange-600 dark:text-orange-400",
+    critical: "text-red-600 dark:text-red-400",
+  };
+
+  return (
+    <div className="space-y-8">
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+          <DollarSign className="w-3.5 h-3.5" /> Where Your Revenue Is Heading
+        </h3>
+
+        <div className="grid sm:grid-cols-4 gap-3" data-testid="grid-scenario-summary">
+          <Card>
+            <CardContent className="pt-4 pb-3 text-center">
+              <p className="text-xs text-muted-foreground mb-1">Best Case</p>
+              <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">${scenario.upsideMrr.toLocaleString()}/mo</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-3 text-center">
+              <p className="text-xs text-muted-foreground mb-1">Most Likely</p>
+              <p className="text-lg font-bold">${scenario.expectedMrr.toLocaleString()}/mo</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-3 text-center">
+              <p className="text-xs text-muted-foreground mb-1">If Things Slip</p>
+              <p className="text-lg font-bold text-red-600 dark:text-red-400">${scenario.worstCaseMrr.toLocaleString()}/mo</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-3 text-center">
+              <p className="text-xs text-muted-foreground mb-1">Financial Risk</p>
+              <p className={`text-lg font-bold capitalize ${riskColors[scenario.cashFlowRiskLevel] || ""}`}>
+                {scenario.cashFlowRiskLevel}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card data-testid="chart-scenario-bands">
+          <CardContent className="pt-5">
+            <p className="text-sm font-medium mb-4">6-Month Revenue Projection</p>
+            <ResponsiveContainer width="100%" height={320}>
+              <ComposedChart data={scenario.projections}>
+                <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                <XAxis
+                  dataKey="month"
+                  tickFormatter={(m) => new Date(m + "T00:00:00").toLocaleDateString("en-US", { month: "short" })}
+                  tick={{ fontSize: 11 }}
+                />
+                <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11 }} />
+                <RechartsTooltip
+                  formatter={(v: number, name: string) => [`$${v.toLocaleString()}`, name]}
+                  labelFormatter={(m) => new Date(m + "T00:00:00").toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                  contentStyle={{ fontSize: "12px", borderRadius: "6px" }}
+                />
+                <Legend iconSize={10} wrapperStyle={{ fontSize: "11px" }} />
+                <defs>
+                  <linearGradient id="planUpsideGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="hsl(142, 60%, 45%)" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="hsl(142, 60%, 45%)" stopOpacity={0.02} />
+                  </linearGradient>
+                  <linearGradient id="planDownsideGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="hsl(0, 70%, 55%)" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="hsl(0, 70%, 55%)" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <Area type="monotone" dataKey="upside" stroke="hsl(142, 60%, 45%)" fill="url(#planUpsideGrad)" strokeWidth={1.5} strokeDasharray="4 2" name="Upside" />
+                <Area type="monotone" dataKey="downside" stroke="hsl(0, 70%, 55%)" fill="url(#planDownsideGrad)" strokeWidth={1.5} strokeDasharray="4 2" name="Downside" />
+                <Line type="monotone" dataKey="expected" stroke="hsl(210, 60%, 50%)" strokeWidth={2.5} dot={{ r: 3 }} name="Expected" />
+                <Line type="monotone" dataKey="current" stroke="hsl(0, 0%, 60%)" strokeWidth={1} strokeDasharray="6 4" dot={false} name="Current MRR" />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+          <Users className="w-3.5 h-3.5" /> How Members Stay (and Leave)
+        </h3>
+
+        <div className="grid lg:grid-cols-2 gap-6">
+          <Card data-testid="chart-survival-curve">
+            <CardContent className="pt-5">
+              <p className="text-sm font-medium mb-4">Retention Survival Curve</p>
+              <ResponsiveContainer width="100%" height={280}>
+                <AreaChart data={cohorts.survivalCurve}>
+                  <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                  <XAxis dataKey="days" tickFormatter={(d) => d === 0 ? "Join" : d < 365 ? `${d}d` : `${(d/365).toFixed(1)}y`} tick={{ fontSize: 11 }} />
+                  <YAxis domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11 }} />
+                  <RechartsTooltip
+                    formatter={(v: number) => [`${v}%`, "Survival Rate"]}
+                    labelFormatter={(d) => `Day ${d}`}
+                    contentStyle={{ fontSize: "12px", borderRadius: "6px" }}
+                  />
+                  <defs>
+                    <linearGradient id="planSurvivalGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(210, 60%, 50%)" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="hsl(210, 60%, 50%)" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <Area type="monotone" dataKey="survivalRate" stroke="hsl(210, 60%, 50%)" fill="url(#planSurvivalGrad)" strokeWidth={2} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          <Card data-testid="chart-retention-windows">
+            <CardContent className="pt-5">
+              <p className="text-sm font-medium mb-4">Where Members Are Lost</p>
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={cohorts.retentionWindows.filter(w => w.lostCount > 0)}>
+                  <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                  <XAxis dataKey="window" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <RechartsTooltip
+                    formatter={(v: number, name: string) => [name === "lostCount" ? `${v} members` : `$${v}`, name === "lostCount" ? "Members Lost" : "Revenue Lost"]}
+                    contentStyle={{ fontSize: "12px", borderRadius: "6px" }}
+                  />
+                  <Bar dataKey="lostCount" fill="hsl(0, 70%, 55%)" radius={[4, 4, 0, 0]} name="Members Lost" />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+          <Shield className="w-3.5 h-3.5" /> Planning Ahead
+        </h3>
+
+        <Card data-testid="card-break-even">
+          <CardContent className="pt-5 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Financial Safety Check</p>
+              <Badge variant="outline" className={riskColors[scenario.cashFlowRiskLevel]}>
+                {(scenario.breakEvenRisk * 100).toFixed(0)}% risk
+              </Badge>
+            </div>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              {scenario.breakEvenRisk > 0.3
+                ? "There is a meaningful chance revenue could dip below what you need to keep the lights on. Focus on reducing cancellations now to narrow the gap between your best and worst case scenarios."
+                : "Your revenue should stay above sustainable levels across all scenarios. Keep doing what you're doing while watching for early warning signs."}
+            </p>
+          </CardContent>
+        </Card>
+
+        {scenario.scenarioInsights.length > 0 && (
+          <Card data-testid="card-scenario-insights">
+            <CardContent className="pt-5 space-y-3">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">What the Numbers Are Telling You</p>
+              {scenario.scenarioInsights.map((ins, i) => (
+                <p key={i} className="text-sm leading-relaxed">{ins}</p>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {cohorts.retentionWindows.length > 0 && (
+          <Card data-testid="card-retention-insights">
+            <CardContent className="pt-5 space-y-3">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">When You're Losing Members</p>
+              {cohorts.retentionWindows.filter(w => w.lostCount > 0).map((w, i) => (
+                <div key={i} className="border-b last:border-0 pb-3 last:pb-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <Badge variant="outline" className="text-xs">{w.window}</Badge>
+                    <span className="text-xs text-red-600 dark:text-red-400">{w.lostCount} lost ({w.lostPct.toFixed(0)}%)</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{w.insight}</p>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+          <BarChart3 className="w-3.5 h-3.5" /> Cohort Performance
+        </h3>
+
+        <Card data-testid="chart-cohort-survival">
+          <CardContent className="pt-5">
+            <p className="text-sm font-medium mb-4">Cohort Survival Rates</p>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={cohorts.cohorts}>
+                <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                <XAxis dataKey="cohortLabel" tick={{ fontSize: 10 }} />
+                <YAxis domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11 }} />
+                <RechartsTooltip
+                  formatter={(v: number, name: string) => {
+                    if (name === "survivalRate") return [`${v}%`, "Survival Rate"];
+                    return [v, name];
+                  }}
+                  contentStyle={{ fontSize: "12px", borderRadius: "6px" }}
+                />
+                <Bar dataKey="survivalRate" fill="hsl(210, 60%, 50%)" radius={[4, 4, 0, 0]} name="Survival Rate" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <div className="rounded-md border overflow-x-auto" data-testid="table-cohorts">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Cohort</TableHead>
+                <TableHead className="text-right">Joined</TableHead>
+                <TableHead className="text-right">Active</TableHead>
+                <TableHead className="text-right">Survival</TableHead>
+                <TableHead className="text-right">Avg Rate</TableHead>
+                <TableHead className="text-right">Revenue Retained</TableHead>
+                <TableHead className="text-right">Revenue Lost</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {cohorts.cohorts.map((c) => (
+                <TableRow key={c.cohortMonth}>
+                  <TableCell className="font-medium">{c.cohortLabel}</TableCell>
+                  <TableCell className="text-right">{c.totalJoined}</TableCell>
+                  <TableCell className="text-right">{c.stillActive}</TableCell>
+                  <TableCell className="text-right">
+                    <span className={`font-medium ${c.survivalRate >= 70 ? "text-emerald-600 dark:text-emerald-400" : c.survivalRate >= 50 ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"}`}>
+                      {c.survivalRate}%
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right text-sm">${c.avgMonthlyRate}</TableCell>
+                  <TableCell className="text-right text-sm text-emerald-600 dark:text-emerald-400">${c.revenueRetained.toLocaleString()}</TableCell>
+                  <TableCell className="text-right text-sm text-red-600 dark:text-red-400">${c.revenueLost.toLocaleString()}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+
+      {cohorts.crossfitInsights.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+            <Zap className="w-3.5 h-3.5" /> CrossFit-Specific Insights
+          </h3>
+          <Card data-testid="card-crossfit-insights">
+            <CardContent className="pt-5 space-y-3">
+              {cohorts.crossfitInsights.map((ins, i) => (
+                <p key={i} className="text-sm leading-relaxed">{ins}</p>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
@@ -1156,7 +1425,7 @@ function PredictiveRiskBadge({ risk }: { risk: "low" | "medium" | "high" }) {
   );
 }
 
-function PredictiveMemberDrawer({ member, gymId, onClose }: { member: EnrichedMember | null; gymId: string; onClose: () => void }) {
+function PredictiveMemberDrawer({ member, prediction, gymId, onClose }: { member: EnrichedMember | null; prediction: MemberPrediction | null; gymId: string; onClose: () => void }) {
   const { toast } = useToast();
   const [note, setNote] = useState("");
 
@@ -1259,6 +1528,31 @@ function PredictiveMemberDrawer({ member, gymId, onClose }: { member: EnrichedMe
                         {r}
                       </Badge>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {prediction && (
+                <div className="space-y-3" data-testid="section-recommended-action">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Recommended Action</p>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2" data-testid="badge-engagement-class">
+                      <Badge variant="outline" className="text-xs capitalize" data-testid="badge-engagement-class-value">
+                        {prediction.engagementClass}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground" data-testid="text-churn-risk">
+                        {(prediction.churnProbability * 100).toFixed(0)}% churn risk
+                      </span>
+                    </div>
+                    <div className="rounded-md bg-muted/50 p-3 space-y-1.5" data-testid="div-intervention-detail">
+                      <p className="text-xs font-semibold capitalize" data-testid="text-intervention-type">{prediction.interventionType.replace(/-/g, " ")}</p>
+                      <p className="text-sm leading-relaxed" data-testid="text-intervention-detail">{prediction.interventionDetail}</p>
+                    </div>
+                    {prediction.interventionMicroGuidance && (
+                      <p className="text-xs text-muted-foreground leading-relaxed italic" data-testid="text-intervention-guidance">
+                        {prediction.interventionMicroGuidance}
+                      </p>
+                    )}
                   </div>
                 </div>
               )}

@@ -29,7 +29,7 @@ The Stability Command Center for CrossFit gyms. A financial resilience operating
 - Strategic brief limited to TOP 3 ranked recommendations (critical > high > medium > low)
 - Language is direct, human, gym-owner-friendly — no MBA jargon
 - Core member interventions include: quarterly goal-setting, skill progression tracking, competition participation, movement quality reinforcement
-- CrossFit Open recommendations appear seasonally (Jan-Apr)
+- CrossFit event recommendations rotate seasonally (Open, Hero WODs, seminars, nutrition challenges, holiday events, yoga/mobility clinics, bring-a-friend days)
 - Stability verdicts are clear and actionable (strong/moderate/fragile)
 
 ## Report Format
