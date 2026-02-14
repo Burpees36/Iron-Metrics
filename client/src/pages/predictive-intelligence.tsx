@@ -1,18 +1,28 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
+} from "@/components/ui/sheet";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient } from "@/lib/queryClient";
+import { isUnauthorizedError } from "@/lib/auth-utils";
 import {
   Brain, AlertTriangle, TrendingDown, TrendingUp, Users, DollarSign,
   Shield, ShieldAlert, ShieldCheck, Target, Zap, FileText, BarChart3,
   ChevronRight, Clock, Minus, ArrowUp, ArrowDown, CheckCircle2, Circle,
-  MessageSquare, Phone, UserCheck, CalendarDays,
+  MessageSquare, Phone, UserCheck, CalendarDays, Search, Star,
 } from "lucide-react";
+import { useState } from "react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -147,6 +157,31 @@ interface BriefRecommendation {
   executionChecklist: string[];
 }
 
+interface EnrichedMember {
+  id: string;
+  name: string;
+  email: string | null;
+  status: string;
+  joinDate: string;
+  cancelDate: string | null;
+  monthlyRate: string;
+  tenureDays: number;
+  tenureMonths: number;
+  risk: "low" | "medium" | "high";
+  riskReasons: string[];
+  lastContacted: string | null;
+  daysSinceContact: number | null;
+  isHighValue: boolean;
+  totalRevenue: number;
+}
+
+interface MemberContact {
+  id: string;
+  memberId: string;
+  contactedAt: string;
+  note: string | null;
+}
+
 export default function PredictiveIntelligenceView({ gymId }: { gymId: string }) {
   const { data, isLoading, error } = useQuery<PredictiveIntelligence>({
     queryKey: [`/api/gyms/${gymId}/predictive`],
@@ -182,7 +217,7 @@ export default function PredictiveIntelligenceView({ gymId }: { gymId: string })
         </TabsContent>
 
         <TabsContent value="members" className="mt-6">
-          <MemberRiskView predictions={data.memberPredictions} />
+          <MemberRiskView predictions={data.memberPredictions} gymId={gymId} />
         </TabsContent>
 
         <TabsContent value="cohorts" className="mt-6">
@@ -587,8 +622,25 @@ function MemberAlertCard({ alert, index }: { alert: MemberAlertEnriched; index: 
 // MEMBER RISK VIEW
 // ═══════════════════════════════════════════════════════════════
 
-function MemberRiskView({ predictions }: { predictions: PredictiveIntelligence["memberPredictions"] }) {
+function MemberRiskView({ predictions, gymId }: { predictions: PredictiveIntelligence["memberPredictions"]; gymId: string }) {
   const { summary, members } = predictions;
+  const [search, setSearch] = useState("");
+  const [selectedMember, setSelectedMember] = useState<EnrichedMember | null>(null);
+
+  const { data: enrichedMembers } = useQuery<EnrichedMember[]>({
+    queryKey: ["/api/gyms", gymId, "members", "enriched"],
+    queryFn: async () => {
+      const res = await fetch(`/api/gyms/${gymId}/members/enriched`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+  });
+
+  const filteredMembers = members.filter(m =>
+    search === "" ||
+    m.name.toLowerCase().includes(search.toLowerCase()) ||
+    (m.email && m.email.toLowerCase().includes(search.toLowerCase()))
+  );
 
   const totalMembers = Object.values(summary.classBreakdown).reduce((a, b) => a + b, 0);
 
@@ -706,6 +758,19 @@ function MemberRiskView({ predictions }: { predictions: PredictiveIntelligence["
         </Card>
       )}
 
+      <div className="sticky top-0 z-50 bg-background pb-3" data-testid="search-member-risk">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search members by name or email..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+            data-testid="input-member-search"
+          />
+        </div>
+      </div>
+
       <div className="rounded-md border overflow-x-auto" data-testid="table-member-risk">
         <Table>
           <TableHeader>
@@ -721,11 +786,19 @@ function MemberRiskView({ predictions }: { predictions: PredictiveIntelligence["
             </TableRow>
           </TableHeader>
           <TableBody>
-            {members.slice(0, 30).map((m) => {
+            {filteredMembers.slice(0, 50).map((m) => {
               const Icon = classIcons[m.engagementClass] || Shield;
               const urg = urgencyConfig[m.interventionUrgency] || urgencyConfig.monitor;
               return (
-                <TableRow key={m.memberId} data-testid={`row-member-${m.memberId}`}>
+                <TableRow
+                  key={m.memberId}
+                  data-testid={`row-member-${m.memberId}`}
+                  className="cursor-pointer"
+                  onClick={() => {
+                    const enriched = enrichedMembers?.find(em => em.id === m.memberId);
+                    if (enriched) setSelectedMember(enriched);
+                  }}
+                >
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium">{m.name}</span>
@@ -799,9 +872,11 @@ function MemberRiskView({ predictions }: { predictions: PredictiveIntelligence["
           </TableBody>
         </Table>
       </div>
-      {members.length > 30 && (
-        <p className="text-xs text-muted-foreground text-center">Showing top 30 of {members.length} members by risk</p>
+      {filteredMembers.length > 50 && (
+        <p className="text-xs text-muted-foreground text-center">Showing top 50 of {filteredMembers.length} members by risk</p>
       )}
+
+      <PredictiveMemberDrawer member={selectedMember} gymId={gymId} onClose={() => setSelectedMember(null)} />
     </div>
   );
 }
@@ -1050,6 +1125,190 @@ function ScenarioView({ scenario }: { scenario: PredictiveIntelligence["revenueS
         </Card>
       )}
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MEMBER DRAWER HELPERS
+// ═══════════════════════════════════════════════════════════════
+
+function PredictiveRiskDot({ risk }: { risk: "low" | "medium" | "high" }) {
+  const colors = {
+    high: "bg-red-500 dark:bg-red-400",
+    medium: "bg-amber-500 dark:bg-amber-400",
+    low: "bg-emerald-500 dark:bg-emerald-400",
+  };
+  return <div className={`w-2 h-2 rounded-full flex-shrink-0 ${colors[risk]}`} />;
+}
+
+function PredictiveRiskBadge({ risk }: { risk: "low" | "medium" | "high" }) {
+  const config = {
+    high: { variant: "destructive" as const, icon: ShieldAlert, label: "High" },
+    medium: { variant: "secondary" as const, icon: Shield, label: "Medium" },
+    low: { variant: "outline" as const, icon: ShieldCheck, label: "Low" },
+  };
+  const c = config[risk];
+  return (
+    <Badge variant={c.variant} className="text-[10px] gap-1">
+      <c.icon className="w-3 h-3" />
+      {c.label}
+    </Badge>
+  );
+}
+
+function PredictiveMemberDrawer({ member, gymId, onClose }: { member: EnrichedMember | null; gymId: string; onClose: () => void }) {
+  const { toast } = useToast();
+  const [note, setNote] = useState("");
+
+  const { data: contactHistory } = useQuery<MemberContact[]>({
+    queryKey: ["/api/gyms", gymId, "members", member?.id, "contacts"],
+    queryFn: async () => {
+      const res = await fetch(`/api/gyms/${gymId}/members/${member!.id}/contacts`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: !!member,
+  });
+
+  const contactMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/gyms/${gymId}/members/${member!.id}/contact`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ note: note || "Touchpoint logged" }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Touchpoint logged", description: `Contact with ${member!.name} recorded.` });
+      setNote("");
+      queryClient.invalidateQueries({ queryKey: ["/api/gyms", gymId, "members", "enriched"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/gyms", gymId, "members", member!.id, "contacts"] });
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        window.location.href = "/api/login";
+        return;
+      }
+      toast({ title: "Error", description: "Failed to log contact.", variant: "destructive" });
+    },
+  });
+
+  const rate = member ? Number(member.monthlyRate) : 0;
+
+  return (
+    <Sheet open={!!member} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto" data-testid="drawer-member-detail">
+        {member && (
+          <>
+            <SheetHeader className="space-y-1 pr-8">
+              <SheetTitle className="flex items-center gap-2">
+                <PredictiveRiskDot risk={member.status === "active" ? member.risk : "low"} />
+                {member.name}
+                {member.isHighValue && member.status === "active" && (
+                  <Star className="w-4 h-4 text-amber-500 dark:text-amber-400" />
+                )}
+              </SheetTitle>
+              <SheetDescription>
+                {member.email || "No email on file"}
+              </SheetDescription>
+            </SheetHeader>
+
+            <div className="mt-6 space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Status</p>
+                  <Badge variant={member.status === "active" ? "default" : "outline"} className="text-xs" data-testid="badge-member-status">
+                    {member.status}
+                  </Badge>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Risk</p>
+                  <PredictiveRiskBadge risk={member.risk} />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Tenure</p>
+                  <p className="text-sm font-mono font-medium" data-testid="text-member-tenure">
+                    {member.tenureMonths > 0 ? `${member.tenureMonths} months` : `${member.tenureDays} days`}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Monthly Rate</p>
+                  <p className="text-sm font-mono font-medium" data-testid="text-member-rate">${rate.toFixed(0)}/mo</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Total Revenue</p>
+                  <p className="text-sm font-mono font-medium" data-testid="text-member-revenue">${member.totalRevenue.toLocaleString()}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Joined</p>
+                  <p className="text-sm" data-testid="text-member-join-date">
+                    {new Date(member.joinDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  </p>
+                </div>
+              </div>
+
+              {member.riskReasons.length > 0 && member.status === "active" && (
+                <div className="space-y-2" data-testid="section-risk-signals">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Risk Signals</p>
+                  <div className="flex flex-wrap gap-1">
+                    {member.riskReasons.map((r, i) => (
+                      <Badge key={i} variant="outline" className="text-[10px]">
+                        {r}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="border-t pt-4 space-y-3">
+                <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Log Touchpoint</p>
+                <Textarea
+                  placeholder="Quick note about this interaction..."
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  className="text-sm resize-none"
+                  rows={2}
+                  data-testid="input-drawer-contact-note"
+                />
+                <Button
+                  size="sm"
+                  onClick={() => contactMutation.mutate()}
+                  disabled={contactMutation.isPending}
+                  data-testid="button-drawer-log-touchpoint"
+                >
+                  <Phone className="w-3.5 h-3.5 mr-1" />
+                  {contactMutation.isPending ? "Logging..." : "Log Touchpoint"}
+                </Button>
+              </div>
+
+              <div className="border-t pt-4 space-y-3">
+                <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Contact History</p>
+                {(!contactHistory || contactHistory.length === 0) ? (
+                  <p className="text-xs text-muted-foreground" data-testid="text-no-contact-history">No contact history yet.</p>
+                ) : (
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto" data-testid="list-contact-history">
+                    {contactHistory.slice(0, 20).map((c) => (
+                      <div key={c.id} className="flex items-start gap-2 text-xs" data-testid={`contact-entry-${c.id}`}>
+                        <MessageSquare className="w-3 h-3 text-muted-foreground mt-0.5 flex-shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-muted-foreground">
+                            {c.contactedAt ? new Date(c.contactedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Unknown"}
+                          </p>
+                          {c.note && <p className="text-foreground mt-0.5">{c.note}</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
   );
 }
 

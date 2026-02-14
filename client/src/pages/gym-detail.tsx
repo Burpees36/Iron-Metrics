@@ -261,17 +261,12 @@ export default function GymDetail() {
       <Tabs defaultValue="report">
         <TabsList data-testid="tabs-gym-detail">
           <TabsTrigger value="report" data-testid="tab-report">Report</TabsTrigger>
-          <TabsTrigger value="members" data-testid="tab-members">Members</TabsTrigger>
           <TabsTrigger value="trends" data-testid="tab-trends">Trends</TabsTrigger>
           <TabsTrigger value="predictive" data-testid="tab-predictive">Predictive</TabsTrigger>
         </TabsList>
 
         <TabsContent value="report" className="mt-8">
           <ReportView gymId={gym.id} />
-        </TabsContent>
-
-        <TabsContent value="members" className="mt-8">
-          <MembersView gymId={gym.id} />
         </TabsContent>
 
         <TabsContent value="trends" className="mt-8">
@@ -1291,7 +1286,7 @@ function TrendsView({ gymId }: { gymId: string }) {
     );
   }
 
-  const { insights, microKpis, projections, correlations, stabilityScore, ninetyDayOutlook, targetPath, timelineEvents, strategicRecommendations, growthEngine } = intelligence;
+  const { insights, microKpis, projections, correlations, stabilityScore, ninetyDayOutlook, targetPath, strategicRecommendations, growthEngine } = intelligence;
   const getInsight = (key: string) => insights.find((i) => i.chartKey === key);
   const getKpi = (key: string) => microKpis.find((k) => k.chartKey === key);
 
@@ -1372,20 +1367,27 @@ function TrendsView({ gymId }: { gymId: string }) {
                 {stabilityScore.detail}
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-                {Object.entries(stabilityScore.components).map(([key, comp]) => (
-                  <div key={key} className="space-y-1">
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="text-[10px] text-muted-foreground uppercase tracking-wide">
-                        {key === "rsiSlope" ? "RSI" : key === "churnAvg" ? "Churn" : key === "netGrowth" ? "Growth" : "Revenue"}
-                      </span>
-                      <span className="text-xs font-mono font-semibold">{comp.score}/25</span>
+                {Object.entries(stabilityScore.components).map(([key, comp]) => {
+                  const isRsi = key === "rsiSlope";
+                  const lastActualProjection = projections.filter(p => !p.projected).slice(-1)[0];
+                  const actualRsi = lastActualProjection?.rsi ?? 0;
+                  const displayScore = isRsi ? actualRsi : comp.score;
+                  const displayMax = isRsi ? 100 : 25;
+                  return (
+                    <div key={key} className="space-y-1">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                          {isRsi ? "RSI" : key === "churnAvg" ? "Churn" : key === "netGrowth" ? "Growth" : "Revenue"}
+                        </span>
+                        <span className="text-xs font-mono font-semibold">{displayScore}/{displayMax}</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div className="h-full rounded-full transition-all" style={{ width: `${(displayScore / displayMax) * 100}%`, backgroundColor: tc.barColor }} />
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">{comp.label}</p>
                     </div>
-                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                      <div className="h-full rounded-full transition-all" style={{ width: `${(comp.score / 25) * 100}%`, backgroundColor: tc.barColor }} />
-                    </div>
-                    <p className="text-[10px] text-muted-foreground">{comp.label}</p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
             <div className="lg:w-72 lg:border-l lg:pl-6 border-t lg:border-t-0 pt-4 lg:pt-0 space-y-3">
@@ -1580,38 +1582,6 @@ function TrendsView({ gymId }: { gymId: string }) {
           )}
         </div>
       </div>
-
-      {/* ── STABILITY TIMELINE ── */}
-      {timelineEvents.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-            <Clock className="w-3.5 h-3.5" /> Stability Timeline
-          </h3>
-          <Card data-testid="section-timeline">
-            <CardContent className="p-6">
-              <div className="relative">
-                <div className="absolute left-3 top-0 bottom-0 w-px bg-border" />
-                <div className="space-y-4">
-                  {timelineEvents.slice().reverse().map((event, i) => {
-                    const sevColors = { info: "bg-blue-500", warning: "bg-amber-500", critical: "bg-red-500" };
-                    return (
-                      <div key={i} className="flex items-start gap-4 pl-1" data-testid={`timeline-event-${i}`}>
-                        <div className={`w-[22px] h-[22px] rounded-full flex-shrink-0 ${sevColors[event.severity]} flex items-center justify-center z-10`}>
-                          <div className="w-2 h-2 rounded-full bg-white dark:bg-black" />
-                        </div>
-                        <div className="space-y-0.5 pt-0.5">
-                          <p className="text-xs font-medium">{event.description}</p>
-                          <p className="text-[10px] text-muted-foreground">{fmtMonth(event.month)}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
 
       {/* ── STRATEGIC FOCUS ── */}
       {strategicRecommendations.length > 0 && (
