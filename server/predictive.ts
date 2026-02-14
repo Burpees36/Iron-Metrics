@@ -23,6 +23,7 @@ export interface MemberPrediction {
   riskDrivers: string[];
   interventionType: InterventionType;
   interventionDetail: string;
+  interventionMicroGuidance: string;
   interventionUrgency: "immediate" | "this-week" | "this-month" | "monitor";
   lastContactDays: number | null;
   isHighValue: boolean;
@@ -357,8 +358,7 @@ function computeMemberPredictions(
       ? riskDrivers[0]
       : tenureDays <= 90 ? "Early-stage member" : "No significant risk signals";
 
-    // Intervention selection (CrossFit-aware)
-    const { type: interventionType, detail: interventionDetail, urgency: interventionUrgency } = selectIntervention(
+    const { type: interventionType, detail: interventionDetail, microGuidance: interventionMicroGuidance, urgency: interventionUrgency } = selectIntervention(
       churnProb, tenureDays, lastContactDays, isHighValue, rate, gymArm, riskDrivers
     );
 
@@ -377,6 +377,7 @@ function computeMemberPredictions(
       riskDrivers,
       interventionType,
       interventionDetail,
+      interventionMicroGuidance,
       interventionUrgency,
       lastContactDays,
       isHighValue,
@@ -434,15 +435,15 @@ function selectIntervention(
   rate: number,
   gymArm: number,
   riskDrivers: string[]
-): { type: InterventionType; detail: string; urgency: "immediate" | "this-week" | "this-month" | "monitor" } {
+): { type: InterventionType; detail: string; microGuidance: string; urgency: "immediate" | "this-week" | "this-month" | "monitor" } {
   const hasContactGap = lastContactDays === null || lastContactDays > 14;
 
-  // Ghost members need win-back
   if (churnProb > 0.55) {
     if (tenureDays <= 30) {
       return {
         type: "onboarding-acceleration",
         detail: "This member is at high risk of dropping before forming a habit. Schedule a personal 1-on-1 with a coach to set specific movement goals for their first month. In CrossFit, early skill wins create belonging.",
+        microGuidance: "Book a 15-min 1-on-1 goal session before their next class",
         urgency: "immediate",
       };
     }
@@ -450,22 +451,24 @@ function selectIntervention(
       return {
         type: "personal-outreach",
         detail: "High-value member showing disengagement signals. A personal call from the head coach — not a text — acknowledging their commitment and asking what they need to stay challenged. This member's revenue justifies the time investment.",
+        microGuidance: "Head coach calls today — ask what would make them stay",
         urgency: "immediate",
       };
     }
     return {
       type: "win-back",
       detail: "This member is likely to cancel without intervention. Invite them to a community event, partner WOD, or specialty class. In CrossFit, reconnection happens through shared experience, not emails.",
+      microGuidance: "Personally invite to next partner WOD or community event",
       urgency: "this-week",
     };
   }
 
-  // At-risk members need targeted engagement
   if (churnProb > 0.30) {
     if (tenureDays <= 60 && hasContactGap) {
       return {
         type: "coach-connection",
         detail: "This member hasn't been personally connected to a coach yet. Assign a specific coach to check in after their next class. Members who have a named coach relationship in their first 60 days retain at 2x the rate.",
+        microGuidance: "Schedule 10-min goal check-in within 7 days",
         urgency: "this-week",
       };
     }
@@ -473,6 +476,7 @@ function selectIntervention(
       return {
         type: "goal-setting",
         detail: "Set a 90-day skill milestone — first pull-up, double-unders, or a specific lift PR. Members who achieve a concrete goal in their first quarter develop the identity shift from 'trying CrossFit' to 'being a CrossFitter.'",
+        microGuidance: "Set 1 specific skill milestone with a target date",
         urgency: "this-week",
       };
     }
@@ -480,22 +484,24 @@ function selectIntervention(
       return {
         type: "community-integration",
         detail: "Long-tenured member showing drift. Invite them to lead a warm-up, mentor a new member, or join a competition team. Giving members a role in the community transforms them from consumers to contributors.",
+        microGuidance: "Assign accountability partner or mentee this week",
         urgency: "this-month",
       };
     }
     return {
       type: "personal-outreach",
       detail: "Direct personal outreach from a coach. Ask about their goals, what's working, what's not. Sometimes members drift because they feel invisible — a genuine conversation costs nothing and prevents cancellations.",
+      microGuidance: "Coach texts today: 'Hey, how's training going?'",
       urgency: "this-week",
     };
   }
 
-  // Drifters need gentle re-engagement
   if (churnProb > 0.15) {
     if (tenureDays > 365) {
       return {
         type: "milestone-celebration",
         detail: "Celebrate their membership anniversary. Public recognition during class, a small gift, or a social post. Long-term members are your culture carriers — making them feel valued reinforces their commitment and signals to newer members what loyalty looks like.",
+        microGuidance: "Plan public shout-out at next class they attend",
         urgency: "this-month",
       };
     }
@@ -503,20 +509,22 @@ function selectIntervention(
       return {
         type: "pricing-review",
         detail: "This member is on a below-average rate. When their next billing cycle approaches, consider offering a premium tier upgrade with added value (open gym access, nutrition coaching, or specialty programming) rather than a price increase.",
+        microGuidance: "Prepare value-add upgrade offer before next billing cycle",
         urgency: "this-month",
       };
     }
     return {
       type: "community-integration",
       detail: "Deepen community connection through partner WODs, team competitions, or social events. Members who have 3+ gym friendships retain at dramatically higher rates. The workout brings them in — the community keeps them.",
+      microGuidance: "Pair with another member for next partner WOD",
       urgency: "this-month",
     };
   }
 
-  // Core members — maintain and leverage
   return {
     type: "milestone-celebration",
     detail: "This member is well-embedded. Continue to recognize their progress and involve them in community leadership. They are your retention flywheel — every core member who stays makes the community stronger for everyone else.",
+    microGuidance: "Recognize progress publicly or invite to lead a warm-up",
     urgency: "monitor",
   };
 }

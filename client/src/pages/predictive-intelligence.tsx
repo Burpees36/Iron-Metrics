@@ -86,6 +86,7 @@ interface MemberPrediction {
   riskDrivers: string[];
   interventionType: string;
   interventionDetail: string;
+  interventionMicroGuidance: string;
   interventionUrgency: string;
   lastContactDays: number | null;
   isHighValue: boolean;
@@ -593,6 +594,8 @@ function MemberAlertCard({ alert, index }: { alert: MemberAlertEnriched; index: 
 function MemberRiskView({ predictions }: { predictions: PredictiveIntelligence["memberPredictions"] }) {
   const { summary, members } = predictions;
 
+  const totalMembers = Object.values(summary.classBreakdown).reduce((a, b) => a + b, 0);
+
   const classColors: Record<string, string> = {
     core: "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
     drifter: "text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20",
@@ -607,28 +610,69 @@ function MemberRiskView({ predictions }: { predictions: PredictiveIntelligence["
     ghost: AlertTriangle,
   };
 
-  const urgencyColors: Record<string, string> = {
-    immediate: "text-red-600 dark:text-red-400",
-    "this-week": "text-orange-600 dark:text-orange-400",
-    "this-month": "text-amber-600 dark:text-amber-400",
-    monitor: "text-muted-foreground",
+  const classDescriptions: Record<string, (count: number, total: number, members: MemberPrediction[]) => string> = {
+    core: (count, total, mems) => {
+      const coreMembers = mems.filter(m => m.engagementClass === "core");
+      const coreRevenue = coreMembers.reduce((s, m) => s + m.monthlyRate, 0);
+      const totalRevenue = mems.reduce((s, m) => s + m.monthlyRate, 0);
+      const pct = totalRevenue > 0 ? Math.round((coreRevenue / totalRevenue) * 100) : 0;
+      return `Core members account for ${pct}% of revenue. These are your retention foundation.`;
+    },
+    drifter: (count) => `${count} member${count !== 1 ? "s" : ""} showing early signs of drift. Gentle re-engagement now prevents escalation.`,
+    "at-risk": (count) => `${count} member${count !== 1 ? "s" : ""} at elevated churn risk. Targeted intervention within the next week is recommended.`,
+    ghost: (count) => `${count} member${count !== 1 ? "s" : ""} likely to cancel without direct action. Immediate outreach is critical.`,
   };
+
+  const urgencyConfig: Record<string, { color: string; bgColor: string; dotColor: string; label: string }> = {
+    immediate: { color: "text-red-700 dark:text-red-300", bgColor: "bg-red-500/10", dotColor: "bg-red-500", label: "Immediate" },
+    "this-week": { color: "text-red-600 dark:text-red-400", bgColor: "bg-red-500/10", dotColor: "bg-red-400", label: "This Week" },
+    "this-month": { color: "text-amber-600 dark:text-amber-400", bgColor: "bg-amber-500/10", dotColor: "bg-amber-500", label: "This Month" },
+    monitor: { color: "text-muted-foreground", bgColor: "", dotColor: "bg-muted-foreground/40", label: "Monitor" },
+  };
+
+  const directiveSummary = (() => {
+    if (summary.urgentInterventions > 0) {
+      return `You have ${summary.urgentInterventions} member${summary.urgentInterventions !== 1 ? "s" : ""} who need attention this week — focus there first to protect $${summary.totalRevenueAtRisk.toLocaleString()}/mo in revenue.`;
+    }
+    if (summary.totalAtRisk > 0) {
+      return `${summary.totalAtRisk} member${summary.totalAtRisk !== 1 ? "s" : ""} are showing risk signals — proactive outreach now can prevent cancellations before they happen.`;
+    }
+    return "Your roster is in a healthy position. Keep strengthening your Core density and monitoring for early drift signals.";
+  })();
 
   return (
     <div className="space-y-6">
+      <div data-testid="text-risk-directive">
+        <p className="text-sm leading-relaxed">{directiveSummary}</p>
+      </div>
+
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3" data-testid="grid-risk-summary">
         {(["core", "drifter", "at-risk", "ghost"] as const).map((cls) => {
           const Icon = classIcons[cls];
+          const count = summary.classBreakdown[cls] || 0;
+          const description = classDescriptions[cls](count, totalMembers, members);
           return (
-            <Card key={cls}>
-              <CardContent className="pt-4 pb-3 px-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <Icon className={`w-4 h-4 ${classColors[cls].split(" ")[0]}`} />
-                  <p className="text-xs font-medium capitalize">{cls}</p>
-                </div>
-                <p className="text-2xl font-bold">{summary.classBreakdown[cls] || 0}</p>
-              </CardContent>
-            </Card>
+            <Tooltip key={cls}>
+              <TooltipTrigger asChild>
+                <Card data-testid={`card-segment-${cls}`}>
+                  <CardContent className="pt-4 pb-3 px-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Icon className={`w-4 h-4 ${classColors[cls].split(" ")[0]}`} />
+                      <p className="text-xs font-medium capitalize">{cls}</p>
+                    </div>
+                    <p className="text-2xl font-bold">{count}</p>
+                    {cls === "core" && totalMembers > 0 && (
+                      <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-1" data-testid="text-core-density">
+                        {Math.round((count / totalMembers) * 100)}% of roster
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs">
+                <p className="text-xs leading-relaxed">{description}</p>
+              </TooltipContent>
+            </Tooltip>
           );
         })}
       </div>
@@ -683,6 +727,7 @@ function MemberRiskView({ predictions }: { predictions: PredictiveIntelligence["
           <TableBody>
             {members.slice(0, 30).map((m) => {
               const Icon = classIcons[m.engagementClass] || Shield;
+              const urg = urgencyConfig[m.interventionUrgency] || urgencyConfig.monitor;
               return (
                 <TableRow key={m.memberId} data-testid={`row-member-${m.memberId}`}>
                   <TableCell>
@@ -727,17 +772,25 @@ function MemberRiskView({ predictions }: { predictions: PredictiveIntelligence["
                   <TableCell className="text-sm text-muted-foreground">
                     {m.tenureMonths > 0 ? `${m.tenureMonths}mo` : `${m.tenureDays}d`}
                   </TableCell>
-                  <TableCell>
-                    <span className={`text-xs font-medium ${urgencyColors[m.interventionUrgency] || ""}`}>
-                      {m.interventionUrgency.replace("-", " ")}
-                    </span>
+                  <TableCell data-testid={`cell-urgency-${m.memberId}`}>
+                    <div className="flex items-center gap-1.5">
+                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${urg.dotColor}`} />
+                      <span className={`text-xs font-semibold ${urg.color}`}>
+                        {urg.label}
+                      </span>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Tooltip>
                       <TooltipTrigger className="text-left">
-                        <Badge variant="outline" className="text-xs">
-                          {m.interventionType.replace(/-/g, " ")}
-                        </Badge>
+                        <div className="space-y-0.5">
+                          <Badge variant="outline" className="text-xs">
+                            {m.interventionType.replace(/-/g, " ")}
+                          </Badge>
+                          <p className="text-[10px] text-muted-foreground/70 leading-tight max-w-[180px]" data-testid={`text-micro-guidance-${m.memberId}`}>
+                            {m.interventionMicroGuidance}
+                          </p>
+                        </div>
                       </TooltipTrigger>
                       <TooltipContent className="max-w-sm">
                         <p className="text-xs leading-relaxed">{m.interventionDetail}</p>
