@@ -258,14 +258,14 @@ export function generateMetricReports(metrics: {
       ? `+$${annualImpact.toLocaleString()} annual revenue if reduced to target`
       : "On track",
     meaning: metrics.churnRate > 7
-      ? "Your current churn rate indicates significant revenue volatility over the next 6-12 months. Immediate attention required."
+      ? "You're losing too many members. If this keeps up, revenue will feel it within a few months."
       : metrics.churnRate > 5
-        ? "Churn is above the stability threshold. Members are leaving before building lasting habits."
+        ? "Churn is above where you want it. Members are leaving before they build lasting habits."
         : "Retention is solid. Members are staying and building routines.",
-    whyItMatters: "Churn is the single largest driver of revenue instability. Every percentage point above target erodes predictable income and increases acquisition cost pressure.",
+    whyItMatters: "Churn is the biggest threat to predictable revenue. If it creeps up, you'll feel it fast — and replacing lost members costs more than keeping the ones you have.",
     action: metrics.churnRate > 5
-      ? "Prioritize outreach to members showing attendance decline. Implement a structured 30-day check-in for all new members."
-      : "Maintain current retention systems. Look for early warning signals before they become cancellations.",
+      ? "Reach out to members who seem to be fading. Set up a 30-day check-in for every new member — catch drift early."
+      : "Things are working. Keep an eye out for early warning signs and don't take retention for granted.",
     trendDirection: churnTrend.direction === "up" ? "down" : churnTrend.direction === "down" ? "up" : churnTrend.direction,
     trendValue: churnTrend.value,
   });
@@ -276,21 +276,21 @@ export function generateMetricReports(metrics: {
     current: `${metrics.rsi}/100`,
     target: "80/100",
     impact: metrics.rsi < 60
-      ? "High risk of revenue instability in the next quarter"
+      ? "Revenue is at risk if retention doesn't improve soon"
       : metrics.rsi < 80
-        ? "Moderate retention risk requires proactive intervention"
-        : "Strong foundation for predictable revenue",
+        ? "Some retention issues to address before they get worse"
+        : "Strong foundation — revenue should stay predictable",
     meaning: metrics.rsi >= 80
-      ? "Your retention ecosystem is healthy. Members are staying, engaging, and contributing to a stable revenue base."
+      ? "Your gym is retaining well. Members are staying, building habits, and contributing to a stable revenue base."
       : metrics.rsi >= 60
-        ? "Retention has vulnerabilities. Membership age distribution or early cancellation patterns suggest room for improvement."
-        : "Retention is unstable. Multiple indicators suggest members are not embedding into your community fast enough.",
-    whyItMatters: "RSI is the composite health indicator of your gym's financial resilience. It synthesizes churn, tenure, early cancellation, and growth into a single stability signal.",
+        ? "Retention has some soft spots. Look at whether newer members are sticking around past the first few months."
+        : "Retention is weak. Members aren't embedding into your community fast enough, and it's showing in the numbers.",
+    whyItMatters: "RSI rolls up churn, tenure, early cancellations, and growth into one number. It's the clearest single read on whether your gym is building lasting membership or just cycling through new faces.",
     action: metrics.rsi < 60
-      ? "Implement a structured onboarding sequence for the first 90 days. Focus on building social connections through group programming."
+      ? "Focus on the first 90 days. Structure onboarding so new members connect with coaches and other members — not just the workouts."
       : metrics.rsi < 80
-        ? "Review early cancellation trends. Investigate what happens in months 2-4 of membership that causes drop-off."
-        : "Continue investing in community events and member milestones to reinforce belonging.",
+        ? "Look at what happens in months 2-4. That's where most drop-off happens — dig into why."
+        : "Keep doing what's working. Invest in community events and celebrate milestones to reinforce belonging.",
     trendDirection: rsiTrend.direction,
     trendValue: rsiTrend.value,
   });
@@ -304,16 +304,16 @@ export function generateMetricReports(metrics: {
       ? `+$${Math.round((150 - metrics.arm) * metrics.activeMembers).toLocaleString()} monthly if ARM reaches target`
       : "Revenue per member is optimized",
     meaning: metrics.arm >= 150
-      ? "Average revenue per member is strong. This suggests healthy tier distribution or effective value-add services."
+      ? "Revenue per member is strong. Your pricing and service tiers are working well."
       : metrics.arm >= 100
-        ? "Revenue per member is moderate. Opportunities exist to introduce premium offerings or adjust pricing."
-        : "Revenue per member is low. Pricing may not reflect the value delivered.",
-    whyItMatters: "Revenue per member determines how efficiently your roster generates income. Higher ARM means you need fewer members to achieve the same revenue, reducing dependency on constant growth.",
+        ? "Revenue per member is decent but there's room to grow — through pricing, premium add-ons, or both."
+        : "Revenue per member is low. You may be undercharging for the value you deliver.",
+    whyItMatters: "The more revenue each member generates, the less pressure you have to constantly chase new signups. Higher revenue per member means more financial breathing room.",
     action: metrics.arm < 100
-      ? "Review pricing tiers. Consider introducing a premium tier with personal training or specialized programming."
+      ? "Review your pricing. Consider a premium tier with personal training, nutrition coaching, or specialized programming."
       : metrics.arm < 150
-        ? "Explore upsell opportunities: nutrition coaching, recovery services, or accountability programs."
-        : "Focus on retention and member acquisition rather than further price optimization.",
+        ? "Look at add-on opportunities: nutrition coaching, accountability programs, or recovery services."
+        : "Pricing is in a good place. Focus on keeping members and bringing in new ones.",
     trendDirection: armTrend.direction,
     trendValue: armTrend.value,
   });
@@ -334,16 +334,16 @@ export function generateMetricReports(metrics: {
       ? `If churn drops from ${metrics.churnRate}% to ${targetChurn.toFixed(1)}%: +$${Math.round(ltvScenarioDelta).toLocaleString()} LTV per member`
       : "LTV is maximized at current churn levels",
     meaning: metrics.ltv >= 3000
-      ? "Member lifetime value is excellent. Each member represents significant long-term revenue."
+      ? "Each member is worth a lot over their lifetime. Your retention and pricing are working together well."
       : metrics.ltv >= 1500
-        ? "LTV is moderate. Improving retention or pricing would compound significantly over time."
-        : "LTV is below optimal. High churn is eroding long-term revenue potential.",
-    whyItMatters: "Lifetime value quantifies the total revenue each member will generate. Small improvements in retention create outsized financial returns because the compounding effect works in your favor.",
+        ? "Lifetime value is decent. Even small improvements in retention will compound into meaningful revenue over time."
+        : "Lifetime value is low — mostly because members aren't staying long enough. Improving retention is the highest-leverage move you can make.",
+    whyItMatters: "Lifetime value tells you the total revenue a member will generate before they leave. When you keep members longer, every month compounds — small retention wins create outsized revenue gains.",
     action: metrics.ltv < 1500
-      ? "Focus on the first 90 days of membership. Members who survive the first quarter are 3x more likely to stay a year."
+      ? "Focus on the first 90 days. Members who make it past their first quarter are 3x more likely to stay a year."
       : metrics.ltv < 3000
-        ? "Invest in member milestone celebrations and community programming to extend average membership duration."
-        : "LTV is strong. Consider referral programs to acquire similar high-value members.",
+        ? "Celebrate milestones, build community, and give members reasons to stay beyond the workout itself."
+        : "LTV is strong. Use referral programs to bring in more members like the ones who already stay.",
     trendDirection: ltvTrend.direction,
     trendValue: ltvTrend.value,
   });
@@ -368,18 +368,18 @@ export function generateMetricReports(metrics: {
       ? `$${Math.round(metrics.memberRiskCount * metrics.arm).toLocaleString()}/mo revenue at risk`
       : "No members currently flagged",
     meaning: riskTier === "High"
-      ? "A significant portion of your roster shows early-stage risk signals. These members are in their first 60 days with historically high drop-off rates."
+      ? "A lot of your members are showing signs they might leave. Most are newer members who haven't built the habit yet."
       : riskTier === "Moderate"
-        ? "Some newer members need attention. Early engagement is the strongest predictor of long-term retention."
+        ? "Some newer members need attention. The first few months are when most people decide whether to stay or go."
         : riskTier === "Low"
-          ? "A small number of new members are in the risk window. Targeted outreach can prevent cancellation."
-          : "No members are currently in the high-risk window. Your onboarding is working.",
-    whyItMatters: "Members in their first 60 days are 3-5x more likely to cancel than tenured members. Proactive intervention during this window has the highest retention ROI of any action you can take.",
+          ? "A small number of members are in the risk window. A little personal outreach can make the difference."
+          : "Nobody is flagged right now. Your onboarding is doing its job.",
+    whyItMatters: "New members are 3-5x more likely to cancel than members who've been around a while. Reaching out early is the single most effective thing you can do to keep them.",
     action: riskTier === "High"
-      ? "Immediate action required. Personally reach out to every flagged member this week. Schedule goal-setting sessions and introduce them to regular class attendees."
+      ? "Act this week. Personally reach out to every flagged member — set a goal with them and introduce them to someone who comes to the same class."
       : metrics.memberRiskCount > 0
-        ? "Reach out to flagged members within their first 2 weeks. A personal connection dramatically reduces early cancellation risk."
-        : "Continue monitoring. Review new member engagement patterns through their first 90 days.",
+        ? "Reach out to flagged members in their first 2 weeks. A personal connection from a coach dramatically reduces the chance they cancel."
+        : "Keep monitoring. Check in with new members through their first 90 days.",
     trendDirection: riskTrend.direction === "up" ? "down" : riskTrend.direction === "down" ? "up" : riskTrend.direction,
     trendValue: riskTrend.value,
   });
@@ -404,12 +404,12 @@ export function generateMetricReports(metrics: {
       : netGrowth === 0
         ? "Stable roster — but no forward momentum. Acquisition is matching attrition exactly."
         : "Your roster is contracting. Every month without correction accelerates the decline.",
-    whyItMatters: "Net growth is the clearest signal of roster momentum. Negative growth compounds monthly — it doesn't just stall revenue, it erodes community. Positive growth builds financial resilience and culture simultaneously.",
+    whyItMatters: "When you're losing more members than you're gaining, it compounds fast — each month gets harder. When you're growing, momentum builds and makes everything easier.",
     action: netGrowth < 0
-      ? "Address retention first before increasing acquisition spend. Reducing churn by 1-2% is more cost-effective than acquiring replacement members."
+      ? "Fix retention first. Reducing churn by 1-2% is cheaper and more effective than trying to replace lost members with new ones."
       : netGrowth === 0
-        ? "Flat growth is friction, not stability. Evaluate acquisition channels and consider member referral incentives to break through the plateau."
-        : "Sustain current momentum. Ensure new members are well-onboarded to prevent growth from masking rising churn.",
+        ? "Flat isn't stable — it's stalled. Look at referral programs or community events to break through the plateau."
+        : "Keep the momentum going. Make sure new members are getting properly onboarded so growth doesn't mask rising churn.",
     trendDirection: membersTrend.direction,
     trendValue: membersTrend.value,
   });
@@ -496,7 +496,7 @@ export function generateForecast(metricsHistory: {
   } else if (churnRate <= 5 && netGrowth >= 0) {
     outlook = "Stable but watchful. No immediate risk, but forward momentum is limited.";
   } else if (churnRate <= 7) {
-    outlook = "Attention needed. Churn is eroding gains. Retention interventions will have the highest ROI.";
+    outlook = "Attention needed. Churn is eating into your gains. Fixing retention is the best move right now.";
   } else {
     outlook = "Urgent action required. Current trajectory leads to meaningful revenue loss within 90 days.";
   }
@@ -1124,7 +1124,7 @@ export function generateTrendIntelligence(
   if (latestArm >= 150 && Math.abs(Number(prev?.arm ?? latestArm) - latestArm) < 5) {
     strategicRecommendations.push({ area: "Pricing", status: "maintain", headline: "Revenue per member is steady — no pricing pressure", detail: "ARM is in a healthy range and stable. No immediate pricing adjustments needed. Focus on value delivery." });
   } else if (latestArm < 120) {
-    strategicRecommendations.push({ area: "Pricing", status: "priority", headline: "Revenue per member is below potential", detail: "ARM suggests room for premium tier introduction or price adjustment. Even a modest increase compounds significantly across your membership base." });
+    strategicRecommendations.push({ area: "Pricing", status: "priority", headline: "Revenue per member is below potential", detail: "There's room for a premium tier or a price adjustment. Even a small increase per member adds up fast across your whole roster." });
   } else {
     strategicRecommendations.push({ area: "Pricing", status: "monitor", headline: "Revenue per member is moderate", detail: "ARM is acceptable but not optimized. Consider premium add-ons like nutrition coaching or personal training sessions." });
   }
@@ -1139,7 +1139,7 @@ export function generateTrendIntelligence(
 
   const riskPct = latestMembers > 0 ? (latest.memberRiskCount / latestMembers) * 100 : 0;
   if (riskPct > 15) {
-    strategicRecommendations.push({ area: "Risk Management", status: "priority", headline: "High exposure to new member churn", detail: `${riskPct.toFixed(0)}% of your roster is in the first-60-day risk window. Proactive outreach to these members has the highest retention ROI of any action.` });
+    strategicRecommendations.push({ area: "Risk Management", status: "priority", headline: "High exposure to new member churn", detail: `${riskPct.toFixed(0)}% of your roster is in their first 60 days — the period when most people quit. Reaching out to them now is the single most effective thing you can do.` });
   } else if (riskPct > 8) {
     strategicRecommendations.push({ area: "Risk Management", status: "monitor", headline: "Moderate new member risk exposure", detail: "A meaningful portion of members are in the early risk window. Ensure each has been personally contacted within their first two weeks." });
   } else {

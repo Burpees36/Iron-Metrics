@@ -458,13 +458,9 @@ function StrategicBriefView({ brief }: { brief: PredictiveIntelligence["strategi
                   <p className="text-xs text-muted-foreground">{rec.revenueImpact}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-1">Intervention</p>
+                  <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-1">Action</p>
                   <p className="text-xs text-muted-foreground">{rec.interventionType}</p>
                 </div>
-              </div>
-              <div className="pt-2 border-t">
-                <p className="text-xs font-medium text-muted-foreground mb-1">CrossFit Context</p>
-                <p className="text-xs text-muted-foreground/80 italic leading-relaxed">{rec.crossfitContext}</p>
               </div>
             </CardContent>
           </Card>
@@ -619,7 +615,7 @@ function MemberRiskView({ predictions }: { predictions: PredictiveIntelligence["
       return `Core members account for ${pct}% of revenue. These are your retention foundation.`;
     },
     drifter: (count) => `${count} member${count !== 1 ? "s" : ""} showing early signs of drift. Gentle re-engagement now prevents escalation.`,
-    "at-risk": (count) => `${count} member${count !== 1 ? "s" : ""} at elevated churn risk. Targeted intervention within the next week is recommended.`,
+    "at-risk": (count) => `${count} member${count !== 1 ? "s" : ""} showing signs they might leave. Reach out this week.`,
     ghost: (count) => `${count} member${count !== 1 ? "s" : ""} likely to cancel without direct action. Immediate outreach is critical.`,
   };
 
@@ -692,7 +688,7 @@ function MemberRiskView({ predictions }: { predictions: PredictiveIntelligence["
         </Card>
         <Card>
           <CardContent className="pt-4 pb-3">
-            <p className="text-xs text-muted-foreground mb-1">Urgent Interventions</p>
+            <p className="text-xs text-muted-foreground mb-1">Need Attention</p>
             <p className="text-xl font-bold text-amber-600 dark:text-amber-400">{summary.urgentInterventions}</p>
           </CardContent>
         </Card>
@@ -721,7 +717,7 @@ function MemberRiskView({ predictions }: { predictions: PredictiveIntelligence["
               <TableHead className="text-right">Rate</TableHead>
               <TableHead>Tenure</TableHead>
               <TableHead>Urgency</TableHead>
-              <TableHead>Intervention</TableHead>
+              <TableHead>Recommended Action</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

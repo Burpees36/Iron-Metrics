@@ -265,7 +265,7 @@ function computeMemberPredictions(
     let churnProb = 0;
     const riskDrivers: string[] = [];
 
-    // Tenure-based risk (CrossFit 30-60-90 day danger zones)
+    // Tenure-based risk (30-60-90 day danger zones)
     if (tenureDays <= 14) {
       churnProb += 0.35;
       riskDrivers.push("Critical onboarding window (first 2 weeks)");
@@ -442,23 +442,23 @@ function selectIntervention(
     if (tenureDays <= 30) {
       return {
         type: "onboarding-acceleration",
-        detail: "This member is at high risk of dropping before forming a habit. Apply Bergeron's '5 minutes after every class' rule — a coach should spend dedicated time with this member after each session to build trust and set specific movement goals for their first month. Define structured first-month standards: Week 1 (movement basics + coach intro), Week 2 (first benchmark), Week 3 (partner workout), Week 4 (goal-setting). Early skill wins create belonging, but only if the coach reads this athlete's individual needs and coaches the positive.",
-        microGuidance: "Book a 15-min 1-on-1 goal session; implement 5-min post-class check-ins",
+        detail: "This member is at high risk of leaving before building a habit. Get a coach in front of them — a 15-minute 1-on-1 to set specific movement goals for their first month. Then: structured check-ins after their 1st, 7th, and 14th day. Early skill wins create belonging.",
+        microGuidance: "Book a 15-min 1-on-1 goal session; check in after day 1, 7, and 14",
         urgency: "immediate",
       };
     }
     if (isHighValue) {
       return {
         type: "personal-outreach",
-        detail: "High-value member showing disengagement signals. A personal call from the head coach — not a text — but this isn't about showing knowledge or pitching. Bergeron's trust framework: 'True influence comes as others sense you are being influenced by them.' Ask open-ended questions, listen deeply, and let them tell you what's changed. Don't lecture — connect. This member's revenue justifies the time, but the approach must be genuine curiosity, not retention tactics.",
-        microGuidance: "Head coach calls today — ask open-ended questions, listen deeply",
+        detail: "High-value member showing disengagement. A personal call from you or the head coach — not a text. Ask open-ended questions, listen to what's changed, and show genuine interest. This member's revenue justifies the time, but the approach has to be real curiosity, not a retention pitch.",
+        microGuidance: "Head coach calls today — listen first, ask what's changed",
         urgency: "immediate",
       };
     }
     return {
       type: "win-back",
-      detail: "This member is likely to cancel without intervention. Reconnection happens through shared physical experience, not emails or discounts. Invite them to a partner WOD, a community event, or if it's Open season, encourage them to sign up — the Open transforms 'I used to do CrossFit' back into active identity. Partner WODs and team competitions create the bonds that make leaving feel like a loss.",
-      microGuidance: "Personally invite to next partner WOD or Open signup",
+      detail: "This member is likely to cancel without direct action. Reconnection happens through shared experience, not emails or discounts. Personally invite them to a partner workout, a community event, or during Open season, encourage them to sign up. Shared physical experience rebuilds the connection that keeps people.",
+      microGuidance: "Personally invite to the next partner workout or upcoming event",
       urgency: "this-week",
     };
   }
@@ -467,15 +467,15 @@ function selectIntervention(
     if (tenureDays <= 60 && hasContactGap) {
       return {
         type: "coach-connection",
-        detail: "This member hasn't been personally connected to a coach yet. Bergeron's awareness concept is critical here: the assigned coach needs to read this member's individual needs — not coach them the way the coach prefers to be coached. 'Every athlete wants to be treated the way THEY want — not the way the coach wants.' Assign a specific coach, have them spend 5 minutes after the next class listening (not instructing), and discover what this member actually needs to feel seen.",
-        microGuidance: "Assign a coach; 5-min post-class listening session within 7 days",
+        detail: "This member hasn't been personally connected to a coach yet. Assign one. Have them spend 5 minutes after the next class just listening — not instructing — to find out what this person actually needs to feel like they belong here.",
+        microGuidance: "Assign a coach; 5-min post-class conversation within 7 days",
         urgency: "this-week",
       };
     }
     if (tenureDays <= 90) {
       return {
         type: "goal-setting",
-        detail: "Set a 90-day skill milestone — first pull-up, first Rx workout, first competition, or first Open signup. This is the identity transformation window: the member shifts from 'trying CrossFit' to 'being a CrossFitter.' Concrete milestones make progress visible and create the emotional investment that turns attendance into identity. Coach the positive along the way — 'Big set!' not 'Don't put the bar down.'",
+        detail: "Set a 90-day skill milestone — first pull-up, first Rx workout, or first competition. This is where a member goes from 'trying CrossFit' to 'being a CrossFitter.' Concrete goals make progress visible and build the emotional investment that turns attendance into identity.",
         microGuidance: "Set 1 specific skill milestone with a target date",
         urgency: "this-week",
       };
@@ -483,15 +483,15 @@ function selectIntervention(
     if (tenureDays > 180) {
       return {
         type: "community-integration",
-        detail: "Long-tenured member showing drift. Culture is not community — community is the output of culture. Give this member a ROLE: warm-up leader, new member mentor, competition team captain, or ambassador. Members who contribute to the culture become inseparable from it. When someone has a defined role in how the gym operates, leaving means losing a part of their identity, not just a membership.",
-        microGuidance: "Assign a role: mentee, warm-up leader, or competition team",
+        detail: "Long-tenured member showing drift. Give them a role — new member mentor, competition team captain, or event organizer. Members who contribute to how the gym runs become inseparable from it. When someone has a defined role, leaving means losing part of their identity.",
+        microGuidance: "Give them a role: mentor, team captain, or event organizer",
         urgency: "this-month",
       };
     }
     return {
       type: "personal-outreach",
-      detail: "Direct personal outreach from a coach who has built awareness of this member's needs. Ask about their goals, what's working, what's not. Bergeron's trust principle: 'True influence comes as others sense you are being influenced by them.' Listen more than you talk. Sometimes members drift because they feel invisible — a genuine conversation where you listen costs nothing and prevents cancellations.",
-      microGuidance: "Coach texts today: 'Hey, how's training going? What can I do better for you?'",
+      detail: "Direct personal outreach from a coach who knows this member. Ask about their goals, what's working, what's not. Sometimes members drift because they feel invisible — a genuine conversation where you listen costs nothing and prevents cancellations.",
+      microGuidance: "Coach texts today: 'Hey, how's training going? Anything I can help with?'",
       urgency: "this-week",
     };
   }
@@ -500,8 +500,8 @@ function selectIntervention(
     if (tenureDays > 365) {
       return {
         type: "milestone-celebration",
-        detail: "Celebrate their membership anniversary — these are your culture carriers, and protecting your people is how you protect your culture. Public recognition during class, a small gift, or a social post creates a standard for what loyalty looks like for newer members. When a 2-year member gets celebrated, every 2-month member sees a future worth staying for. Nicole Christensen's principle: 'If you don't defend and protect your culture, it changes.' Honoring your veterans IS culture protection.",
-        microGuidance: "Plan public shout-out at next class; post on social media",
+        detail: "Celebrate their membership anniversary. Public recognition during class, a small gift, or a social media shout-out. When a 2-year member gets celebrated, every 2-month member sees a future worth staying for. Honoring your veterans sets the standard for what loyalty looks like.",
+        microGuidance: "Plan a public shout-out at the next class; post on social",
         urgency: "this-month",
       };
     }
@@ -515,16 +515,16 @@ function selectIntervention(
     }
     return {
       type: "community-integration",
-      detail: "Deepen community connection through partner WODs, team competitions, or social events. Members who have 3+ gym friendships retain at dramatically higher rates. The workout brings them in — the community keeps them.",
-      microGuidance: "Pair with another member for next partner WOD",
+      detail: "Deepen community connection through partner workouts, team competitions, or social events. Members who have 3+ gym friendships stay at dramatically higher rates. The workout brings them in — the relationships keep them.",
+      microGuidance: "Pair with another member for the next partner workout",
       urgency: "this-month",
     };
   }
 
   return {
-    type: "milestone-celebration",
-    detail: "This member is well-embedded and represents your culture in action. Involve them in community leadership: mentoring new members, leading warm-ups, or organizing events. When members say 'my gym' instead of 'the gym,' you've crossed the loyalty threshold. These core members are your community ambassadors — every one who stays and contributes makes the culture stronger and the community more magnetic for everyone else.",
-    microGuidance: "Invite to mentor a newer member or lead a warm-up this week",
+    type: "goal-setting",
+    detail: "This member is well-embedded and represents your gym's standard. Keep them growing: quarterly goal-setting conversations to review progress and set new targets, track their skill progression (gymnastics, Olympic lifts, engine work), and encourage competition participation — in-house throwdowns, local comps, or the Open. Reinforce that their movement quality sets the bar for everyone else. These are the members who make your gym what it is.",
+    microGuidance: "Schedule a quarterly goal review; track their skill progression",
     urgency: "monitor",
   };
 }
@@ -599,12 +599,12 @@ function computeCohortIntelligence(
     const revLost = inWindow.reduce((s, m) => s + Number(m.monthlyRate), 0);
 
     const crossfitInsights: Record<string, string> = {
-      "0-30 days": "Members who leave in the first month never formed the CrossFit habit. They experienced the intensity but didn't find their people. Define your standards for how new members are introduced — write them down. Nicole Christensen's framework: Methodology, Etiquette, and Dos/Don'ts must be taught from day one. Structured onboarding with personal introductions, scaled workouts, and Bergeron's '5 minutes after every class' rule prevents this.",
-      "31-60 days": "The 30-60 day window is where the initial excitement fades and the reality of commitment sets in. This is the identity transformation window — members need a tangible goal that shifts them from 'trying CrossFit' to 'being a CrossFitter.' A skill to chase, a PR to hit, a first Rx workout. Without this shift, they're still consumers, not community members.",
-      "61-90 days": "Members leaving at 60-90 days made it past the initial hurdle but didn't cross the belonging threshold. They came to workouts but didn't become part of the culture. They need a role, not just attendance — partner WODs, team competitions, mentoring opportunities, or a defined contribution to the gym. Members who contribute to the culture become inseparable from it.",
-      "91-180 days": "Members who leave between 3-6 months often hit a plateau, but the deeper question is coaching quality. Are all your coaches delivering the same standard? Are they reading athletes individually and building trust through listening? Bergeron's awareness principle: 'Just because you like to be coached a certain way doesn't mean your athletes like it.' Audit coaching consistency across your team.",
-      "181-365 days": "Members leaving in the 6-12 month range are significant losses — they've invested meaningful time and money. These departures often signal coaching changes or cultural drift. Nicole Christensen's warning: 'Culture is learned, acquired, dynamic — if you don't defend and protect it, it changes.' Review whether your standards have slipped, coaching quality has shifted, or the culture has drifted from what originally attracted these members.",
-      "365+ days": "Long-tenured members who leave represent deep culture loss — institutional knowledge and community fabric walk out the door. These are your culture carriers, and losing them signals systemic issues: pricing pressure, coaching turnover, or a fundamental cultural shift. Each one takes relationships, mentorship capacity, and the living proof that your gym delivers long-term results.",
+      "0-30 days": "Members who leave in the first month never formed the habit. They experienced the intensity but didn't find their people. Structured onboarding — personal introductions, scaled workouts, and post-class check-ins — prevents this.",
+      "31-60 days": "The 30-60 day window is where initial excitement fades. Members need a tangible goal that shifts them from 'trying CrossFit' to 'being a CrossFitter.' A skill to chase, a PR to hit, a first Rx workout.",
+      "61-90 days": "Members leaving at 60-90 days made it past the initial hurdle but didn't cross the belonging threshold. They need a role, not just attendance — partner workouts, team competitions, mentoring opportunities.",
+      "91-180 days": "Members who leave between 3-6 months often hit a plateau. Are all your coaches delivering the same standard? Are they connecting with athletes individually? Audit coaching consistency.",
+      "181-365 days": "Members leaving in the 6-12 month range are significant losses. These departures often signal coaching changes or cultural drift. Review whether your standards have slipped or the experience has changed.",
+      "365+ days": "Long-tenured members who leave represent deep culture loss. These are your culture carriers, and losing them signals systemic issues: pricing pressure, coaching turnover, or a shift in what your gym stands for.",
     };
 
     windows.push({
@@ -684,16 +684,16 @@ function computeCohortIntelligence(
     }
 
     if (day30Survival < 85) {
-      crossfitInsights.push(`You're losing ${(100 - day30Survival).toFixed(0)}% of members before they complete their first month. In CrossFit, this often means the gap between the free trial experience and the ongoing membership experience is too large. Structured Foundations programs close this gap.`);
+      crossfitInsights.push(`You're losing ${(100 - day30Survival).toFixed(0)}% of members before they complete their first month. This often means the gap between the free trial experience and the ongoing membership experience is too large. Structured Foundations programs close this gap.`);
     }
   }
 
   const currentMonth = now.getMonth();
   if (currentMonth >= 0 && currentMonth <= 3) {
-    crossfitInsights.push(`The CrossFit Open (Feb-March) is the most powerful retention and growth event of the year — more global participants than any other sporting event. Use this window to energize every member, create shared goals through Friday Night Lights and intramural teams, and bring non-members through the door. Open participation correlates with a 6-12 month retention boost.`);
+    crossfitInsights.push(`The CrossFit Open (Feb-March) is the most powerful retention and growth event of the year. Use this window to energize every member, create shared goals through Friday Night Lights and intramural teams, and bring non-members through the door. Open participation correlates with a 6-12 month retention boost.`);
   }
 
-  crossfitInsights.push(`Coaching consistency is the invisible driver of retention. If members get a different experience depending on which coach is leading class, your culture has a crack. Nicole Christensen's standard: all coaches need training, shadowing, feedback loops, and mentorship. They must deliver the same standard and understand not just WHAT your standards are, but WHY they matter.`);
+  crossfitInsights.push(`Coaching consistency drives retention. If members get a different experience depending on which coach leads class, your culture has a crack. All coaches need training, shadowing, and feedback loops. They should deliver the same standard every class.`);
 
   return { cohorts, retentionWindows: windows, survivalCurve, insights, crossfitInsights };
 }
@@ -794,19 +794,19 @@ function computeRevenueScenarios(
   const downsideDelta = ((finalDownside - currentMrr) / currentMrr * 100);
 
   if (expectedDelta > 5) {
-    scenarioInsights.push(`Expected case: Revenue grows ${expectedDelta.toFixed(1)}% over 6 months to $${finalExpected.toLocaleString()}/mo. Momentum is in your favor.`);
+    scenarioInsights.push(`On the current path, revenue grows ${expectedDelta.toFixed(1)}% over 6 months to $${finalExpected.toLocaleString()}/mo.`);
   } else if (expectedDelta > -2) {
-    scenarioInsights.push(`Expected case: Revenue holds relatively stable at $${finalExpected.toLocaleString()}/mo. No significant growth or decline projected.`);
+    scenarioInsights.push(`Revenue looks stable at $${finalExpected.toLocaleString()}/mo. No big changes expected.`);
   } else {
-    scenarioInsights.push(`Expected case: Revenue contracts ${Math.abs(expectedDelta).toFixed(1)}% to $${finalExpected.toLocaleString()}/mo. Current churn trajectory is eroding your base.`);
+    scenarioInsights.push(`At current churn, revenue shrinks ${Math.abs(expectedDelta).toFixed(1)}% to $${finalExpected.toLocaleString()}/mo. That's the trend you're fighting.`);
   }
 
   if (downsideDelta < -15) {
-    scenarioInsights.push(`Downside risk: If churn worsens and acquisition slows, revenue could drop to $${finalDownside.toLocaleString()}/mo — a ${Math.abs(downsideDelta).toFixed(0)}% decline. This is the scenario you're insuring against.`);
+    scenarioInsights.push(`If churn gets worse and new signups slow down, revenue could drop to $${finalDownside.toLocaleString()}/mo — that's a ${Math.abs(downsideDelta).toFixed(0)}% hit. This is the scenario you want to prevent.`);
   }
 
   const spreadPct = ((finalUpside - finalDownside) / currentMrr * 100).toFixed(0);
-  scenarioInsights.push(`Revenue range spans ${spreadPct}% between best and worst case. ${Number(spreadPct) > 30 ? "High volatility — stability initiatives have outsized impact." : "Moderate volatility — your revenue base is reasonably predictable."}`);
+  scenarioInsights.push(`The gap between best and worst case is ${spreadPct}%. ${Number(spreadPct) > 30 ? "That's a wide range — stabilizing retention would narrow it significantly." : "Moderate spread — your revenue base is reasonably predictable."}`);
 
   return {
     projections,
@@ -851,13 +851,13 @@ function generateStrategicBrief(
   let stabilityLevel: "strong" | "moderate" | "fragile";
   if (latestRsi >= 80 && gymChurnRate <= 5) {
     stabilityLevel = "strong";
-    stabilityVerdict = "Your gym is operating from a position of financial strength. Retention systems are working, revenue is predictable, and your community has stability. Your coaches are delivering consistent experiences and your culture is holding. Now deepen it — define your standards if you haven't, and invest in coaching development. This is the platform to build from — not the time to coast.";
+    stabilityVerdict = "Your gym is in a strong position. Retention is working, revenue is predictable, and your community is stable. Now deepen it — invest in coaching development and don't coast.";
   } else if (latestRsi >= 60 && gymChurnRate <= 7) {
     stabilityLevel = "moderate";
-    stabilityVerdict = "Your gym is functional but not yet fortified. The numbers are acceptable, but acceptable isn't resilient. Audit your coaching team: are all coaches delivering the same standard? Are your gym's values written down and taught? The gap between 'functional' and 'resilient' is usually a culture gap. One bad month — a coaching change, a competitor opening, a seasonal dip — could expose the gaps. Now is the time to strengthen, while you have margin.";
+    stabilityVerdict = "Your gym is functional but not fortified. The numbers are acceptable, but one bad month — a coaching change, a competitor opening, a seasonal dip — could expose the cracks. Now is the time to strengthen, while you have margin.";
   } else {
     stabilityLevel = "fragile";
-    stabilityVerdict = "Your gym is in a fragile position. Revenue is volatile, retention is leaking, and the membership base is not building the compound loyalty that creates financial resilience. Start with the fundamentals that great CrossFit coaches built on: define your standards, train your coaches to connect individually with athletes, and build trust through listening, not lecturing. Every month without intervention makes the next month harder.";
+    stabilityVerdict = "Your gym is in a tough spot. Revenue is volatile, retention is leaking, and your membership base isn't building the loyalty that creates resilience. Start with the fundamentals: define your standards, connect individually with your members, and build trust. Every month without action makes the next month harder.";
   }
 
   // Executive summary
@@ -867,12 +867,12 @@ function generateStrategicBrief(
 
   let executiveSummary: string;
   if (summary.totalAtRisk === 0) {
-    executiveSummary = `All ${activeMemberCount} active members are in healthy engagement states. No immediate churn risk detected. Focus on deepening community bonds and building the referral pipeline.`;
+    executiveSummary = `All ${activeMemberCount} active members are in good shape. No immediate risk. Focus on community and referrals.`;
   } else {
-    executiveSummary = `${summary.totalAtRisk} of ${activeMemberCount} active members are showing elevated churn signals, representing $${totalRevAtRisk.toLocaleString()}/month ($${annualRisk.toLocaleString()}/year) in revenue at risk. ${summary.urgentInterventions > 0 ? `${summary.urgentInterventions} require immediate intervention this week.` : "All can be addressed through structured outreach this month."} The most common risk driver: ${summary.topRiskDriver}.`;
+    executiveSummary = `${summary.totalAtRisk} of ${activeMemberCount} members are showing signs they might leave, putting $${totalRevAtRisk.toLocaleString()}/month ($${annualRisk.toLocaleString()}/year) at risk. ${summary.urgentInterventions > 0 ? `${summary.urgentInterventions} need action this week.` : "All can be addressed through structured outreach this month."} The most common issue: ${summary.topRiskDriver}.`;
   }
 
-  // Recommendations (non-generic, CrossFit-aware, economically quantified)
+  // Recommendations (non-generic, economically quantified)
   const recommendations: BriefRecommendation[] = [];
 
   // Recommendation 1: Based on cohort analysis
@@ -885,10 +885,10 @@ function generateStrategicBrief(
       category: "Onboarding",
       priority: "critical",
       headline: `${worst30Day.lostCount} members lost before day 30 — your onboarding is the highest-leverage fix`,
-      detail: `${worst30Day.lostPct.toFixed(0)}% of all cancellations happen in the first month. Implement a structured 4-week Foundations program: Week 1 (movement basics + coach intro), Week 2 (first benchmark WOD), Week 3 (partner workout + community intro), Week 4 (goal-setting session with coach).`,
+      detail: `${worst30Day.lostPct.toFixed(0)}% of all cancellations happen in the first month. Implement a structured 4-week Foundations program: Week 1 (movement basics + coach intro), Week 2 (first benchmark WOD), Week 3 (partner workout + community intro), Week 4 (goal-setting session with coach). In CrossFit, the first month determines everything — members need to feel competent, connected, and challenged. Without all three, they leave.`,
       revenueImpact: `Retaining just 30% of these members preserves ~$${savedRevenue.toLocaleString()} over 6 months`,
       interventionType: "Structured onboarding program",
-      crossfitContext: "In CrossFit, the first month determines everything. Members need to feel competent (they can do the movements), connected (they know people's names), and challenged (they have something to chase). Without all three, they leave. Nicole Christensen's framework: define your onboarding standards, write them down, and teach them consistently. Bergeron's rule: every coach spends 5 minutes after class with a newer athlete. That investment builds the trust that turns a trial into a lifestyle.",
+      crossfitContext: "",
       timeframe: "Implement within 2 weeks",
       executionChecklist: [
         "Assign a dedicated coach to every new member within 24 hours of signup",
@@ -905,10 +905,10 @@ function generateStrategicBrief(
       category: "Retention",
       priority: "high",
       headline: `${worst60Day.lostCount} members lost between days 31-60 — the belonging gap`,
-      detail: `Members are surviving the initial shock but leaving before building community. Implement "90-Day Skill Milestones": first pull-up, first Rx WOD, first competition. Members who achieve a concrete goal in their first quarter retain at dramatically higher rates.`,
+      detail: `Members are surviving the initial shock but leaving before building community. Implement "90-Day Skill Milestones": first pull-up, first Rx WOD, first competition. Members who achieve a concrete goal in their first quarter retain at dramatically higher rates. The 30-60 day window is where CrossFit either becomes identity or exits — members need visible progress that creates emotional investment.`,
       revenueImpact: `Closing this gap could preserve ~$${savedRevenue.toLocaleString()} over 8 months`,
       interventionType: "Skill milestone program",
-      crossfitContext: "The 30-60 day window is where CrossFit either becomes identity or exits. Members need visible progress — a heavier deadlift, a faster Fran, a skill they couldn't do before. Progress creates identity. Identity creates retention. Coach the positive: 'You were so fast today' creates a self-fulfilling prophecy of improvement. Every coach on your team should know each member's milestone and celebrate it publicly.",
+      crossfitContext: "",
       timeframe: "Launch within 1 month",
       executionChecklist: [
         "Define 3 skill milestones for each new member (e.g. first pull-up, first Rx workout, first competition)",
@@ -930,10 +930,10 @@ function generateStrategicBrief(
       category: "Churn Reduction",
       priority: "critical",
       headline: `Reducing churn from ${gymChurnRate.toFixed(1)}% to 5% would save $${annualSaved.toLocaleString()}/year`,
-      detail: `At current rates, you're losing ~${Math.round(activeMemberCount * gymChurnRate / 100)} members per month. The gap between your churn (${gymChurnRate.toFixed(1)}%) and the stability target (5%) represents ${membersRetainedPerMonth} members/month — each worth $${gymArm.toFixed(0)} in monthly revenue.`,
+      detail: `At current rates, you're losing ~${Math.round(activeMemberCount * gymChurnRate / 100)} members per month. The gap between your churn (${gymChurnRate.toFixed(1)}%) and the stability target (5%) represents ${membersRetainedPerMonth} members/month — each worth $${gymArm.toFixed(0)} in monthly revenue. High churn usually means one of three things: poor onboarding, coaching inconsistency across your team, or weak culture where members work out but don't connect.`,
       revenueImpact: `$${annualSaved.toLocaleString()} annual revenue preserved`,
       interventionType: "Retention system overhaul",
-      crossfitContext: "High churn in CrossFit usually means one of three things: (1) poor onboarding — members feel lost because standards aren't defined or taught, (2) coaching inconsistency — different experience depending on the coach, because your team hasn't been trained to deliver the same standard, or (3) weak culture — members workout but don't connect because no one is reading athletes individually or building trust through listening. Nicole Christensen's five pillars: Define Standards, Teach, Communicate Consistently, Protect, Be Consistent. Start there.",
+      crossfitContext: "",
       timeframe: "Begin assessment this week",
       executionChecklist: [
         "Call every member who cancelled in the last 60 days — ask what could have been different",
@@ -951,10 +951,10 @@ function generateStrategicBrief(
       category: "Retention Optimization",
       priority: "medium",
       headline: `Each 1% churn improvement unlocks ~$${Math.round(activeMemberCount * 0.01 * gymArm * 12).toLocaleString()}/year`,
-      detail: `Your churn is above target but not critical. Focus on the specific members showing drift signals rather than system-wide changes. Personal outreach to the ${summary.totalAtRisk} at-risk members is the most efficient use of your time this week.`,
+      detail: `Your churn is above target but not critical. Focus on the specific members showing drift signals rather than system-wide changes. Personal outreach to the ${summary.totalAtRisk} at-risk members is the most efficient use of your time this week. At this churn level, the problem isn't systemic — it's individual. Each at-risk member has a specific reason they're drifting, and a genuine conversation where you listen more than you talk is the highest-ROI retention tool.`,
       revenueImpact: `$${saved.toLocaleString()} potential annual recovery`,
       interventionType: "Targeted member outreach",
-      crossfitContext: "At this churn level, the problem isn't systemic — it's individual. Each at-risk member has a specific reason they're drifting. Bergeron's awareness principle: read each athlete individually — 'Just because you like to be coached a certain way doesn't mean your athletes like it.' A genuine conversation from a coach who listens more than they talk is the highest-ROI retention tool in CrossFit. Build trust by asking, not telling.",
+      crossfitContext: "",
       timeframe: "This week — personal outreach",
       executionChecklist: [
         "Pull the at-risk member list from the Member Risk tab",
@@ -969,10 +969,10 @@ function generateStrategicBrief(
       category: "Retention",
       priority: "low",
       headline: "Churn is controlled — shift focus to deepening loyalty",
-      detail: `At ${gymChurnRate.toFixed(1)}%, your retention is strong. The next level is building members who would never leave — not because of a contract, but because leaving would mean losing their identity. Nicole Christensen's framework: culture is not community — community is the output of culture. Define your standards, teach them, communicate them consistently, protect them, and be consistent. When your culture is defined and defended, community emerges naturally.`,
+      detail: `At ${gymChurnRate.toFixed(1)}%, your retention is strong. The next level is building members who would never leave — not because of a contract, but because leaving would mean losing their identity. Define your standards, teach them, communicate them consistently, protect them, and be consistent. When your culture is defined and defended, community emerges naturally. Write down your gym's standards, etiquette, and dos/don'ts, and assign veteran members as mentors with defined roles.`,
       revenueImpact: "Compound loyalty reduces future churn risk and creates organic referral growth",
       interventionType: "Culture deepening",
-      crossfitContext: "Culture is not community. Community is the output of culture, not the input. What keeps people coming back is standards, accountability, and the knowledge that this gym stands for something. Write down your gym's standards, etiquette, and dos/don'ts. Assign veteran members as mentors with defined roles. When members contribute to the culture, they become inseparable from it.",
+      crossfitContext: "",
       timeframe: "Ongoing — culture investment",
       executionChecklist: [
         "Write down your gym's standards, etiquette, and dos/don'ts — make them visible",
@@ -994,10 +994,10 @@ function generateStrategicBrief(
       category: "Revenue per Member",
       priority: "high",
       headline: `$${armGap.toFixed(0)} gap between current ARM ($${gymArm.toFixed(0)}) and target ($150)`,
-      detail: `Closing this gap adds $${revenueUnlocked.toLocaleString()}/month to your revenue without a single new member. Options: introduce premium tiers (unlimited + open gym + specialty classes), add nutrition coaching, or launch personal training packages.`,
+      detail: `Closing this gap adds $${revenueUnlocked.toLocaleString()}/month to your revenue without a single new member. Options: introduce premium tiers (unlimited + open gym + specialty classes), add nutrition coaching, or launch personal training packages. Members investing in transformation will pay more when the value is explicit and the coaching relationship is genuine.`,
       revenueImpact: `+$${revenueUnlocked.toLocaleString()}/month ($${(revenueUnlocked * 12).toLocaleString()}/year)`,
       interventionType: "Pricing tier introduction",
-      crossfitContext: "CrossFit members are investing in transformation, not just access. Premium tiers that include goal-setting, body composition tracking, and coach check-ins align pricing with the value you're actually delivering. When coaches build trust through individual awareness and positive coaching language, members perceive higher value and will invest accordingly. Most members will pay more if the value is explicit and the coaching relationship is genuine.",
+      crossfitContext: "",
       timeframe: "Design within 2 weeks, launch within 1 month",
       executionChecklist: [
         "Define 2-3 pricing tiers (e.g. Base, Performance, Unlimited)",
@@ -1012,10 +1012,10 @@ function generateStrategicBrief(
       category: "Revenue Optimization",
       priority: "medium",
       headline: `ARM at $${gymArm.toFixed(0)} — room for premium tier expansion`,
-      detail: "Your baseline pricing is reasonable. The opportunity is in value-add services: nutrition coaching ($50-100/mo), accountability programs, or specialty class access. These increase ARM without changing your core pricing.",
+      detail: "Your baseline pricing is reasonable. The opportunity is in value-add services: nutrition coaching ($50-100/mo), accountability programs, or specialty class access. These increase ARM without changing your core pricing. Members who invest more engage more — a higher-ARM member who gets nutrition coaching and quarterly goal reviews is far stickier than one who just shows up for WODs.",
       revenueImpact: `+$${Math.round((150 - gymArm) * activeMemberCount).toLocaleString()}/month if ARM reaches $150`,
       interventionType: "Value-add services",
-      crossfitContext: "Members who invest more engage more. A $200/month member who gets nutrition coaching, quarterly goal reviews, and a coach who reads their individual needs is far stickier than a $120/month member who just shows up for WODs. Higher ARM actually improves retention — especially when paired with coaching quality that builds trust through listening and individual awareness.",
+      crossfitContext: "",
       timeframe: "Plan and pilot within 1 month",
       executionChecklist: [
         "Survey members: which add-on service would they value most?",
@@ -1038,16 +1038,16 @@ function generateStrategicBrief(
       category: "Growth Strategy",
       priority: "high",
       headline: "Retention is strong but growth is flat — time to invest in acquisition",
-      detail: `You're not losing members, but you're not adding them either. With churn at ${gymChurnRate.toFixed(1)}%, new members are highly likely to stick. This is the ideal time to invest in acquisition — referral programs, community events open to non-members, and the CrossFit Open as your biggest growth vehicle. Host Friday Night Lights during the Open — every member invites someone. Run 'Bring Your Person' weeks year-round.`,
+      detail: `You're not losing members, but you're not adding them either. With churn at ${gymChurnRate.toFixed(1)}%, new members are highly likely to stick. This is the ideal time to invest in acquisition — referral programs, community events open to non-members, and the CrossFit Open as your biggest growth vehicle. Host Friday Night Lights during the Open — every member invites someone. Run 'Bring Your Person' weeks year-round. Your retention is your competitive advantage for growth.`,
       revenueImpact: `Each new member adds ~$${gymArm.toFixed(0)}/month with high retention probability`,
       interventionType: "Referral and acquisition programs",
-      crossfitContext: "Your gym's retention is your competitive advantage for growth. When new members join a gym where people stay, they feel it — that stability is itself a marketing tool. The CrossFit Open is the most powerful growth event of the year: Friday Night Lights creates an atmosphere that no Instagram ad can replicate. Run 'Bring Your Person' week, host community events open to non-members, and let your culture do the selling.",
+      crossfitContext: "",
       timeframe: "Launch referral program within 2 weeks",
       executionChecklist: [
         "Launch a 'Bring Your Person' week — every member invites one guest",
         "Host Friday Night Lights during the Open — make it the event of the year",
         "Create a referral reward (free month, gear credit, etc.)",
-        "Host one open community event per month (partner WOD, potluck, competition)",
+        "Host one open community event per month (partner workout, potluck, competition)",
         "Post member transformation stories on social media weekly",
         "Track referral source for every new signup",
       ],
@@ -1058,10 +1058,10 @@ function generateStrategicBrief(
       category: "Roster Stabilization",
       priority: "critical",
       headline: `Losing ${monthlyLoss.toFixed(0)} members/month net — roster is contracting`,
-      detail: `At this rate, you'll lose ${Math.round(monthlyLoss * 6)} members over the next 6 months. This isn't a growth problem — it's a retention emergency. Before spending on acquisition, stop the bleeding. Every new member acquired into a high-churn environment is wasted acquisition cost.`,
+      detail: `At this rate, you'll lose ${Math.round(monthlyLoss * 6)} members over the next 6 months. This isn't a growth problem — it's a retention emergency. Before spending on acquisition, stop the bleeding. Every new member acquired into a high-churn environment is wasted acquisition cost. Fix the culture first: are your standards defined and enforced? Are your coaches trained to connect individually with athletes? Call every member who left and listen — don't pitch.`,
       revenueImpact: `$${Math.round(monthlyLoss * gymArm * 12).toLocaleString()}/year in lost revenue if trend continues`,
       interventionType: "Retention emergency protocol",
-      crossfitContext: "When a CrossFit gym is losing members, the instinct is to run promotions and discounts. This is the wrong move. Discounts attract price-sensitive members who churn even faster. Instead: fix the culture, then grow. Are your standards defined and enforced? Are your coaches trained to connect individually with athletes? Is every class delivering the same quality experience? Nicole Christensen's principle: 'Culture is learned, acquired, dynamic — if you don't defend and protect it, it changes.' Call every member who left and listen — don't pitch.",
+      crossfitContext: "",
       timeframe: "Start exit interviews this week",
       executionChecklist: [
         "Freeze all acquisition spending until churn is below 7%",
@@ -1074,17 +1074,17 @@ function generateStrategicBrief(
     });
   }
 
-  // NEW: Coaching Development recommendation
+  // Coaching Development recommendation
   if (activeMemberCount >= 10) {
     const coachingPriority = gymChurnRate > 7 ? "high" : gymChurnRate > 3 ? "medium" : "low";
     recommendations.push({
       category: "Coaching Development",
       priority: coachingPriority as "high" | "medium" | "low",
       headline: "Invest in your coaching team — they are the delivery system for your culture",
-      detail: `Great coaches don't just see movement faults — they connect with athletes individually. Ben Bergeron's framework: develop awareness (read each athlete's needs), build trust (listen more than you coach), and coach the positive ("Big set!" not "Don't put it down!"). Nicole Christensen's standard: coaches need training, shadowing, feedback loops, and mentorship. They must understand not just what your standards are, but WHY they matter.`,
+      detail: `Great coaches don't just see movement faults — they connect with athletes individually. Develop awareness (read each athlete's needs), build trust (listen more than you coach), and coach the positive ("Big set!" not "Don't put it down!"). All coaches need training, shadowing, feedback loops, and mentorship. They must understand not just what your standards are, but why they matter.`,
       revenueImpact: "Coaching quality directly drives retention — members stay for coaches who see them as individuals",
       interventionType: "Coaching development program",
-      crossfitContext: "The best CrossFit gyms are built on coaching teams, not individual coaches. Dennis Thomas, Chuck Carswell, Ben Bergeron, Nicole Christensen, Nicole Carroll — what they share isn't just technique knowledge. It's the ability to create an atmosphere where athletes trust the process, trust their coach, and push beyond what they thought was possible. Build that in your team.",
+      crossfitContext: "",
       timeframe: "Start monthly coaching development meetings within 2 weeks",
       executionChecklist: [
         "Hold a monthly coaching meeting focused on one coaching skill (awareness, trust, positive language)",
@@ -1097,16 +1097,16 @@ function generateStrategicBrief(
     });
   }
 
-  // NEW: Culture Standards recommendation
+  // Culture Standards recommendation
   if (gymChurnRate > 5 || activeMemberCount < 30) {
     recommendations.push({
       category: "Culture Standards",
       priority: gymChurnRate > 7 ? "high" : "medium",
       headline: "Define, teach, and protect your gym's culture — it's what keeps members beyond the first year",
-      detail: `Culture isn't a vibe or a slogan. It's built through a commitment to standards, values, and equality. Nicole Christensen (CF-L4, 15+ years running CrossFit Roots) defines culture through three pillars: Methodology (movement standards, scaling, intensity), Etiquette (how things work in your house), and Dos/Don'ts (the unspoken rules that protect your long-term culture). Every person who walks through your door — coaches, staff, athletes — needs to understand what your gym stands for.`,
+      detail: `Culture isn't a vibe or a slogan. It's built through a commitment to standards, values, and equality. Define your culture through three pillars: Methodology (movement standards, scaling, intensity), Etiquette (how things work in your house), and Dos/Don'ts (the unspoken rules that protect your long-term culture). Every person who walks through your door — coaches, staff, athletes — needs to understand what your gym stands for. The same standards that attract the right people will repel the wrong ones — that's not a bug, it's a feature.`,
       revenueImpact: "Strong culture creates members who would never leave — retention becomes identity, not obligation",
       interventionType: "Culture definition and enforcement",
-      crossfitContext: "The same standards that attract the right people will repel the wrong ones. That's not a bug — it's a feature. When you correct movement every single time, enforce showing up on time, and protect the methodology from Instagram experts, you're building something that lasts for decades. The great dynasties weren't built on hype — they were built on systems and standards that outlasted any one player or coach.",
+      crossfitContext: "",
       timeframe: "Complete culture document within 1 month",
       executionChecklist: [
         "Write down your movement standards — what is non-negotiable? (e.g., squat below parallel every time)",
@@ -1119,7 +1119,7 @@ function generateStrategicBrief(
     });
   }
 
-  // NEW: Community & Open recommendation
+  // Community & Open recommendation
   const currentMonth = now.getMonth();
   const isOpenSeason = currentMonth >= 0 && currentMonth <= 3;
   if (isOpenSeason || avgNetGrowth <= 0) {
@@ -1130,15 +1130,13 @@ function generateStrategicBrief(
         ? "The CrossFit Open is your biggest retention and growth tool of the year — use it"
         : "Community events create shared experience that no discount can replace",
       detail: isOpenSeason
-        ? `The CrossFit Open has more global participants than any other sporting event. It's your chance to energize every member, create shared goals, and bring non-members through the door. Run Friday Night Lights, set up intramural teams, and make it an event — not just a workout. Every member should be encouraged to sign up, regardless of fitness level. The Open is where 'I do CrossFit' becomes 'I AM a CrossFitter.'`
-        : `Shared physical experience creates bonds that no marketing campaign can replicate. Partner WODs, team competitions, potlucks, and bring-a-friend events transform attendance into belonging. Members who have 3+ gym friendships retain at dramatically higher rates.`,
+        ? `The CrossFit Open has more global participants than any other sporting event. It's your chance to energize every member, create shared goals, and bring non-members through the door. Run Friday Night Lights, set up intramural teams, and make it an event — not just a workout. Every member should be encouraged to sign up, regardless of fitness level. The Open is where 'I do CrossFit' becomes 'I AM a CrossFitter.' When members cheer each other through a workout and compare scores, they're part of something — that feeling prevents cancellations months later.`
+        : `Shared physical experience creates bonds that no marketing campaign can replicate. Partner workouts, team competitions, potlucks, and bring-a-friend events transform attendance into belonging. Members who have 3+ gym friendships retain at dramatically higher rates. The workout brings them in — the relationships keep them.`,
       revenueImpact: isOpenSeason
         ? "Open participation correlates with 6-12 month retention boost — members who compete together stay together"
         : "Each community event that brings a guest creates a warm referral lead worth $" + gymArm.toFixed(0) + "/month",
       interventionType: isOpenSeason ? "CrossFit Open activation" : "Community event series",
-      crossfitContext: isOpenSeason
-        ? "The Open is the gateway to belonging. When members cheer each other through a workout, high-five at the end, and compare scores — they're not just exercising, they're part of something. That feeling is what prevents cancellations in June when motivation dips. Use this window."
-        : "CrossFit's magic isn't the methodology alone — it's that the methodology is delivered in community. Partner WODs, team competitions, and shared suffering create relationships that make your gym irreplaceable. These events are not extras — they are core to your retention strategy.",
+      crossfitContext: "",
       timeframe: isOpenSeason ? "Register and plan Friday Night Lights this week" : "Schedule monthly community events",
       executionChecklist: isOpenSeason ? [
         "Encourage every member to register for the Open — make it a gym-wide goal",
@@ -1148,7 +1146,7 @@ function generateStrategicBrief(
         "Post member Open stories and results on social media",
         "Plan a post-Open celebration event for everyone who participated",
       ] : [
-        "Schedule one community event per month (partner WOD, potluck, bring-a-friend)",
+        "Schedule one community event per month (partner workout, potluck, bring-a-friend)",
         "Run a 'Bring Your Person' week — every member invites one guest",
         "Organize a quarterly in-house competition with teams",
         "Create a post-event follow-up process for guests who attended",
@@ -1157,6 +1155,13 @@ function generateStrategicBrief(
       ],
     });
   }
+
+  // Sort by priority and take TOP 3 only
+  recommendations.sort((a, b) => {
+    const priorityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+    return (priorityOrder[a.priority] ?? 3) - (priorityOrder[b.priority] ?? 3);
+  });
+  const top3 = recommendations.slice(0, 3);
 
   // Cohort alert
   let cohortAlert: string | null = null;
@@ -1171,11 +1176,11 @@ function generateStrategicBrief(
   const expectedDelta = ((revenueScenario.expectedMrr - latestMrr) / latestMrr * 100);
   let revenueOutlook: string;
   if (expectedDelta > 5) {
-    revenueOutlook = `Revenue is projected to grow ${expectedDelta.toFixed(1)}% over the next 6 months to $${revenueScenario.expectedMrr.toLocaleString()}/month. Upside scenario: $${revenueScenario.upsideMrr.toLocaleString()}/month. This trajectory builds the financial cushion that lets you invest in quality.`;
+    revenueOutlook = `Revenue is on track to grow ${expectedDelta.toFixed(1)}% over the next 6 months to $${revenueScenario.expectedMrr.toLocaleString()}/mo. Momentum is in your favor — if you keep retention steady, you have upside to $${revenueScenario.upsideMrr.toLocaleString()}/mo.`;
   } else if (expectedDelta > -3) {
-    revenueOutlook = `Revenue is projected to hold near $${revenueScenario.expectedMrr.toLocaleString()}/month — stable but without growth momentum. The gap between your expected ($${revenueScenario.expectedMrr.toLocaleString()}) and upside ($${revenueScenario.upsideMrr.toLocaleString()}) scenarios shows the revenue you're leaving on the table.`;
+    revenueOutlook = `Revenue should hold near $${revenueScenario.expectedMrr.toLocaleString()}/mo — stable but not growing. The gap between where you are and where you could be ($${revenueScenario.upsideMrr.toLocaleString()}/mo) shows the revenue you're leaving on the table.`;
   } else {
-    revenueOutlook = `Revenue is projected to decline ${Math.abs(expectedDelta).toFixed(1)}% to $${revenueScenario.expectedMrr.toLocaleString()}/month. Worst case: $${revenueScenario.worstCaseMrr.toLocaleString()}/month. Every month of decline makes the next month harder. Intervention now has the highest ROI.`;
+    revenueOutlook = `Revenue is headed down — projected to drop ${Math.abs(expectedDelta).toFixed(1)}% to $${revenueScenario.expectedMrr.toLocaleString()}/mo. If things get worse, it could hit $${revenueScenario.worstCaseMrr.toLocaleString()}/mo. Acting now gives you the best chance to turn this around.`;
   }
 
   const topAlerts: MemberAlertEnriched[] = memberPredictions.members
@@ -1188,7 +1193,7 @@ function generateStrategicBrief(
       } else if (m.lastContactDays === null) {
         suggestedAction = "Personal call from head coach";
       } else if (m.lastContactDays > 30) {
-        suggestedAction = "Text check-in + invite to partner WOD";
+        suggestedAction = "Text check-in + invite to partner workout";
       } else if (m.tenureDays <= 30) {
         suggestedAction = "1-on-1 intro session with assigned coach";
       } else if (m.tenureDays <= 90) {
@@ -1239,7 +1244,7 @@ function generateStrategicBrief(
     stabilityVerdict,
     stabilityLevel,
     keyMetrics,
-    recommendations,
+    recommendations: top3,
     cohortAlert,
     revenueOutlook,
     revenueComparison,

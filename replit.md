@@ -23,18 +23,14 @@ The Stability Command Center for CrossFit gyms. A financial resilience operating
 5. **Coach Impact Layer** - Retention leverage by class type and attendance patterns (future: requires attendance data).
 6. **Predictive Intelligence Stack** - Member-level churn prediction (0-1 probability, engagement classification, intervention types), cohort survival analysis, revenue scenario modeling (Monte Carlo-style), strategic brief generator with economically-quantified CrossFit-aware recommendations, execution checklists, stability verdict visual (strong/moderate/fragile with progress bar), enriched member alerts (tenure, last contact, outreach status, suggested action), and revenue outlook bar comparison.
 
-### CrossFit Coaching Philosophy Integration
-The predictive engine is deeply informed by CrossFit coaching philosophy from:
-- **Nicole Christensen (CF-L4)**: Culture vs Community distinction (culture is input, community is output), 5 pillars (Define Standards → Teach → Communicate → Protect → Be Consistent), methodology/etiquette/dos-don'ts framework
-- **Ben Bergeron**: Awareness (reading athletes individually), trust-building (listening over lecturing), positive coaching language ("Big set" not "Don't put it down"), 5-minute post-class rule
-- **Dennis Thomas, Chuck Carswell, Nicole Carroll**: Coaching team development, atmosphere of success, identity transformation
-
-#### Key Design Decisions
-- Culture ≠ Community. Culture is the input (standards, systems, mindset); community is the output.
-- Each intervention references specific coaching concepts (awareness, trust, positive language, identity transformation)
-- Three new recommendation categories: Coaching Development, Culture Standards, Community Events/CrossFit Open
-- CrossFit Open recommendations appear seasonally (Jan-Apr) with Friday Night Lights and intramural team guidance
-- Stability verdicts incorporate coaching philosophy assessment
+### Intelligence Philosophy
+- All insights presented as Iron Metrics intelligence — no external coach attributions
+- Coaching concepts (onboarding structure, awareness, trust-building, identity transformation) are embedded natively
+- Strategic brief limited to TOP 3 ranked recommendations (critical > high > medium > low)
+- Language is direct, human, gym-owner-friendly — no MBA jargon
+- Core member interventions include: quarterly goal-setting, skill progression tracking, competition participation, movement quality reinforcement
+- CrossFit Open recommendations appear seasonally (Jan-Apr)
+- Stability verdicts are clear and actionable (strong/moderate/fragile)
 
 ## Report Format
 Every metric block contains:
