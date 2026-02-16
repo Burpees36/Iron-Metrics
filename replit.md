@@ -22,11 +22,12 @@ The Stability Command Center for CrossFit gyms. A financial resilience operating
 4. **Lifetime Value Engine (LTVE)** - True LTV, revenue unlocked per 1% churn improvement, scenario projections.
 5. **Coach Impact Layer** - Retention leverage by class type and attendance patterns (future: requires attendance data).
 6. **Predictive Intelligence Stack** - Member-level churn prediction (0-1 probability, engagement classification, intervention types), cohort survival analysis, revenue scenario modeling (Monte Carlo-style), strategic brief generator with economically-quantified CrossFit-aware recommendations, execution checklists, stability verdict visual (strong/moderate/fragile with progress bar), enriched member alerts (tenure, last contact, outreach status, suggested action), and revenue outlook bar comparison.
+7. **Ranked Intervention Engine** - Every recommendation is mathematically scored: interventionScore = expectedRevenueImpact × confidenceWeight × urgencyFactor, where expectedRevenueImpact = churnReductionEstimate × membersAffected × avgLtvRemaining. Confidence is data-quality-based (data months, member count, retention windows). Urgency is timeframe-driven with context multipliers. Priority labels (critical/high/medium/low) derived from score percentile thresholds. Top-scored intervention surfaces as "Focus Recommendation" hero card.
 
 ### Intelligence Philosophy
 - All insights presented as Iron Metrics intelligence — no external coach attributions
 - Coaching concepts (onboarding structure, awareness, trust-building, identity transformation) are embedded natively
-- Strategic brief limited to TOP 3 ranked recommendations (critical > high > medium > low)
+- Strategic brief limited to TOP 3 ranked recommendations sorted by interventionScore descending; priority labels derived from score percentiles
 - Language is direct, human, gym-owner-friendly — no MBA jargon
 - Core member interventions include: quarterly goal-setting, skill progression tracking, competition participation, movement quality reinforcement
 - CrossFit event recommendations rotate seasonally (Open, Hero WODs, seminars, nutrition challenges, holiday events, yoga/mobility clinics, bring-a-friend days)
