@@ -184,11 +184,11 @@ export default function LandingPage() {
             <div className="space-y-8">
               <p className="text-sm font-medium text-primary tracking-wide uppercase animate-fade-in-up">Stability operating system</p>
               <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight leading-tight animate-fade-in-up animation-delay-100" data-testid="text-hero-headline">
-                Retention is the
+                Community is the
                 <br />
-                <span className="text-primary">heartbeat.</span>
+                <span className="text-primary">soul.</span>
                 <br />
-                Stability keeps it steady.
+                Stability keeps it thriving.
               </h1>
               <p className="text-muted-foreground text-base sm:text-lg max-w-md leading-relaxed animate-fade-in-up animation-delay-200">Know your numbers. Know your risks. Know your next move.</p>
               <div className="flex flex-wrap items-center gap-3 animate-fade-in-up animation-delay-300">

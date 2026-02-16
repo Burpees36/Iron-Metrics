@@ -58,7 +58,7 @@ import {
   MessageSquare,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import PredictiveIntelligenceView from "./predictive-intelligence";
 import {
   LineChart,
@@ -389,7 +389,7 @@ function ReportView({ gymId }: { gymId: string }) {
         </Card>
       ) : (
         <>
-          <div className="grid sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="grid sm:grid-cols-3 lg:grid-cols-5 gap-4 animate-fade-in-up">
             <RSIDial value={data.metrics.rsi} testId="metric-rsi" />
             <ScoreCard
               icon={TrendingDown}
@@ -426,14 +426,14 @@ function ReportView({ gymId }: { gymId: string }) {
             />
           </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in-up animation-delay-100">
             <SmallMetric label="Revenue / Member" value={`$${Number(data.metrics.arm).toFixed(0)}`} icon={BarChart3} />
             <SmallMetric label="Lifetime Value" value={`$${Number(data.metrics.ltv).toLocaleString()}`} icon={TrendingUp} />
             <SmallMetric label="New Members" value={String(data.metrics.newMembers)} icon={UserPlus} />
             <SmallMetric label="Cancellations" value={String(data.metrics.cancels)} icon={UserMinus} />
           </div>
 
-          <div className="space-y-6" data-testid="section-reports">
+          <div className="space-y-6 animate-fade-in-up animation-delay-200" data-testid="section-reports">
             {data.reports.map((report, i) => (
               <ReportCard
                 key={i}
@@ -461,6 +461,7 @@ function RSIDial({ value, testId }: { value: number; testId: string }) {
   const totalArc = 270;
   const arcLength = (totalArc / 360) * circumference;
   const filledLength = (value / 100) * arcLength;
+  const dashOffset = arcLength - filledLength;
 
   const color = value >= 80
     ? { stroke: "#10b981", glow: "rgba(16, 185, 129, 0.25)", label: "Stable" }
@@ -469,7 +470,7 @@ function RSIDial({ value, testId }: { value: number; testId: string }) {
       : { stroke: "#ef4444", glow: "rgba(239, 68, 68, 0.25)", label: "Unstable" };
 
   return (
-    <Card data-testid={testId}>
+    <Card className="hover-elevate transition-all duration-300" data-testid={testId}>
       <CardContent className="p-5 flex flex-col items-center justify-center space-y-1">
         <div className="relative w-[100px] h-[85px]">
           <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
@@ -493,17 +494,22 @@ function RSIDial({ value, testId }: { value: number; testId: string }) {
               stroke={color.stroke}
               strokeWidth={strokeWidth}
               strokeLinecap="round"
-              strokeDasharray={`${filledLength} ${circumference - filledLength}`}
+              strokeDasharray={`${arcLength} ${circumference - arcLength}`}
               strokeDashoffset={-(circumference - arcLength) / 2 - ((360 - totalArc) / 360) * circumference / 2}
               transform={`rotate(${startAngle} ${center} ${center})`}
-              style={{ filter: `drop-shadow(0 0 4px ${color.glow})`, transition: "stroke-dasharray 0.8s ease" }}
+              className="animate-progress-ring"
+              style={{
+                filter: `drop-shadow(0 0 4px ${color.glow})`,
+                "--ring-circumference": `${arcLength}`,
+                "--ring-offset": `${dashOffset}`,
+              } as React.CSSProperties}
             />
             <text
               x={center}
               y={center - 2}
               textAnchor="middle"
               dominantBaseline="central"
-              className="fill-foreground"
+              className="fill-foreground animate-count-up-pulse"
               style={{ fontSize: "18px", fontWeight: 700, fontFamily: "var(--font-mono, monospace)" }}
             >
               {value}
@@ -569,7 +575,7 @@ function ScoreCard({
         : "bg-muted";
 
   return (
-    <Card data-testid={testId}>
+    <Card className="hover-elevate transition-all duration-300" data-testid={testId}>
       <CardContent className="p-5 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
@@ -592,7 +598,7 @@ function ScoreCard({
 
 function SmallMetric({ label, value, icon: Icon }: { label: string; value: string; icon: typeof Users }) {
   return (
-    <Card>
+    <Card className="hover-elevate transition-all duration-300">
       <CardContent className="p-4 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Icon className="w-3.5 h-3.5 text-muted-foreground" />
@@ -635,7 +641,7 @@ function ReportCard({ report, gymId, atRiskMembers, monthDate }: { report: Metri
   const isRiskRadar = report.metric === "Member Risk Radar";
 
   return (
-    <Card data-testid={`report-${report.metric.toLowerCase().replace(/\s+/g, "-")}`}>
+    <Card className="hover-elevate transition-all duration-300" data-testid={`report-${report.metric.toLowerCase().replace(/\s+/g, "-")}`}>
       <CardContent className="p-6 space-y-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-2">
@@ -1350,10 +1356,16 @@ function TrendsView({ gymId }: { gymId: string }) {
     high: { text: "text-red-600 dark:text-red-400", label: "High" },
   };
 
+  const dynamicBg = stabilityScore.score >= 85
+    ? "bg-gradient-to-br from-background via-background to-emerald-500/[0.03] dark:to-emerald-500/[0.04]"
+    : stabilityScore.score < 60
+      ? "bg-gradient-to-br from-background via-background to-red-500/[0.03] dark:to-red-500/[0.06]"
+      : "";
+
   return (
-    <div className="space-y-8">
+    <div className={`space-y-8 rounded-lg transition-colors duration-700 ${dynamicBg}`} style={{ background: dynamicBg ? undefined : "linear-gradient(135deg, hsl(var(--background)) 0%, hsl(215 18% 12% / 0.03) 100%)" }}>
       {/* ── EXECUTIVE HEALTH + 90-DAY OUTLOOK ── */}
-      <Card className={`${tc.bg} border ${tc.border}`} data-testid="section-stability-score">
+      <Card className={`${tc.bg} border ${tc.border} animate-fade-in-up`} data-testid="section-stability-score">
         <CardContent className="p-6">
           <div className="flex flex-col lg:flex-row lg:items-start gap-6">
             <div className="flex-1 space-y-3">
@@ -1449,7 +1461,7 @@ function TrendsView({ gymId }: { gymId: string }) {
       </Card>
 
       {/* ── STABILITY & RETENTION ── */}
-      <div className="space-y-3">
+      <div className="space-y-3 animate-fade-in-up animation-delay-100">
         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
           <Shield className="w-3.5 h-3.5" /> Stability & Retention
         </h3>
@@ -1460,7 +1472,7 @@ function TrendsView({ gymId }: { gymId: string }) {
       </div>
 
       {/* ── REVENUE ENGINE ── */}
-      <div className="space-y-3">
+      <div className="space-y-3 animate-fade-in-up animation-delay-200">
         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
           <DollarSign className="w-3.5 h-3.5" /> Revenue Engine
         </h3>
@@ -1485,8 +1497,8 @@ function TrendsView({ gymId }: { gymId: string }) {
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
                       <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
                       <RechartsTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12 }} formatter={(v: number) => [`$${v.toLocaleString()}`, ""]} />
-                      <Line type="monotone" dataKey="current" stroke="hsl(var(--chart-2))" strokeWidth={2} name="Current Trajectory" dot={{ r: 3 }} />
-                      <Line type="monotone" dataKey="target" stroke="#10b981" strokeWidth={2} strokeDasharray="6 4" name="Target Path" dot={false} />
+                      <Line type="monotone" dataKey="current" stroke="hsl(var(--chart-2))" strokeWidth={2} name="Current Trajectory" dot={{ r: 3 }} animationDuration={1200} animationBegin={200} />
+                      <Line type="monotone" dataKey="target" stroke="#10b981" strokeWidth={2} strokeDasharray="6 4" name="Target Path" dot={false} animationDuration={1200} animationBegin={600} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
                     </LineChart>
                   </ResponsiveContainer>
@@ -1505,8 +1517,8 @@ function TrendsView({ gymId }: { gymId: string }) {
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
                       <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
                       <RechartsTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12 }} formatter={(v: number) => [`$${v.toLocaleString()}`, "MRR"]} />
-                      <Area type="monotone" dataKey="mrr" stroke="hsl(var(--chart-2))" fill="url(#mrrGrad)" strokeWidth={2} connectNulls={false} />
-                      <Area type="monotone" dataKey="mrrProjected" stroke="hsl(var(--chart-2))" fill="none" strokeWidth={2} strokeDasharray="6 4" strokeOpacity={0.5} connectNulls={false} />
+                      <Area type="monotone" dataKey="mrr" stroke="hsl(var(--chart-2))" fill="url(#mrrGrad)" strokeWidth={2} connectNulls={false} animationDuration={1200} animationBegin={200} />
+                      <Area type="monotone" dataKey="mrrProjected" stroke="hsl(var(--chart-2))" fill="none" strokeWidth={2} strokeDasharray="6 4" strokeOpacity={0.5} connectNulls={false} animationDuration={1200} animationBegin={600} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -1518,7 +1530,7 @@ function TrendsView({ gymId }: { gymId: string }) {
       </div>
 
       {/* ── GROWTH ENGINE ── */}
-      <div className="space-y-3">
+      <div className="space-y-3 animate-fade-in-up animation-delay-300">
         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
           <UserPlus className="w-3.5 h-3.5" /> Growth Engine
         </h3>
@@ -1543,7 +1555,7 @@ function TrendsView({ gymId }: { gymId: string }) {
                     <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12 }} formatter={(v: number) => [`${v >= 0 ? "+" : ""}${v}`, "Net"]} />
                     <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="6 4" strokeOpacity={0.4} />
-                    <Area type="monotone" dataKey="cumulative" stroke="hsl(var(--chart-5))" fill="url(#cumGrad)" strokeWidth={2} />
+                    <Area type="monotone" dataKey="cumulative" stroke="hsl(var(--chart-5))" fill="url(#cumGrad)" strokeWidth={2} animationDuration={1200} animationBegin={200} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -1566,8 +1578,8 @@ function TrendsView({ gymId }: { gymId: string }) {
                     <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12 }} formatter={(v: number, name: string) => [name === "cancels" ? `${Math.abs(v)}` : `${v}`, name === "cancels" ? "Cancellations" : "New Joins"]} />
                     <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeOpacity={0.3} />
-                    <Bar dataKey="joins" fill="#10b981" radius={[3, 3, 0, 0]} name="joins" />
-                    <Bar dataKey="cancels" fill="#ef4444" radius={[0, 0, 3, 3]} name="cancels" />
+                    <Bar dataKey="joins" fill="#10b981" radius={[3, 3, 0, 0]} name="joins" animationDuration={800} animationBegin={200} />
+                    <Bar dataKey="cancels" fill="#ef4444" radius={[0, 0, 3, 3]} name="cancels" animationDuration={800} animationBegin={400} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -1577,7 +1589,7 @@ function TrendsView({ gymId }: { gymId: string }) {
       </div>
 
       {/* ── LEADING INDICATORS ── */}
-      <div className="space-y-3">
+      <div className="space-y-3 animate-fade-in-up animation-delay-400">
         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
           <Radar className="w-3.5 h-3.5" /> Leading Indicators
         </h3>
@@ -1732,8 +1744,8 @@ function IntelligentChart({ title, insight, kpi, data, dataKey, projectedKey, gr
               <RechartsTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12 }} formatter={formatter} />
               {referenceArea && <ReferenceArea y1={referenceArea.y1} y2={referenceArea.y2} fill="#10b981" fillOpacity={0.06} stroke="#10b981" strokeOpacity={0.15} strokeDasharray="3 3" />}
               {referenceLine && <ReferenceLine y={referenceLine.y} stroke="hsl(var(--muted-foreground))" strokeDasharray="6 4" strokeOpacity={0.5} label={{ value: referenceLine.label, position: "right", fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />}
-              <Area type="monotone" dataKey={dataKey} stroke={color} fill={`url(#${gradientId})`} strokeWidth={2} connectNulls={false} />
-              <Area type="monotone" dataKey={projectedKey} stroke={color} fill="none" strokeWidth={2} strokeDasharray="6 4" strokeOpacity={0.5} connectNulls={false} />
+              <Area type="monotone" dataKey={dataKey} stroke={color} fill={`url(#${gradientId})`} strokeWidth={2} connectNulls={false} animationDuration={1200} animationBegin={200} />
+              <Area type="monotone" dataKey={projectedKey} stroke={color} fill="none" strokeWidth={2} strokeDasharray="6 4" strokeOpacity={0.5} connectNulls={false} animationDuration={1200} animationBegin={600} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -1760,8 +1772,8 @@ function IntelligentChurnChart({ insight, kpi, data, testId }: { insight?: Trend
               <RechartsTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12 }} formatter={(value: number) => [`${value}%`, "Churn"]} />
               <ReferenceLine y={5} stroke="#f59e0b" strokeDasharray="6 4" strokeOpacity={0.6} label={{ value: "5% Target", position: "right", fontSize: 10, fill: "#f59e0b" }} />
               <ReferenceArea y1={7} y2={15} fill="#ef4444" fillOpacity={0.04} stroke="#ef4444" strokeOpacity={0.1} strokeDasharray="3 3" />
-              <Line type="monotone" dataKey="churn" stroke="hsl(var(--chart-3))" strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
-              <Line type="monotone" dataKey="churnProjected" stroke="hsl(var(--chart-3))" strokeWidth={2} strokeDasharray="6 4" strokeOpacity={0.5} dot={false} connectNulls={false} />
+              <Line type="monotone" dataKey="churn" stroke="hsl(var(--chart-3))" strokeWidth={2} dot={{ r: 3 }} connectNulls={false} animationDuration={1200} animationBegin={200} />
+              <Line type="monotone" dataKey="churnProjected" stroke="hsl(var(--chart-3))" strokeWidth={2} strokeDasharray="6 4" strokeOpacity={0.5} dot={false} connectNulls={false} animationDuration={1200} animationBegin={600} />
             </LineChart>
           </ResponsiveContainer>
         </div>

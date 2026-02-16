@@ -342,7 +342,7 @@ function RevenueOutlookVisual({ comparison, outlook }: {
   ];
 
   return (
-    <Card data-testid="card-revenue-outlook">
+    <Card className="hover-elevate transition-all duration-300" data-testid="card-revenue-outlook">
       <CardContent className="pt-5 space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Revenue Outlook</p>
@@ -397,7 +397,7 @@ function StrategicBriefView({ brief }: { brief: PredictiveIntelligence["strategi
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 animate-fade-in-up">
         <div>
           <h2 className="text-lg font-semibold tracking-tight" data-testid="text-brief-title">Strategic Intelligence Brief</h2>
           <p className="text-sm text-muted-foreground">{dateStr}</p>
@@ -408,18 +408,20 @@ function StrategicBriefView({ brief }: { brief: PredictiveIntelligence["strategi
         </Badge>
       </div>
 
-      <StabilityVerdictBar level={brief.stabilityLevel} verdict={brief.stabilityVerdict} />
+      <div className="animate-fade-in-up animation-delay-100">
+        <StabilityVerdictBar level={brief.stabilityLevel} verdict={brief.stabilityVerdict} />
+      </div>
 
-      <Card data-testid="card-executive-summary">
+      <Card className="animate-fade-in-up animation-delay-200 hover-elevate transition-all duration-300" data-testid="card-executive-summary">
         <CardContent className="pt-6">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">Executive Summary</p>
           <p className="text-sm leading-relaxed">{brief.executiveSummary}</p>
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3" data-testid="grid-key-metrics">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 animate-fade-in-up animation-delay-300" data-testid="grid-key-metrics">
         {brief.keyMetrics.map((km) => (
-          <Card key={km.label}>
+          <Card key={km.label} className="hover-elevate transition-all duration-300">
             <CardContent className="pt-4 pb-3 px-3 text-center">
               <p className="text-xs text-muted-foreground mb-1">{km.label}</p>
               <p className={`text-lg font-bold ${km.status === "good" ? "text-emerald-600 dark:text-emerald-400" : km.status === "warning" ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"}`}>
@@ -431,7 +433,7 @@ function StrategicBriefView({ brief }: { brief: PredictiveIntelligence["strategi
       </div>
 
       {brief.cohortAlert && (
-        <Card className="border-amber-500/30" data-testid="card-cohort-alert">
+        <Card className="border-amber-500/30 animate-fade-in-up animation-delay-300 hover-elevate transition-all duration-300" data-testid="card-cohort-alert">
           <CardContent className="pt-4 pb-3 flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
             <div>
@@ -442,10 +444,10 @@ function StrategicBriefView({ brief }: { brief: PredictiveIntelligence["strategi
         </Card>
       )}
 
-      <div className="space-y-4" data-testid="section-recommendations">
+      <div className="space-y-4 animate-fade-in-up animation-delay-400" data-testid="section-recommendations">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Strategic Recommendations</h3>
         {brief.recommendations.map((rec, i) => (
-          <Card key={i} data-testid={`card-recommendation-${i}`}>
+          <Card key={i} className="hover-elevate transition-all duration-300" data-testid={`card-recommendation-${i}`}>
             <CardContent className="pt-5 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
@@ -512,7 +514,7 @@ function StrategicBriefView({ brief }: { brief: PredictiveIntelligence["strategi
         </div>
       )}
 
-      <Card data-testid="card-roi-projection">
+      <Card className="animate-fade-in-up animation-delay-600 hover-elevate transition-all duration-300" data-testid="card-roi-projection">
         <CardContent className="pt-5 space-y-3">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">ROI Projection</p>
           <div className="grid sm:grid-cols-3 gap-4">
@@ -1027,7 +1029,7 @@ function FuturePlanningView({ cohorts, scenario }: {
           <Shield className="w-3.5 h-3.5" /> Planning Ahead
         </h3>
 
-        <Card data-testid="card-break-even">
+        <Card className="hover-elevate transition-all duration-300" data-testid="card-break-even">
           <CardContent className="pt-5 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Financial Safety Check</p>
@@ -1092,7 +1094,7 @@ function FuturePlanningView({ cohorts, scenario }: {
                   }}
                   contentStyle={{ fontSize: "12px", borderRadius: "6px" }}
                 />
-                <Bar dataKey="survivalRate" fill="hsl(210, 60%, 50%)" radius={[4, 4, 0, 0]} name="Survival Rate" />
+                <Bar dataKey="survivalRate" fill="hsl(210, 60%, 50%)" radius={[4, 4, 0, 0]} name="Survival Rate" animationDuration={800} animationBegin={300} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -1158,7 +1160,7 @@ function CohortView({ cohorts: data }: { cohorts: PredictiveIntelligence["cohort
   return (
     <div className="space-y-6">
       <div className="grid lg:grid-cols-2 gap-6">
-        <Card data-testid="chart-survival-curve">
+        <Card className="hover-elevate transition-all duration-300 animate-fade-in-up" data-testid="chart-survival-curve">
           <CardContent className="pt-5">
             <p className="text-sm font-medium mb-4">Retention Survival Curve</p>
             <ResponsiveContainer width="100%" height={280}>
@@ -1177,13 +1179,13 @@ function CohortView({ cohorts: data }: { cohorts: PredictiveIntelligence["cohort
                     <stop offset="95%" stopColor="hsl(210, 60%, 50%)" stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
-                <Area type="monotone" dataKey="survivalRate" stroke="hsl(210, 60%, 50%)" fill="url(#survivalGrad)" strokeWidth={2} />
+                <Area type="monotone" dataKey="survivalRate" stroke="hsl(210, 60%, 50%)" fill="url(#survivalGrad)" strokeWidth={2} animationDuration={1200} animationBegin={200} />
               </AreaChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
 
-        <Card data-testid="chart-retention-windows">
+        <Card className="hover-elevate transition-all duration-300 animate-fade-in-up animation-delay-200" data-testid="chart-retention-windows">
           <CardContent className="pt-5">
             <p className="text-sm font-medium mb-4">Where Members Are Lost</p>
             <ResponsiveContainer width="100%" height={280}>
@@ -1195,14 +1197,14 @@ function CohortView({ cohorts: data }: { cohorts: PredictiveIntelligence["cohort
                   formatter={(v: number, name: string) => [name === "lostCount" ? `${v} members` : `$${v}`, name === "lostCount" ? "Members Lost" : "Revenue Lost"]}
                   contentStyle={{ fontSize: "12px", borderRadius: "6px" }}
                 />
-                <Bar dataKey="lostCount" fill="hsl(0, 70%, 55%)" radius={[4, 4, 0, 0]} name="Members Lost" />
+                <Bar dataKey="lostCount" fill="hsl(0, 70%, 55%)" radius={[4, 4, 0, 0]} name="Members Lost" animationDuration={800} animationBegin={200} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
       </div>
 
-      <Card data-testid="chart-cohort-survival">
+      <Card className="hover-elevate transition-all duration-300 animate-fade-in-up animation-delay-300" data-testid="chart-cohort-survival">
         <CardContent className="pt-5">
           <p className="text-sm font-medium mb-4">Cohort Survival Rates</p>
           <ResponsiveContainer width="100%" height={280}>
@@ -1217,7 +1219,7 @@ function CohortView({ cohorts: data }: { cohorts: PredictiveIntelligence["cohort
                 }}
                 contentStyle={{ fontSize: "12px", borderRadius: "6px" }}
               />
-              <Bar dataKey="survivalRate" fill="hsl(210, 60%, 50%)" radius={[4, 4, 0, 0]} name="Survival Rate" />
+              <Bar dataKey="survivalRate" fill="hsl(210, 60%, 50%)" radius={[4, 4, 0, 0]} name="Survival Rate" animationDuration={800} animationBegin={300} />
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
@@ -1257,7 +1259,7 @@ function CohortView({ cohorts: data }: { cohorts: PredictiveIntelligence["cohort
       </div>
 
       {data.retentionWindows.length > 0 && (
-        <Card data-testid="card-retention-insights">
+        <Card className="hover-elevate transition-all duration-300 animate-fade-in-up animation-delay-400" data-testid="card-retention-insights">
           <CardContent className="pt-5 space-y-3">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Retention Window Insights</p>
             {data.retentionWindows.filter(w => w.lostCount > 0).map((w, i) => (
@@ -1274,7 +1276,7 @@ function CohortView({ cohorts: data }: { cohorts: PredictiveIntelligence["cohort
       )}
 
       {data.crossfitInsights.length > 0 && (
-        <Card data-testid="card-crossfit-insights">
+        <Card className="hover-elevate transition-all duration-300 animate-fade-in-up animation-delay-500" data-testid="card-crossfit-insights">
           <CardContent className="pt-5 space-y-3">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">CrossFit-Specific Insights</p>
             {data.crossfitInsights.map((ins, i) => (
@@ -1301,26 +1303,26 @@ function ScenarioView({ scenario }: { scenario: PredictiveIntelligence["revenueS
 
   return (
     <div className="space-y-6">
-      <div className="grid sm:grid-cols-4 gap-3" data-testid="grid-scenario-summary">
-        <Card>
+      <div className="grid sm:grid-cols-4 gap-3 animate-fade-in-up" data-testid="grid-scenario-summary">
+        <Card className="hover-elevate transition-all duration-300">
           <CardContent className="pt-4 pb-3 text-center">
             <p className="text-xs text-muted-foreground mb-1">Upside</p>
             <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">${scenario.upsideMrr.toLocaleString()}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="hover-elevate transition-all duration-300">
           <CardContent className="pt-4 pb-3 text-center">
             <p className="text-xs text-muted-foreground mb-1">Expected</p>
             <p className="text-lg font-bold">${scenario.expectedMrr.toLocaleString()}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="hover-elevate transition-all duration-300">
           <CardContent className="pt-4 pb-3 text-center">
             <p className="text-xs text-muted-foreground mb-1">Downside</p>
             <p className="text-lg font-bold text-red-600 dark:text-red-400">${scenario.worstCaseMrr.toLocaleString()}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="hover-elevate transition-all duration-300">
           <CardContent className="pt-4 pb-3 text-center">
             <p className="text-xs text-muted-foreground mb-1">Cash Flow Risk</p>
             <p className={`text-lg font-bold capitalize ${riskColors[scenario.cashFlowRiskLevel] || ""}`}>
@@ -1330,7 +1332,7 @@ function ScenarioView({ scenario }: { scenario: PredictiveIntelligence["revenueS
         </Card>
       </div>
 
-      <Card data-testid="chart-scenario-bands">
+      <Card className="hover-elevate transition-all duration-300 animate-fade-in-up animation-delay-200" data-testid="chart-scenario-bands">
         <CardContent className="pt-5">
           <p className="text-sm font-medium mb-4">6-Month Revenue Scenarios</p>
           <ResponsiveContainer width="100%" height={320}>
@@ -1358,16 +1360,16 @@ function ScenarioView({ scenario }: { scenario: PredictiveIntelligence["revenueS
                   <stop offset="95%" stopColor="hsl(0, 70%, 55%)" stopOpacity={0.02} />
                 </linearGradient>
               </defs>
-              <Area type="monotone" dataKey="upside" stroke="hsl(142, 60%, 45%)" fill="url(#upsideGrad)" strokeWidth={1.5} strokeDasharray="4 2" name="Upside" />
-              <Area type="monotone" dataKey="downside" stroke="hsl(0, 70%, 55%)" fill="url(#downsideGrad)" strokeWidth={1.5} strokeDasharray="4 2" name="Downside" />
-              <Line type="monotone" dataKey="expected" stroke="hsl(210, 60%, 50%)" strokeWidth={2.5} dot={{ r: 3 }} name="Expected" />
-              <Line type="monotone" dataKey="current" stroke="hsl(0, 0%, 60%)" strokeWidth={1} strokeDasharray="6 4" dot={false} name="Current MRR" />
+              <Area type="monotone" dataKey="upside" stroke="hsl(142, 60%, 45%)" fill="url(#upsideGrad)" strokeWidth={1.5} strokeDasharray="4 2" name="Upside" animationDuration={1200} animationBegin={200} />
+              <Area type="monotone" dataKey="downside" stroke="hsl(0, 70%, 55%)" fill="url(#downsideGrad)" strokeWidth={1.5} strokeDasharray="4 2" name="Downside" animationDuration={1200} animationBegin={400} />
+              <Line type="monotone" dataKey="expected" stroke="hsl(210, 60%, 50%)" strokeWidth={2.5} dot={{ r: 3 }} name="Expected" animationDuration={1200} animationBegin={600} />
+              <Line type="monotone" dataKey="current" stroke="hsl(0, 0%, 60%)" strokeWidth={1} strokeDasharray="6 4" dot={false} name="Current MRR" animationDuration={1000} animationBegin={800} />
             </ComposedChart>
           </ResponsiveContainer>
         </CardContent>
       </Card>
 
-      <Card data-testid="card-break-even">
+      <Card className="hover-elevate transition-all duration-300 animate-fade-in-up animation-delay-300" data-testid="card-break-even">
         <CardContent className="pt-5 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Break-Even Risk Assessment</p>
@@ -1384,7 +1386,7 @@ function ScenarioView({ scenario }: { scenario: PredictiveIntelligence["revenueS
       </Card>
 
       {scenario.scenarioInsights.length > 0 && (
-        <Card data-testid="card-scenario-insights">
+        <Card className="hover-elevate transition-all duration-300 animate-fade-in-up animation-delay-400" data-testid="card-scenario-insights">
           <CardContent className="pt-5 space-y-3">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Scenario Analysis</p>
             {scenario.scenarioInsights.map((ins, i) => (
