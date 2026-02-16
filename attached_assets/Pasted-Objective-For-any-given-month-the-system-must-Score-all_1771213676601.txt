@@ -1,0 +1,193 @@
+Objective
+
+For any given month, the system must:
+
+Score all 13 interventions
+
+Rank them by expected financial impact
+
+Return:
+
+Top 1: “If you do one thing this month…”
+
+Top 3: Prioritized actions
+
+Clear ROI math behind each
+
+This becomes your strategic brain.
+
+🧠 Core Scoring Formula (v1)
+
+We calculate:
+
+Intervention Score =
+Expected Financial Impact
+× Confidence Weight
+× Urgency Factor
+× Relevance Gate
+
+
+Let’s define each.
+
+1️⃣ Expected Financial Impact
+For Retention Interventions
+Expected Impact =
+Members Affected
+× ARM
+× Expected Months Remaining
+× Lift %
+
+
+Where:
+
+Members Affected = size of at-risk cohort
+
+ARM = average revenue per member
+
+Expected Months Remaining = conservative (ex: 6 months)
+
+Lift % = baseline intervention lift
+
+For Acquisition Interventions
+Expected Impact =
+Expected New Members
+× ARM
+× 6 months
+
+For ARM Expansion (Nutrition)
+Expected Impact =
+Members Participating
+× Expected ARM Increase
+× 6 months
+
+2️⃣ Confidence Weight
+
+From earlier:
+
+0.85 (highly reliable)
+
+0.70 (moderate)
+
+0.55 (variable)
+
+This tempers inflated projections.
+
+3️⃣ Urgency Factor
+
+We now scale based on risk intensity.
+
+Example logic:
+
+Retention Rising Rapidly?
+→ 1.3 multiplier
+
+Retention Stable?
+→ 1.0
+
+Retention Improving?
+→ 0.7
+
+Acquisition Flat?
+→ 1.2
+
+Seasonal Relevance (Open near)?
+→ 1.4
+
+This gives context sensitivity without complexity.
+
+4️⃣ Relevance Gate (Critical)
+
+Intervention must only score if logically applicable.
+
+Example:
+
+Milestone Program only applies if tenure ≤120 days
+
+Onboarding only applies if new_members > 0
+
+Local Partnership only scores high if gym classified small-town
+
+Open activation only scores during pre-season window
+
+If not relevant:
+
+Relevance Gate = 0
+
+
+Intervention Score = 0.
+
+This prevents garbage recommendations.
+
+🔢 Example Walkthrough
+
+Gym Data:
+
+18 members in 0–90 days
+
+ARM = $165
+
+3-month churn rising
+
+Lift = 6%
+
+Confidence = 0.85
+
+Urgency = 1.2
+
+Members Saved:
+18 × 0.06 = 1.08
+
+Revenue Saved:
+1.08 × 165 × 6 = $1,069
+
+Score:
+1069 × 0.85 × 1.2 = 1091
+
+That becomes comparable against:
+
+Referral Sprint Score
+Attendance Recovery Score
+Etc.
+
+Now we rank.
+
+🏗 Minimal Implementation Plan
+
+You need:
+
+1. Intervention Config Table
+
+Hard-coded dictionary for now:
+
+intervention = {
+  "name": "",
+  "type": "retention/acquisition/arm",
+  "lift": 0.05,
+  "confidence": 0.75,
+  "time_window": 60
+}
+
+2. Affected Cohort Functions
+
+Examples:
+
+get_new_members(gym_data)
+get_at_risk_members(gym_data)
+get_flat_growth_signal(gym_data)
+
+3. Score Function
+def score_intervention(intervention, gym_data):
+    if not relevant(intervention, gym_data):
+        return 0
+    
+    expected_impact = calculate_impact(intervention, gym_data)
+    
+    return expected_impact * intervention["confidence"] * urgency(gym_data)
+
+4. Rank + Return Top 3
+
+Sort descending.
+
+Done.
+
+🚀 What This Immediately Improves

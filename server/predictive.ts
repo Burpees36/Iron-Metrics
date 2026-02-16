@@ -854,44 +854,68 @@ function computeRevenueScenarios(
 // RANKED INTERVENTION ENGINE — SCORING HELPERS
 // ═══════════════════════════════════════════════════════════════
 
-function computeConfidence(
-  dataMonths: number,
-  activeMemberCount: number,
-  hasRetentionWindows: boolean,
-  categorySpecific: number = 0
-): number {
-  let base = 0.5;
-  if (dataMonths >= 6) base += 0.2;
-  else if (dataMonths >= 3) base += 0.1;
-  if (activeMemberCount >= 50) base += 0.15;
-  else if (activeMemberCount >= 20) base += 0.1;
-  else if (activeMemberCount >= 10) base += 0.05;
-  if (hasRetentionWindows) base += 0.1;
-  base += categorySpecific;
-  return Math.min(Math.max(base, 0.1), 1.0);
+type ChurnTrend = "rising" | "stable" | "improving";
+type InterventionCategory = "retention" | "acquisition" | "arm_expansion";
+
+interface GymUrgencyContext {
+  churnTrend: ChurnTrend;
+  acquisitionFlat: boolean;
+  isOpenSeason: boolean;
 }
 
-function computeUrgency(timeframe: string, contextMultiplier: number = 1.0): number {
-  let base = 1.0;
-  const lower = timeframe.toLowerCase();
-  if (lower.includes("this week") || lower.includes("immediately") || lower.includes("today")) base = 1.4;
-  else if (lower.includes("2 weeks") || lower.includes("within 2")) base = 1.25;
-  else if (lower.includes("1 month") || lower.includes("within 1")) base = 1.1;
-  else if (lower.includes("ongoing") || lower.includes("quarterly")) base = 0.8;
-  else if (lower.includes("monitor")) base = 0.6;
-  return base * contextMultiplier;
+function detectChurnTrend(sortedMetrics: { churnRate: string | number }[]): ChurnTrend {
+  if (sortedMetrics.length < 2) return "stable";
+  const recent3 = sortedMetrics.slice(-3);
+  const rates = recent3.map(m => Number(m.churnRate));
+  if (rates.length < 2) return "stable";
+  const first = rates[0];
+  const last = rates[rates.length - 1];
+  const delta = last - first;
+  if (delta > 1.0) return "rising";
+  if (delta < -1.0) return "improving";
+  return "stable";
+}
+
+function computeUrgency(ctx: GymUrgencyContext, interventionCategory: InterventionCategory): number {
+  let factor = 1.0;
+
+  if (interventionCategory === "retention") {
+    if (ctx.churnTrend === "rising") factor = 1.3;
+    else if (ctx.churnTrend === "stable") factor = 1.0;
+    else if (ctx.churnTrend === "improving") factor = 0.7;
+  }
+
+  if (interventionCategory === "acquisition" && ctx.acquisitionFlat) {
+    factor = Math.max(factor, 1.2);
+  }
+
+  if (ctx.isOpenSeason) {
+    factor = Math.max(factor, 1.4);
+  }
+
+  return factor;
+}
+
+function computeRetentionImpact(membersAffected: number, arm: number, monthsRemaining: number, liftPct: number): number {
+  return membersAffected * arm * monthsRemaining * liftPct;
+}
+
+function computeAcquisitionImpact(expectedNewMembers: number, arm: number): number {
+  return expectedNewMembers * arm * 6;
+}
+
+function computeArmExpansionImpact(membersParticipating: number, armIncrease: number): number {
+  return membersParticipating * armIncrease * 6;
 }
 
 function computeInterventionScore(
-  churnReductionEstimate: number,
-  membersAffected: number,
-  avgLtvRemaining: number,
+  expectedRevenueImpactRaw: number,
   confidence: number,
   urgency: number
 ): { expectedRevenueImpact: number; interventionScore: number } {
-  const expectedRevenueImpact = churnReductionEstimate * membersAffected * avgLtvRemaining;
-  const interventionScore = Math.round(expectedRevenueImpact * confidence * urgency);
-  return { expectedRevenueImpact: Math.round(expectedRevenueImpact), interventionScore };
+  const expectedRevenueImpact = Math.round(expectedRevenueImpactRaw);
+  const interventionScore = Math.round(expectedRevenueImpactRaw * confidence * urgency);
+  return { expectedRevenueImpact, interventionScore };
 }
 
 function derivePriority(score: number, allScores: number[]): "critical" | "high" | "medium" | "low" {
@@ -977,6 +1001,13 @@ function generateStrategicBrief(
   const currentMonth = now.getMonth();
   const isOpenSeason = currentMonth >= 0 && currentMonth <= 3;
 
+  const churnTrend = detectChurnTrend(sortedMetrics);
+  const urgencyCtx: GymUrgencyContext = {
+    churnTrend,
+    acquisitionFlat: avgNetGrowth <= 1,
+    isOpenSeason,
+  };
+
   const newMembers090 = members.filter(m => m.tenureDays <= 90);
   const newMembersAtRisk090 = newMembers090.filter(m => m.engagementClass === "drifter" || m.engagementClass === "at-risk" || m.engagementClass === "ghost");
   const establishedMembers = members.filter(m => m.tenureDays > 90);
@@ -997,11 +1028,12 @@ function generateStrategicBrief(
   if (newMembers090.length > 0 && (newMembersAtRisk090.length > 0 || (worst30Day && worst30Day.lostPct > 15))) {
     const membersAff = Math.max(newMembersAtRisk090.length, newMembers090.length);
     const baselineLift = 0.06;
-    const ltvRemaining = gymArm * 6;
+    const monthsRemaining = 6;
     const timeframe = "Implement within 2 weeks";
     const confidence = 0.85;
-    const urgency = computeUrgency(timeframe, gymChurnRate > 7 ? 1.15 : 1.0);
-    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(baselineLift, membersAff, ltvRemaining, confidence, urgency);
+    const urgency = computeUrgency(urgencyCtx, "retention");
+    const impact = computeRetentionImpact(membersAff, gymArm, monthsRemaining, baselineLift);
+    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(impact, confidence, urgency);
     recommendations.push({
       category: "Retention",
       priority: "critical",
@@ -1019,7 +1051,7 @@ function generateStrategicBrief(
         "Day 60: Progress conversation — 'Here's what I've noticed you're improving at'",
         "Day 90: Milestone conversation — celebrate their first quarter and set next goals",
       ],
-      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: ltvRemaining,
+      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: gymArm * monthsRemaining,
     });
   }
 
@@ -1029,11 +1061,12 @@ function generateStrategicBrief(
   if (establishedDrifting.length > 0) {
     const membersAff = establishedDrifting.length;
     const baselineLift = 0.03;
-    const ltvRemaining = avgLtvRemainingGym;
+    const monthsRemaining = 6;
     const timeframe = "Begin quarterly check-ins this week";
     const confidence = 0.65;
-    const urgency = computeUrgency(timeframe, gymChurnRate > 7 ? 1.2 : 1.0);
-    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(baselineLift, membersAff, ltvRemaining, confidence, urgency);
+    const urgency = computeUrgency(urgencyCtx, "retention");
+    const impact = computeRetentionImpact(membersAff, gymArm, monthsRemaining, baselineLift);
+    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(impact, confidence, urgency);
     recommendations.push({
       category: "Retention",
       priority: "high",
@@ -1051,7 +1084,7 @@ function generateStrategicBrief(
         "For annual members: schedule a vision conversation — 'What does the next year look like for you here?'",
         "Log every touchpoint in Iron Metrics to track coverage",
       ],
-      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: ltvRemaining,
+      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: gymArm * monthsRemaining,
     });
   }
 
@@ -1061,11 +1094,12 @@ function generateStrategicBrief(
   if (milestoneEligible.length > 0) {
     const membersAff = milestoneEligible.length;
     const baselineLift = 0.045;
-    const ltvRemaining = gymArm * 8;
+    const monthsRemaining = 8;
     const timeframe = "Launch within 1 month";
     const confidence = 0.75;
-    const urgency = computeUrgency(timeframe);
-    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(baselineLift, membersAff, ltvRemaining, confidence, urgency);
+    const urgency = computeUrgency(urgencyCtx, "retention");
+    const impact = computeRetentionImpact(membersAff, gymArm, monthsRemaining, baselineLift);
+    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(impact, confidence, urgency);
     recommendations.push({
       category: "Retention",
       priority: "high",
@@ -1083,7 +1117,7 @@ function generateStrategicBrief(
         "Track milestone completion — celebrate publicly when achieved",
         "If tenure > 120 days AND attendance declining: use Engagement Check-In instead, not milestone pressure",
       ],
-      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: ltvRemaining,
+      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: gymArm * monthsRemaining,
     });
   }
 
@@ -1093,11 +1127,12 @@ function generateStrategicBrief(
   if (drifterCount > 0) {
     const membersAff = drifterCount;
     const baselineLift = 0.25;
-    const ltvRemaining = gymArm * 6;
+    const monthsRemaining = 6;
     const timeframe = "Start personal outreach this week";
     const confidence = 0.80;
-    const urgency = computeUrgency(timeframe, gymChurnRate > 7 ? 1.3 : 1.0);
-    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(baselineLift, membersAff, ltvRemaining, confidence, urgency);
+    const urgency = computeUrgency(urgencyCtx, "retention");
+    const impact = computeRetentionImpact(membersAff, gymArm, monthsRemaining, baselineLift);
+    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(impact, confidence, urgency);
     recommendations.push({
       category: "Retention",
       priority: "critical",
@@ -1115,7 +1150,7 @@ function generateStrategicBrief(
         "If no response after 3 days: phone call from head coach or owner",
         "Track reactivation rate — target 25%+ of outreach converting to attendance",
       ],
-      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: ltvRemaining,
+      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: gymArm * monthsRemaining,
     });
   }
 
@@ -1125,14 +1160,13 @@ function generateStrategicBrief(
   // Trigger: flat growth, stable churn, strong core membership
   // Baseline: +1-3 members/60d (small), +3-6 (mid), confidence 0.70, impact 30-60 days
   if (avgNetGrowth <= 1 && gymChurnRate <= 7 && coreCount >= 5) {
-    const expectedNewMembers = activeMemberCount >= 50 ? 4.5 : 2;
-    const membersAff = Math.round(expectedNewMembers);
-    const baselineLift = 1.0;
-    const ltvRemaining = gymArm * 12;
+    const expectedNew = activeMemberCount >= 50 ? 4.5 : 2;
+    const membersAff = Math.round(expectedNew);
     const timeframe = "Launch referral window within 2 weeks";
     const confidence = 0.70;
-    const urgency = computeUrgency(timeframe);
-    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(baselineLift, membersAff, ltvRemaining, confidence, urgency);
+    const urgency = computeUrgency(urgencyCtx, "acquisition");
+    const impact = computeAcquisitionImpact(expectedNew, gymArm);
+    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(impact, confidence, urgency);
     recommendations.push({
       category: "Acquisition",
       priority: "high",
@@ -1150,7 +1184,7 @@ function generateStrategicBrief(
         "Track referral source for every new signup — measure which members drive referrals",
         "Follow up with every referred lead within 24 hours of first visit",
       ],
-      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: ltvRemaining,
+      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: 1.0, avgLtvRemaining: gymArm * 6,
     });
   }
 
@@ -1158,13 +1192,13 @@ function generateStrategicBrief(
   // Trigger: low new members, strong community engagement
   // Baseline: +0.5-2 members/month sustained, confidence 0.60, impact 30-90 days
   if (avgNewMembers < 3 && coreCount >= 3) {
-    const membersAff = Math.max(1, Math.round(activeMemberCount * 0.02));
-    const baselineLift = 1.0;
-    const ltvRemaining = gymArm * 10;
+    const expectedNew = Math.max(1, Math.round(activeMemberCount * 0.02));
+    const membersAff = expectedNew;
     const timeframe = "Schedule first Bring-A-Friend week within 1 month";
     const confidence = 0.60;
-    const urgency = computeUrgency(timeframe);
-    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(baselineLift, membersAff, ltvRemaining, confidence, urgency);
+    const urgency = computeUrgency(urgencyCtx, "acquisition");
+    const impact = computeAcquisitionImpact(expectedNew, gymArm);
+    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(impact, confidence, urgency);
     recommendations.push({
       category: "Acquisition",
       priority: "medium",
@@ -1182,7 +1216,7 @@ function generateStrategicBrief(
         "Convert tracking: measure how many guests become members each month",
         "Celebrate members who successfully bring someone into the community",
       ],
-      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: ltvRemaining,
+      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: 1.0, avgLtvRemaining: gymArm * 6,
     });
   }
 
@@ -1190,13 +1224,13 @@ function generateStrategicBrief(
   // Trigger: low lead flow, low engagement, stalled acquisition
   // Baseline: 5-15% increase in inbound inquiries, confidence 0.55, impact 60-120 days
   if (avgNetGrowth <= 0 || avgNewMembers < 2) {
-    const membersAff = Math.max(1, Math.round(activeMemberCount * 0.03));
-    const baselineLift = 0.10;
-    const ltvRemaining = gymArm * 12;
+    const expectedNew = Math.max(1, Math.round(activeMemberCount * 0.03));
+    const membersAff = expectedNew;
     const timeframe = "Begin weekly content within 2 weeks";
     const confidence = 0.55;
-    const urgency = computeUrgency(timeframe);
-    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(baselineLift, membersAff, ltvRemaining, confidence, urgency);
+    const urgency = computeUrgency(urgencyCtx, "acquisition");
+    const impact = computeAcquisitionImpact(expectedNew, gymArm);
+    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(impact, confidence, urgency);
     recommendations.push({
       category: "Acquisition",
       priority: "medium",
@@ -1214,7 +1248,7 @@ function generateStrategicBrief(
         "Track which content types generate the most inbound inquiries",
         "Ensure every piece of content shows community, not just fitness",
       ],
-      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: ltvRemaining,
+      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: 1.0, avgLtvRemaining: gymArm * 6,
     });
   }
 
@@ -1222,13 +1256,13 @@ function generateStrategicBrief(
   // Trigger: small roster size, rural/community setting
   // Baseline: +2-5 members/90d, confidence 0.80 small-town / 0.40 urban, impact 30-90 days
   if (activeMemberCount < 80) {
-    const membersAff = Math.max(2, Math.round(activeMemberCount < 40 ? 3.5 : 2));
-    const baselineLift = 1.0;
-    const ltvRemaining = gymArm * 10;
+    const expectedNew = Math.max(2, Math.round(activeMemberCount < 40 ? 3.5 : 2));
+    const membersAff = expectedNew;
     const timeframe = "Initiate first partnership within 1 month";
     const confidence = activeMemberCount < 40 ? 0.80 : 0.50;
-    const urgency = computeUrgency(timeframe);
-    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(baselineLift, membersAff, ltvRemaining, confidence, urgency);
+    const urgency = computeUrgency(urgencyCtx, "acquisition");
+    const impact = computeAcquisitionImpact(expectedNew, gymArm);
+    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(impact, confidence, urgency);
     recommendations.push({
       category: "Acquisition",
       priority: "medium",
@@ -1246,7 +1280,7 @@ function generateStrategicBrief(
         "Track which partnerships generate actual signups",
         "Build relationships with 2-3 key community leaders who can champion your gym",
       ],
-      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: ltvRemaining,
+      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: 1.0, avgLtvRemaining: gymArm * 6,
     });
   }
 
@@ -1258,11 +1292,12 @@ function generateStrategicBrief(
   if (isOpenSeason || (cohort3to6Drop && cohort3to6Drop.lostPct > 10) || gymChurnRate > 5) {
     const membersAff = isOpenSeason ? activeMemberCount : Math.round(activeMemberCount * 0.6);
     const baselineLift = 0.05;
-    const ltvRemaining = gymArm * (isOpenSeason ? 10 : 8);
+    const monthsRemaining = isOpenSeason ? 10 : 8;
     const timeframe = isOpenSeason ? "Register and plan Friday Night Lights this week" : "Schedule next in-house competition within 1 month";
     const confidence = 0.75;
-    const urgency = computeUrgency(timeframe, isOpenSeason ? 1.25 : 1.0);
-    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(baselineLift, membersAff, ltvRemaining, confidence, urgency);
+    const urgency = computeUrgency(urgencyCtx, "retention");
+    const impact = computeRetentionImpact(membersAff, gymArm, monthsRemaining, baselineLift);
+    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(impact, confidence, urgency);
     recommendations.push({
       category: "Community Depth",
       priority: isOpenSeason ? "high" : "medium",
@@ -1291,7 +1326,7 @@ function generateStrategicBrief(
         "Track which members participate vs. which don't — follow up with non-participants",
         "Use events as natural bring-a-friend opportunities",
       ],
-      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: ltvRemaining,
+      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: gymArm * monthsRemaining,
     });
   }
 
@@ -1301,11 +1336,12 @@ function generateStrategicBrief(
   if (drifterCount > coreCount * 0.3 || avgNetGrowth <= 0) {
     const membersAff = activeMemberCount;
     const baselineLift = 0.02;
-    const ltvRemaining = avgLtvRemainingGym;
+    const monthsRemaining = 8;
     const timeframe = "Schedule monthly community events — start this month";
     const confidence = 0.60;
-    const urgency = computeUrgency(timeframe);
-    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(baselineLift, membersAff, ltvRemaining, confidence, urgency);
+    const urgency = computeUrgency(urgencyCtx, "retention");
+    const impact = computeRetentionImpact(membersAff, gymArm, monthsRemaining, baselineLift);
+    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(impact, confidence, urgency);
     recommendations.push({
       category: "Community Depth",
       priority: "medium",
@@ -1323,7 +1359,7 @@ function generateStrategicBrief(
         "Track attendance at community events vs. regular class attendance",
         "Follow up with members who attend events but have low class attendance",
       ],
-      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: ltvRemaining,
+      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: gymArm * monthsRemaining,
     });
   }
 
@@ -1331,14 +1367,15 @@ function generateStrategicBrief(
   // Trigger: mid-tenure plateau (3-6 months), low engagement, ARM expansion opportunity
   // Baseline: 2-4% retention + $20-60 ARM increase, confidence 0.70, impact 30-60 days
   if ((cohort3to6Drop && cohort3to6Drop.lostPct > 8) || gymArm < 150 || drifterCount > 3) {
-    const membersAff = Math.round(activeMemberCount * 0.4);
-    const retentionLift = 0.03;
+    const participants = Math.round(activeMemberCount * 0.4);
+    const membersAff = participants;
     const armLift = 40;
-    const ltvRemaining = gymArm * 8 + armLift * 4;
     const timeframe = "Launch first challenge within 1 month";
     const confidence = 0.70;
-    const urgency = computeUrgency(timeframe);
-    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(retentionLift, membersAff, ltvRemaining, confidence, urgency);
+    const urgency = computeUrgency(urgencyCtx, "retention");
+    const impact = computeArmExpansionImpact(participants, armLift);
+    const retentionLift = 0.03;
+    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(impact, confidence, urgency);
     recommendations.push({
       category: "Community Depth",
       priority: "medium",
@@ -1356,7 +1393,7 @@ function generateStrategicBrief(
         "At challenge end, offer ongoing nutrition coaching as a subscription add-on",
         "Track ARM change for participants vs. non-participants",
       ],
-      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: retentionLift, avgLtvRemaining: ltvRemaining,
+      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: retentionLift, avgLtvRemaining: gymArm * 6,
     });
   }
 
@@ -1368,11 +1405,12 @@ function generateStrategicBrief(
   if (gymChurnRate > 5 || activeMemberCount >= 20) {
     const membersAff = activeMemberCount;
     const baselineLift = gymChurnRate > 7 ? 0.04 : 0.025;
-    const ltvRemaining = avgLtvRemainingGym;
+    const monthsRemaining = 8;
     const timeframe = "Start coaching audit within 2 weeks";
     const confidence = 0.65;
-    const urgency = computeUrgency(timeframe, gymChurnRate > 7 ? 1.15 : 1.0);
-    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(baselineLift, membersAff, ltvRemaining, confidence, urgency);
+    const urgency = computeUrgency(urgencyCtx, "retention");
+    const impact = computeRetentionImpact(membersAff, gymArm, monthsRemaining, baselineLift);
+    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(impact, confidence, urgency);
     recommendations.push({
       category: "Coaching Quality",
       priority: "medium",
@@ -1390,7 +1428,7 @@ function generateStrategicBrief(
         "Hold monthly coaching meetings focused on one skill (awareness, trust, positive language)",
         "Practice coaching the positive: 'Big set!' not 'Don't put it down!' — in every class",
       ],
-      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: ltvRemaining,
+      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: gymArm * monthsRemaining,
     });
   }
 
@@ -1400,11 +1438,12 @@ function generateStrategicBrief(
   if (gymChurnRate > 5 || (cohort3to6Drop && cohort3to6Drop.lostPct > 12)) {
     const membersAff = activeMemberCount;
     const baselineLift = 0.02;
-    const ltvRemaining = avgLtvRemainingGym;
+    const monthsRemaining = 8;
     const timeframe = "Complete audit within 1 month";
     const confidence = 0.60;
-    const urgency = computeUrgency(timeframe);
-    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(baselineLift, membersAff, ltvRemaining, confidence, urgency);
+    const urgency = computeUrgency(urgencyCtx, "retention");
+    const impact = computeRetentionImpact(membersAff, gymArm, monthsRemaining, baselineLift);
+    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(impact, confidence, urgency);
     recommendations.push({
       category: "Coaching Quality",
       priority: "medium",
@@ -1422,7 +1461,7 @@ function generateStrategicBrief(
         "Survey 5-10 members: 'What's one thing we could improve about the class experience?'",
         "Create a monthly programming review meeting with coaching staff",
       ],
-      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: ltvRemaining,
+      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: gymArm * monthsRemaining,
     });
   }
 
