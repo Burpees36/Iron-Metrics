@@ -407,9 +407,16 @@ function FocusRecommendationHero({ rec }: { rec: BriefRecommendation }) {
             <Target className="w-5 h-5 text-blue-500" />
             <p className="text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">Focus Recommendation</p>
           </div>
-          <Badge variant="outline" className="text-xs text-blue-600 dark:text-blue-400 border-blue-500/30" data-testid="badge-focus-score">
-            Score: {rec.interventionScore.toLocaleString()}
-          </Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            {rec.crossfitContext && (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal text-muted-foreground border-muted-foreground/20">
+                {rec.crossfitContext}
+              </Badge>
+            )}
+            <Badge variant="outline" className="text-xs text-blue-600 dark:text-blue-400 border-blue-500/30" data-testid="badge-focus-score">
+              Score: {rec.interventionScore.toLocaleString()}
+            </Badge>
+          </div>
         </div>
 
         <p className="text-xs text-muted-foreground italic">If you only do one thing this month — do this.</p>
@@ -555,6 +562,11 @@ function StrategicBriefView({ brief }: { brief: PredictiveIntelligence["strategi
                     {rec.priority}
                   </Badge>
                   <span className="text-xs text-muted-foreground">{rec.category}</span>
+                  {rec.crossfitContext && (
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal text-muted-foreground border-muted-foreground/20">
+                      {rec.crossfitContext}
+                    </Badge>
+                  )}
                 </div>
                 <span className="text-xs text-muted-foreground">{rec.timeframe}</span>
               </div>

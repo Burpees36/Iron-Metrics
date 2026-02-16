@@ -1,0 +1,212 @@
+Assign Baseline Lift Models
+
+We are NOT claiming these are universal truths.
+
+These are:
+
+Starting priors
+
+Bayesian seeds
+
+Adjustable as real gym data accumulates
+
+Each intervention gets:
+
+Primary Effect Type (Retention / Acquisition / ARM)
+
+Typical Lift Range
+
+Time to Impact
+
+Confidence Weight (how predictable it is)
+
+🛡 RETENTION INTERVENTIONS
+1️⃣ New Member Onboarding Touchpoints
+
+Primary Effect: Reduce 0–90 day churn
+Typical Lift: 4–8% improvement in 90-day retention
+Time to Impact: 30–60 days
+Confidence: 0.85 (very reliable across gyms)
+
+Reason:
+Early relationship formation is universally powerful.
+
+2️⃣ Member Engagement Check-In System
+
+Primary Effect: Reduce mid-tenure churn
+Typical Lift: 2–4% 6-month retention
+Time to Impact: 30–90 days
+Confidence: 0.65
+
+Less dramatic than onboarding, but meaningful.
+
+3️⃣ 90-Day Skill Milestone Program
+
+Primary Effect: Reduce early churn
+Typical Lift: 3–6% 3-month retention
+Time to Impact: 45–75 days
+Confidence: 0.75
+
+Strong when culture already stable.
+
+4️⃣ Attendance Recovery Sprint
+
+Primary Effect: Reactivate drifters
+Typical Lift:
+
+20–30% of at-risk members reactivated
+Effective churn reduction: ~2–5% overall
+
+Time to Impact: 14–30 days
+Confidence: 0.80
+
+High short-term impact lever.
+
+🚀 ACQUISITION INTERVENTIONS
+5️⃣ Referral Activation Sprint
+
+Primary Effect: New member growth
+Typical Lift:
++1–3 members / 60 days (small gyms)
++3–6 members (mid-size gyms)
+
+Confidence: 0.70
+Time to Impact: 30–60 days
+
+6️⃣ Bring-A-Friend System
+
+Primary Effect: Ongoing small growth
+Typical Lift:
++0.5–2 members / month sustained
+
+Confidence: 0.60
+Time to Impact: 30–90 days
+
+Less explosive, more steady.
+
+7️⃣ Social Proof Engine
+
+Primary Effect: Lead generation
+Typical Lift:
+5–15% increase in inbound inquiries
+Conversion dependent on sales system
+
+Confidence: 0.55
+Time to Impact: 60–120 days
+
+Slower burn.
+
+8️⃣ Local Partnership Activation
+
+Primary Effect: Community-rooted acquisition
+Typical Lift:
++2–5 members / 90 days (small-town bias)
+
+Confidence:
+0.80 small-town
+0.40 urban
+
+Time to Impact: 30–90 days
+
+Archetype-sensitive.
+
+🏆 COMMUNITY DEPTH
+9️⃣ Event Activation System
+
+Primary Effect:
+6-month retention lift
+
+Typical Lift:
+3–7% retention increase among participants
+
+Confidence: 0.75
+Time to Impact: Seasonal (30–90 days)
+
+🔟 Monthly Community Event Cadence
+
+Primary Effect:
+Belonging stabilization
+
+Typical Lift:
+1–3% retention improvement
+
+Confidence: 0.60
+Time to Impact: 60–120 days
+
+1️⃣1️⃣ Nutrition Challenge Cycle
+
+Primary Effect:
+Retention + ARM expansion
+
+Typical Lift:
+2–4% retention
+$20–$60 ARM increase (if upsold properly)
+
+Confidence: 0.70
+Time to Impact: 30–60 days
+
+🎓 COACHING QUALITY
+1️⃣2️⃣ Coaching Consistency Audit
+
+Primary Effect:
+Reduce long-term churn
+
+Typical Lift:
+2–5% 6–12 month retention
+
+Confidence: 0.65
+Time to Impact: 60–180 days
+
+1️⃣3️⃣ Programming & Experience Audit
+
+Primary Effect:
+Reduce plateau churn
+
+Typical Lift:
+1–3% long-term retention
+
+Confidence: 0.60
+Time to Impact: 90–180 days
+
+Slower but stabilizing.
+
+🧮 What This Enables
+
+Now your scoring engine can calculate:
+
+Example:
+
+If:
+
+14 new members
+
+ARM = $165
+
+6-month LTV remaining = $990
+
+Onboarding lift = 6%
+
+Then:
+
+Expected Retained Members:
+14 × 0.06 = 0.84
+
+Revenue Saved:
+0.84 × $990 = $831
+
+Now multiply by:
+Confidence (0.85)
+Urgency factor (if churn rising)
+
+That becomes Intervention Score.
+
+🔥 Important: These Are Priors
+
+Once real data exists:
+
+You update:
+
+posterior_lift = (prior_weight × baseline_lift + observed_lift × data_weight)
+
+
+This is how the system evolves.
