@@ -65,6 +65,7 @@ interface PredictiveIntelligence {
     stabilityLevel: string;
     keyMetrics: { label: string; value: string; status: string }[];
     recommendations: BriefRecommendation[];
+    focusRecommendation: BriefRecommendation | null;
     cohortAlert: string | null;
     revenueOutlook: string;
     revenueComparison: {
@@ -155,6 +156,13 @@ interface BriefRecommendation {
   crossfitContext: string;
   timeframe: string;
   executionChecklist: string[];
+  interventionScore: number;
+  expectedRevenueImpact: number;
+  confidenceWeight: number;
+  urgencyFactor: number;
+  membersAffected: number;
+  churnReductionEstimate: number;
+  avgLtvRemaining: number;
 }
 
 interface EnrichedMember {
@@ -387,6 +395,91 @@ function RevenueOutlookVisual({ comparison, outlook }: {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// FOCUS RECOMMENDATION HERO
+// ═══════════════════════════════════════════════════════════════
+
+function FocusRecommendationHero({ rec }: { rec: BriefRecommendation }) {
+  return (
+    <Card className="border-blue-500/30 animate-fade-in-up animation-delay-250" data-testid="card-focus-recommendation">
+      <CardContent className="pt-5 pb-5 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Target className="w-5 h-5 text-blue-500" />
+            <p className="text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">Focus Recommendation</p>
+          </div>
+          <Badge variant="outline" className="text-xs text-blue-600 dark:text-blue-400 border-blue-500/30" data-testid="badge-focus-score">
+            Score: {rec.interventionScore.toLocaleString()}
+          </Badge>
+        </div>
+
+        <p className="text-xs text-muted-foreground italic">If you only do one thing this month — do this.</p>
+
+        <p className="text-sm font-semibold leading-snug" data-testid="text-focus-headline">{rec.headline}</p>
+        <p className="text-sm text-muted-foreground leading-relaxed">{rec.detail}</p>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t">
+          <div>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Revenue Impact</p>
+            <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400" data-testid="text-focus-revenue-impact">${rec.expectedRevenueImpact.toLocaleString()}</p>
+          </div>
+          <div>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Members Affected</p>
+            <p className="text-sm font-bold" data-testid="text-focus-members-affected">{rec.membersAffected}</p>
+          </div>
+          <div>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Confidence</p>
+            <p className="text-sm font-bold" data-testid="text-focus-confidence">{(rec.confidenceWeight * 100).toFixed(0)}%</p>
+          </div>
+          <div>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Urgency</p>
+            <p className="text-sm font-bold" data-testid="text-focus-urgency">{rec.urgencyFactor.toFixed(2)}x</p>
+          </div>
+        </div>
+
+        <div className="pt-2">
+          <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400">{rec.revenueImpact}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INTERVENTION SCORE BREAKDOWN
+// ═══════════════════════════════════════════════════════════════
+
+function ScoreBreakdown({ rec }: { rec: BriefRecommendation }) {
+  return (
+    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 pt-2 border-t" data-testid="score-breakdown">
+      <div>
+        <p className="text-[10px] text-muted-foreground">Score</p>
+        <p className="text-xs font-bold font-mono">{rec.interventionScore.toLocaleString()}</p>
+      </div>
+      <div>
+        <p className="text-[10px] text-muted-foreground">Rev. Impact</p>
+        <p className="text-xs font-bold font-mono text-emerald-600 dark:text-emerald-400">${rec.expectedRevenueImpact.toLocaleString()}</p>
+      </div>
+      <div>
+        <p className="text-[10px] text-muted-foreground">Members</p>
+        <p className="text-xs font-bold font-mono">{rec.membersAffected}</p>
+      </div>
+      <div>
+        <p className="text-[10px] text-muted-foreground">Churn Est.</p>
+        <p className="text-xs font-bold font-mono">{(rec.churnReductionEstimate * 100).toFixed(0)}%</p>
+      </div>
+      <div>
+        <p className="text-[10px] text-muted-foreground">Confidence</p>
+        <p className="text-xs font-bold font-mono">{(rec.confidenceWeight * 100).toFixed(0)}%</p>
+      </div>
+      <div>
+        <p className="text-[10px] text-muted-foreground">Urgency</p>
+        <p className="text-xs font-bold font-mono">{rec.urgencyFactor.toFixed(2)}x</p>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
 // STRATEGIC BRIEF
 // ═══════════════════════════════════════════════════════════════
 
@@ -418,6 +511,10 @@ function StrategicBriefView({ brief }: { brief: PredictiveIntelligence["strategi
           <p className="text-sm leading-relaxed">{brief.executiveSummary}</p>
         </CardContent>
       </Card>
+
+      {brief.focusRecommendation && (
+        <FocusRecommendationHero rec={brief.focusRecommendation} />
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 animate-fade-in-up animation-delay-300" data-testid="grid-key-metrics">
         {brief.keyMetrics.map((km) => (
@@ -491,6 +588,8 @@ function StrategicBriefView({ brief }: { brief: PredictiveIntelligence["strategi
                   <p className="text-xs text-muted-foreground">{rec.interventionType}</p>
                 </div>
               </div>
+
+              <ScoreBreakdown rec={rec} />
             </CardContent>
           </Card>
         ))}

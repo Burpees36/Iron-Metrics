@@ -111,6 +111,13 @@ export interface BriefRecommendation {
   crossfitContext: string;
   timeframe: string;
   executionChecklist: string[];
+  interventionScore: number;
+  expectedRevenueImpact: number;
+  confidenceWeight: number;
+  urgencyFactor: number;
+  membersAffected: number;
+  churnReductionEstimate: number;
+  avgLtvRemaining: number;
 }
 
 export interface MemberAlertEnriched {
@@ -144,6 +151,7 @@ export interface StrategicBrief {
   stabilityLevel: "strong" | "moderate" | "fragile";
   keyMetrics: { label: string; value: string; status: "good" | "warning" | "critical" }[];
   recommendations: BriefRecommendation[];
+  focusRecommendation: BriefRecommendation | null;
   cohortAlert: string | null;
   revenueOutlook: string;
   revenueComparison: RevenueComparison;
@@ -842,6 +850,61 @@ function computeRevenueScenarios(
 // STRATEGIC BRIEF GENERATOR
 // ═══════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════
+// RANKED INTERVENTION ENGINE — SCORING HELPERS
+// ═══════════════════════════════════════════════════════════════
+
+function computeConfidence(
+  dataMonths: number,
+  activeMemberCount: number,
+  hasRetentionWindows: boolean,
+  categorySpecific: number = 0
+): number {
+  let base = 0.5;
+  if (dataMonths >= 6) base += 0.2;
+  else if (dataMonths >= 3) base += 0.1;
+  if (activeMemberCount >= 50) base += 0.15;
+  else if (activeMemberCount >= 20) base += 0.1;
+  else if (activeMemberCount >= 10) base += 0.05;
+  if (hasRetentionWindows) base += 0.1;
+  base += categorySpecific;
+  return Math.min(Math.max(base, 0.1), 1.0);
+}
+
+function computeUrgency(timeframe: string, contextMultiplier: number = 1.0): number {
+  let base = 1.0;
+  const lower = timeframe.toLowerCase();
+  if (lower.includes("this week") || lower.includes("immediately") || lower.includes("today")) base = 1.4;
+  else if (lower.includes("2 weeks") || lower.includes("within 2")) base = 1.25;
+  else if (lower.includes("1 month") || lower.includes("within 1")) base = 1.1;
+  else if (lower.includes("ongoing") || lower.includes("quarterly")) base = 0.8;
+  else if (lower.includes("monitor")) base = 0.6;
+  return base * contextMultiplier;
+}
+
+function computeInterventionScore(
+  churnReductionEstimate: number,
+  membersAffected: number,
+  avgLtvRemaining: number,
+  confidence: number,
+  urgency: number
+): { expectedRevenueImpact: number; interventionScore: number } {
+  const expectedRevenueImpact = churnReductionEstimate * membersAffected * avgLtvRemaining;
+  const interventionScore = Math.round(expectedRevenueImpact * confidence * urgency);
+  return { expectedRevenueImpact: Math.round(expectedRevenueImpact), interventionScore };
+}
+
+function derivePriority(score: number, allScores: number[]): "critical" | "high" | "medium" | "low" {
+  if (allScores.length === 0) return "medium";
+  const sorted = [...allScores].sort((a, b) => b - a);
+  const p75 = sorted[Math.floor(sorted.length * 0.25)] ?? 0;
+  const p50 = sorted[Math.floor(sorted.length * 0.5)] ?? 0;
+  if (score >= p75 && score > 0) return "critical";
+  if (score >= p50 && score > 0) return "high";
+  if (score > 0) return "medium";
+  return "low";
+}
+
 function generateStrategicBrief(
   memberPredictions: MemberPredictionSummary,
   cohortIntelligence: CohortIntelligence,
@@ -891,24 +954,35 @@ function generateStrategicBrief(
     executiveSummary = `${summary.totalAtRisk} of ${activeMemberCount} members are showing signs they might leave, putting $${totalRevAtRisk.toLocaleString()}/month ($${annualRisk.toLocaleString()}/year) at risk. ${summary.urgentInterventions > 0 ? `${summary.urgentInterventions} need action this week.` : "All can be addressed through structured outreach this month."} The most common issue: ${summary.topRiskDriver}.`;
   }
 
-  // Recommendations (non-generic, economically quantified)
+  // Ranked Intervention Engine — score every recommendation numerically
   const recommendations: BriefRecommendation[] = [];
+  const dataMonths = sortedMetrics.length;
+  const hasRetentionWindows = cohortIntelligence.retentionWindows.length > 0;
+  const avgLtvRemainingGym = memberPredictions.members.length > 0
+    ? memberPredictions.members.reduce((s, m) => s + m.expectedLtvRemaining, 0) / memberPredictions.members.length
+    : gymArm * 12;
 
   // Recommendation 1: Based on cohort analysis
   const worst30Day = cohortIntelligence.retentionWindows.find(w => w.window === "0-30 days");
   const worst60Day = cohortIntelligence.retentionWindows.find(w => w.window === "31-60 days");
 
   if (worst30Day && worst30Day.lostCount > 0 && worst30Day.lostPct > 20) {
-    const savedRevenue = Math.round(worst30Day.lostCount * 0.3 * gymArm * 6);
+    const membersAff = worst30Day.lostCount;
+    const churnReduction = 0.30;
+    const ltvRemaining = gymArm * 6;
+    const timeframe = "Implement within 2 weeks";
+    const confidence = computeConfidence(dataMonths, activeMemberCount, hasRetentionWindows, 0.1);
+    const urgency = computeUrgency(timeframe, gymChurnRate > 7 ? 1.15 : 1.0);
+    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(churnReduction, membersAff, ltvRemaining, confidence, urgency);
     recommendations.push({
       category: "Onboarding",
       priority: "critical",
       headline: `${worst30Day.lostCount} members lost before day 30 — your onboarding is the highest-leverage fix`,
       detail: `${worst30Day.lostPct.toFixed(0)}% of all cancellations happen in the first month. Implement a structured 4-week Foundations program: Week 1 (movement basics + coach intro), Week 2 (first benchmark WOD), Week 3 (partner workout + community intro), Week 4 (goal-setting session with coach). In CrossFit, the first month determines everything — members need to feel competent, connected, and challenged. Without all three, they leave.`,
-      revenueImpact: `Retaining just 30% of these members preserves ~$${savedRevenue.toLocaleString()} over 6 months`,
+      revenueImpact: `Retaining just 30% of these members preserves ~$${Math.round(membersAff * churnReduction * ltvRemaining).toLocaleString()} over 6 months`,
       interventionType: "Structured onboarding program",
       crossfitContext: "",
-      timeframe: "Implement within 2 weeks",
+      timeframe,
       executionChecklist: [
         "Assign a dedicated coach to every new member within 24 hours of signup",
         "Schedule a 1-on-1 intro session in their first week",
@@ -917,18 +991,25 @@ function generateStrategicBrief(
         "Coach check-in call/text after their 1st, 7th, and 14th day",
         "Track first benchmark WOD completion in week 2",
       ],
+      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: churnReduction, avgLtvRemaining: ltvRemaining,
     });
   } else if (worst60Day && worst60Day.lostCount > 0 && worst60Day.lostPct > 15) {
-    const savedRevenue = Math.round(worst60Day.lostCount * 0.25 * gymArm * 8);
+    const membersAff = worst60Day.lostCount;
+    const churnReduction = 0.25;
+    const ltvRemaining = gymArm * 8;
+    const timeframe = "Launch within 1 month";
+    const confidence = computeConfidence(dataMonths, activeMemberCount, hasRetentionWindows, 0.05);
+    const urgency = computeUrgency(timeframe);
+    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(churnReduction, membersAff, ltvRemaining, confidence, urgency);
     recommendations.push({
       category: "Retention",
       priority: "high",
       headline: `${worst60Day.lostCount} members lost between days 31-60 — the belonging gap`,
       detail: `Members are surviving the initial shock but leaving before building community. Implement "90-Day Skill Milestones": first pull-up, first Rx WOD, first competition. Members who achieve a concrete goal in their first quarter retain at dramatically higher rates. The 30-60 day window is where CrossFit either becomes identity or exits — members need visible progress that creates emotional investment.`,
-      revenueImpact: `Closing this gap could preserve ~$${savedRevenue.toLocaleString()} over 8 months`,
+      revenueImpact: `Closing this gap could preserve ~$${Math.round(membersAff * churnReduction * ltvRemaining).toLocaleString()} over 8 months`,
       interventionType: "Skill milestone program",
       crossfitContext: "",
-      timeframe: "Launch within 1 month",
+      timeframe,
       executionChecklist: [
         "Define 3 skill milestones for each new member (e.g. first pull-up, first Rx workout, first competition)",
         "Assign coach to track milestone progress per member",
@@ -937,23 +1018,29 @@ function generateStrategicBrief(
         "Celebrate milestone achievements publicly in class",
         "Log milestone progress in member notes",
       ],
+      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: churnReduction, avgLtvRemaining: ltvRemaining,
     });
   }
 
   // Recommendation 2: Based on churn dynamics
   if (gymChurnRate > 7) {
     const churnImprovement = gymChurnRate - 5;
-    const membersRetainedPerMonth = Math.round(activeMemberCount * (churnImprovement / 100));
-    const annualSaved = Math.round(membersRetainedPerMonth * gymArm * 12);
+    const membersAff = Math.round(activeMemberCount * (churnImprovement / 100));
+    const churnReduction = churnImprovement / gymChurnRate;
+    const ltvRemaining = gymArm * 12;
+    const timeframe = "Begin assessment this week";
+    const confidence = computeConfidence(dataMonths, activeMemberCount, hasRetentionWindows, 0.15);
+    const urgency = computeUrgency(timeframe, 1.2);
+    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(churnReduction, membersAff, ltvRemaining, confidence, urgency);
     recommendations.push({
       category: "Churn Reduction",
       priority: "critical",
-      headline: `Reducing churn from ${gymChurnRate.toFixed(1)}% to 5% would save $${annualSaved.toLocaleString()}/year`,
-      detail: `At current rates, you're losing ~${Math.round(activeMemberCount * gymChurnRate / 100)} members per month. The gap between your churn (${gymChurnRate.toFixed(1)}%) and the stability target (5%) represents ${membersRetainedPerMonth} members/month — each worth $${gymArm.toFixed(0)} in monthly revenue. High churn usually means one of three things: poor onboarding, coaching inconsistency across your team, or weak culture where members work out but don't connect.`,
-      revenueImpact: `$${annualSaved.toLocaleString()} annual revenue preserved`,
+      headline: `Reducing churn from ${gymChurnRate.toFixed(1)}% to 5% would save $${Math.round(membersAff * gymArm * 12).toLocaleString()}/year`,
+      detail: `At current rates, you're losing ~${Math.round(activeMemberCount * gymChurnRate / 100)} members per month. The gap between your churn (${gymChurnRate.toFixed(1)}%) and the stability target (5%) represents ${membersAff} members/month — each worth $${gymArm.toFixed(0)} in monthly revenue. High churn usually means one of three things: poor onboarding, coaching inconsistency across your team, or weak culture where members work out but don't connect.`,
+      revenueImpact: `$${Math.round(membersAff * gymArm * 12).toLocaleString()} annual revenue preserved`,
       interventionType: "Retention system overhaul",
       crossfitContext: "",
-      timeframe: "Begin assessment this week",
+      timeframe,
       executionChecklist: [
         "Call every member who cancelled in the last 60 days — ask what could have been different",
         "Audit onboarding: does every new member get a personal coach intro?",
@@ -962,19 +1049,26 @@ function generateStrategicBrief(
         "Implement a cancellation save process (exit interview before processing)",
         "Set a weekly churn review meeting with coaching staff",
       ],
+      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: churnReduction, avgLtvRemaining: ltvRemaining,
     });
   } else if (gymChurnRate > 5) {
     const improvement = gymChurnRate - 4;
-    const saved = Math.round(activeMemberCount * (improvement / 100) * gymArm * 12);
+    const membersAff = summary.totalAtRisk;
+    const churnReduction = improvement / gymChurnRate;
+    const ltvRemaining = gymArm * 12;
+    const timeframe = "This week — personal outreach";
+    const confidence = computeConfidence(dataMonths, activeMemberCount, hasRetentionWindows, 0.05);
+    const urgency = computeUrgency(timeframe);
+    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(churnReduction, membersAff, ltvRemaining, confidence, urgency);
     recommendations.push({
       category: "Retention Optimization",
       priority: "medium",
       headline: `Each 1% churn improvement unlocks ~$${Math.round(activeMemberCount * 0.01 * gymArm * 12).toLocaleString()}/year`,
       detail: `Your churn is above target but not critical. Focus on the specific members showing drift signals rather than system-wide changes. Personal outreach to the ${summary.totalAtRisk} at-risk members is the most efficient use of your time this week. At this churn level, the problem isn't systemic — it's individual. Each at-risk member has a specific reason they're drifting, and a genuine conversation where you listen more than you talk is the highest-ROI retention tool.`,
-      revenueImpact: `$${saved.toLocaleString()} potential annual recovery`,
+      revenueImpact: `$${Math.round(activeMemberCount * (improvement / 100) * gymArm * 12).toLocaleString()} potential annual recovery`,
       interventionType: "Targeted member outreach",
       crossfitContext: "",
-      timeframe: "This week — personal outreach",
+      timeframe,
       executionChecklist: [
         "Pull the at-risk member list from the Member Risk tab",
         "Assign each at-risk member to a specific coach for personal outreach",
@@ -982,8 +1076,16 @@ function generateStrategicBrief(
         "Ask one open-ended question: 'What can we do better for you?'",
         "Log every contact in Iron Metrics to track outreach coverage",
       ],
+      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: churnReduction, avgLtvRemaining: ltvRemaining,
     });
   } else {
+    const membersAff = activeMemberCount;
+    const churnReduction = 0.01;
+    const ltvRemaining = gymArm * 18;
+    const timeframe = "Ongoing — culture investment";
+    const confidence = computeConfidence(dataMonths, activeMemberCount, hasRetentionWindows);
+    const urgency = computeUrgency(timeframe);
+    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(churnReduction, membersAff, ltvRemaining, confidence, urgency);
     recommendations.push({
       category: "Retention",
       priority: "low",
@@ -992,7 +1094,7 @@ function generateStrategicBrief(
       revenueImpact: "Compound loyalty reduces future churn risk and creates organic referral growth",
       interventionType: "Culture deepening",
       crossfitContext: "",
-      timeframe: "Ongoing — culture investment",
+      timeframe,
       executionChecklist: [
         "Write down your gym's standards, etiquette, and dos/don'ts — make them visible",
         "Identify 3-5 long-tenured members to serve as community ambassadors with defined roles",
@@ -1002,22 +1104,29 @@ function generateStrategicBrief(
         "Host one community event per month outside the gym",
         "Protect your culture: have the difficult conversations when standards slip",
       ],
+      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: churnReduction, avgLtvRemaining: ltvRemaining,
     });
   }
 
   // Recommendation 3: Revenue optimization
   if (gymArm < 120) {
     const armGap = 150 - gymArm;
-    const revenueUnlocked = Math.round(armGap * activeMemberCount);
+    const membersAff = activeMemberCount;
+    const churnReduction = 0.20;
+    const ltvRemaining = armGap * 12;
+    const timeframe = "Design within 2 weeks, launch within 1 month";
+    const confidence = computeConfidence(dataMonths, activeMemberCount, hasRetentionWindows, 0.05);
+    const urgency = computeUrgency(timeframe);
+    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(churnReduction, membersAff, ltvRemaining, confidence, urgency);
     recommendations.push({
       category: "Revenue per Member",
       priority: "high",
       headline: `$${armGap.toFixed(0)} gap between current ARM ($${gymArm.toFixed(0)}) and target ($150)`,
-      detail: `Closing this gap adds $${revenueUnlocked.toLocaleString()}/month to your revenue without a single new member. Options: introduce premium tiers (unlimited + open gym + specialty classes), add nutrition coaching, or launch personal training packages. Members investing in transformation will pay more when the value is explicit and the coaching relationship is genuine.`,
-      revenueImpact: `+$${revenueUnlocked.toLocaleString()}/month ($${(revenueUnlocked * 12).toLocaleString()}/year)`,
+      detail: `Closing this gap adds $${Math.round(armGap * activeMemberCount).toLocaleString()}/month to your revenue without a single new member. Options: introduce premium tiers (unlimited + open gym + specialty classes), add nutrition coaching, or launch personal training packages. Members investing in transformation will pay more when the value is explicit and the coaching relationship is genuine.`,
+      revenueImpact: `+$${Math.round(armGap * activeMemberCount).toLocaleString()}/month ($${(Math.round(armGap * activeMemberCount) * 12).toLocaleString()}/year)`,
       interventionType: "Pricing tier introduction",
       crossfitContext: "",
-      timeframe: "Design within 2 weeks, launch within 1 month",
+      timeframe,
       executionChecklist: [
         "Define 2-3 pricing tiers (e.g. Base, Performance, Unlimited)",
         "Add value to premium tiers: open gym, nutrition coaching, specialty classes",
@@ -1025,17 +1134,26 @@ function generateStrategicBrief(
         "Set a target: convert 20% of base members to a higher tier within 60 days",
         "Track ARM weekly to measure impact",
       ],
+      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: churnReduction, avgLtvRemaining: ltvRemaining,
     });
   } else if (gymArm < 150) {
+    const armGap = 150 - gymArm;
+    const membersAff = activeMemberCount;
+    const churnReduction = 0.15;
+    const ltvRemaining = armGap * 12;
+    const timeframe = "Plan and pilot within 1 month";
+    const confidence = computeConfidence(dataMonths, activeMemberCount, hasRetentionWindows);
+    const urgency = computeUrgency(timeframe);
+    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(churnReduction, membersAff, ltvRemaining, confidence, urgency);
     recommendations.push({
       category: "Revenue Optimization",
       priority: "medium",
       headline: `ARM at $${gymArm.toFixed(0)} — room for premium tier expansion`,
       detail: "Your baseline pricing is reasonable. The opportunity is in value-add services: nutrition coaching ($50-100/mo), accountability programs, or specialty class access. These increase ARM without changing your core pricing. Members who invest more engage more — a higher-ARM member who gets nutrition coaching and quarterly goal reviews is far stickier than one who just shows up for WODs.",
-      revenueImpact: `+$${Math.round((150 - gymArm) * activeMemberCount).toLocaleString()}/month if ARM reaches $150`,
+      revenueImpact: `+$${Math.round(armGap * activeMemberCount).toLocaleString()}/month if ARM reaches $150`,
       interventionType: "Value-add services",
       crossfitContext: "",
-      timeframe: "Plan and pilot within 1 month",
+      timeframe,
       executionChecklist: [
         "Survey members: which add-on service would they value most?",
         "Pilot a nutrition coaching add-on with 5-10 interested members",
@@ -1043,6 +1161,7 @@ function generateStrategicBrief(
         "Offer quarterly goal-review sessions as a premium perk",
         "Measure uptake rate and ARM impact monthly",
       ],
+      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: churnReduction, avgLtvRemaining: ltvRemaining,
     });
   }
 
@@ -1053,6 +1172,13 @@ function generateStrategicBrief(
     : 0;
 
   if (avgNetGrowth <= 0 && gymChurnRate <= 5) {
+    const membersAff = Math.max(5, Math.round(activeMemberCount * 0.1));
+    const churnReduction = 0.05;
+    const ltvRemaining = gymArm * 14;
+    const timeframe = "Launch referral program within 2 weeks";
+    const confidence = computeConfidence(dataMonths, activeMemberCount, hasRetentionWindows);
+    const urgency = computeUrgency(timeframe);
+    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(churnReduction, membersAff, ltvRemaining, confidence, urgency);
     recommendations.push({
       category: "Growth Strategy",
       priority: "high",
@@ -1061,7 +1187,7 @@ function generateStrategicBrief(
       revenueImpact: `Each new member adds ~$${gymArm.toFixed(0)}/month with high retention probability`,
       interventionType: "Referral and acquisition programs",
       crossfitContext: "",
-      timeframe: "Launch referral program within 2 weeks",
+      timeframe,
       executionChecklist: [
         "Launch a 'Bring Your Person' week — every member invites one guest",
         "Host Friday Night Lights during the Open — make it the event of the year",
@@ -1070,9 +1196,17 @@ function generateStrategicBrief(
         "Post member transformation stories on social media weekly",
         "Track referral source for every new signup",
       ],
+      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: churnReduction, avgLtvRemaining: ltvRemaining,
     });
   } else if (avgNetGrowth < -2) {
     const monthlyLoss = Math.abs(avgNetGrowth);
+    const membersAff = Math.round(monthlyLoss * 6);
+    const churnReduction = 0.40;
+    const ltvRemaining = gymArm * 12;
+    const timeframe = "Start exit interviews this week";
+    const confidence = computeConfidence(dataMonths, activeMemberCount, hasRetentionWindows, 0.1);
+    const urgency = computeUrgency(timeframe, 1.3);
+    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(churnReduction, membersAff, ltvRemaining, confidence, urgency);
     recommendations.push({
       category: "Roster Stabilization",
       priority: "critical",
@@ -1081,7 +1215,7 @@ function generateStrategicBrief(
       revenueImpact: `$${Math.round(monthlyLoss * gymArm * 12).toLocaleString()}/year in lost revenue if trend continues`,
       interventionType: "Retention emergency protocol",
       crossfitContext: "",
-      timeframe: "Start exit interviews this week",
+      timeframe,
       executionChecklist: [
         "Freeze all acquisition spending until churn is below 7%",
         "Call every member who cancelled in the last 90 days",
@@ -1090,21 +1224,28 @@ function generateStrategicBrief(
         "Implement a 'save' conversation before processing any cancellation",
         "Review coaching quality and class experience consistency",
       ],
+      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: churnReduction, avgLtvRemaining: ltvRemaining,
     });
   }
 
   // Coaching Development recommendation
   if (activeMemberCount >= 10) {
-    const coachingPriority = gymChurnRate > 7 ? "high" : gymChurnRate > 3 ? "medium" : "low";
+    const membersAff = activeMemberCount;
+    const churnReduction = gymChurnRate > 7 ? 0.08 : gymChurnRate > 3 ? 0.04 : 0.02;
+    const ltvRemaining = avgLtvRemainingGym;
+    const timeframe = "Start monthly coaching development meetings within 2 weeks";
+    const confidence = computeConfidence(dataMonths, activeMemberCount, hasRetentionWindows, -0.05);
+    const urgency = computeUrgency(timeframe, gymChurnRate > 7 ? 1.1 : 1.0);
+    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(churnReduction, membersAff, ltvRemaining, confidence, urgency);
     recommendations.push({
       category: "Coaching Development",
-      priority: coachingPriority as "high" | "medium" | "low",
+      priority: "medium",
       headline: "Invest in your coaching team — they are the delivery system for your culture",
       detail: `Great coaches don't just see movement faults — they connect with athletes individually. Develop awareness (read each athlete's needs), build trust (listen more than you coach), and coach the positive ("Big set!" not "Don't put it down!"). All coaches need training, shadowing, feedback loops, and mentorship. They must understand not just what your standards are, but why they matter.`,
       revenueImpact: "Coaching quality directly drives retention — members stay for coaches who see them as individuals",
       interventionType: "Coaching development program",
       crossfitContext: "",
-      timeframe: "Start monthly coaching development meetings within 2 weeks",
+      timeframe,
       executionChecklist: [
         "Hold a monthly coaching meeting focused on one coaching skill (awareness, trust, positive language)",
         "Shadow each coach once per month and give specific, positive feedback",
@@ -1113,20 +1254,28 @@ function generateStrategicBrief(
         "Train coaches to read athletes individually — not every member responds to the same cues",
         "Practice coaching the positive: replace 'don't' cues with action cues in every class",
       ],
+      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: churnReduction, avgLtvRemaining: ltvRemaining,
     });
   }
 
   // Culture Standards recommendation
   if (gymChurnRate > 5 || activeMemberCount < 30) {
+    const membersAff = activeMemberCount;
+    const churnReduction = gymChurnRate > 7 ? 0.06 : 0.03;
+    const ltvRemaining = avgLtvRemainingGym;
+    const timeframe = "Complete culture document within 1 month";
+    const confidence = computeConfidence(dataMonths, activeMemberCount, hasRetentionWindows, -0.1);
+    const urgency = computeUrgency(timeframe);
+    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(churnReduction, membersAff, ltvRemaining, confidence, urgency);
     recommendations.push({
       category: "Culture Standards",
-      priority: gymChurnRate > 7 ? "high" : "medium",
+      priority: "medium",
       headline: "Define, teach, and protect your gym's culture — it's what keeps members beyond the first year",
       detail: `Culture isn't a vibe or a slogan. It's built through a commitment to standards, values, and equality. Define your culture through three pillars: Methodology (movement standards, scaling, intensity), Etiquette (how things work in your house), and Dos/Don'ts (the unspoken rules that protect your long-term culture). Every person who walks through your door — coaches, staff, athletes — needs to understand what your gym stands for. The same standards that attract the right people will repel the wrong ones — that's not a bug, it's a feature.`,
       revenueImpact: "Strong culture creates members who would never leave — retention becomes identity, not obligation",
       interventionType: "Culture definition and enforcement",
       crossfitContext: "",
-      timeframe: "Complete culture document within 1 month",
+      timeframe,
       executionChecklist: [
         "Write down your movement standards — what is non-negotiable? (e.g., squat below parallel every time)",
         "Define your gym's etiquette: on-time policy, phone policy, equipment breakdown expectations",
@@ -1135,6 +1284,7 @@ function generateStrategicBrief(
         "Have the difficult conversations: correct athletes in the moment, with care but with conviction",
         "Review and reinforce standards weekly in coaching meetings",
       ],
+      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: churnReduction, avgLtvRemaining: ltvRemaining,
     });
   }
 
@@ -1142,6 +1292,13 @@ function generateStrategicBrief(
   const currentMonth = now.getMonth();
   const isOpenSeason = currentMonth >= 0 && currentMonth <= 3;
   if (isOpenSeason || avgNetGrowth <= 0) {
+    const membersAff = isOpenSeason ? activeMemberCount : Math.max(3, Math.round(activeMemberCount * 0.15));
+    const churnReduction = isOpenSeason ? 0.05 : 0.03;
+    const ltvRemaining = gymArm * (isOpenSeason ? 10 : 8);
+    const timeframe = isOpenSeason ? "Register and plan Friday Night Lights this week" : "Schedule monthly community events";
+    const confidence = computeConfidence(dataMonths, activeMemberCount, hasRetentionWindows, isOpenSeason ? 0.05 : -0.05);
+    const urgency = computeUrgency(timeframe, isOpenSeason ? 1.2 : 1.0);
+    const { expectedRevenueImpact, interventionScore } = computeInterventionScore(churnReduction, membersAff, ltvRemaining, confidence, urgency);
     recommendations.push({
       category: "Community Events",
       priority: isOpenSeason ? "high" : "medium",
@@ -1156,7 +1313,7 @@ function generateStrategicBrief(
         : "Each community event that brings a guest creates a warm referral lead worth $" + gymArm.toFixed(0) + "/month",
       interventionType: isOpenSeason ? "CrossFit Open activation" : "Community event series",
       crossfitContext: "",
-      timeframe: isOpenSeason ? "Register and plan Friday Night Lights this week" : "Schedule monthly community events",
+      timeframe,
       executionChecklist: isOpenSeason ? [
         "Encourage every member to register for the Open — make it a gym-wide goal",
         "Set up Friday Night Lights: heats, judges, scorecards, music, energy",
@@ -1172,14 +1329,17 @@ function generateStrategicBrief(
         "Track which events generate the most guest sign-ups",
         "Celebrate participation and effort, not just performance",
       ],
+      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: churnReduction, avgLtvRemaining: ltvRemaining,
     });
   }
 
-  // Sort by priority and take TOP 3 only
-  recommendations.sort((a, b) => {
-    const priorityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
-    return (priorityOrder[a.priority] ?? 3) - (priorityOrder[b.priority] ?? 3);
+  // Ranked Intervention Engine: sort by interventionScore descending, derive priority from scores
+  const allScores = recommendations.map(r => r.interventionScore);
+  recommendations.forEach(r => {
+    r.priority = derivePriority(r.interventionScore, allScores);
   });
+  recommendations.sort((a, b) => b.interventionScore - a.interventionScore);
+  const focusRecommendation = recommendations.length > 0 ? recommendations[0] : null;
   const top3 = recommendations.slice(0, 3);
 
   // Cohort alert
@@ -1264,6 +1424,7 @@ function generateStrategicBrief(
     stabilityLevel,
     keyMetrics,
     recommendations: top3,
+    focusRecommendation,
     cohortAlert,
     revenueOutlook,
     revenueComparison,
