@@ -1,0 +1,306 @@
+FEATURE NAME
+
+Execution Tracking + Learning Loop for Strategic Recommendations
+
+GOAL
+
+Allow owners to check/uncheck checklist items on each recommendation card. Store these actions. Then automatically compare future outcomes against the baseline forecast to learn what recommendations and task sets actually work, using a hybrid model:
+
+Global learning: improves priors for all gyms
+
+Gym learning: adapts to what works for this specific gym
+
+NON-GOALS
+
+No reliance on who checked the box (only owners use system)
+
+No trusting user-reported outcomes
+
+No direct model coefficient changes from free text unless validated + classified
+
+DATA MODEL (CONCEPTUAL)
+Entities (names flexible)
+1) Recommendation Card (already exists conceptually)
+
+Represents a specific strategic recommendation for a given gym and month/week, with:
+
+stable recommendation_id
+
+gym_id
+
+period_start (month_start or report_date)
+
+recommendation_type (string label; flexible)
+
+checklist_items[] (each with stable item_id + text)
+
+baseline forecast snapshot at time of generation (needed for later deltas)
+
+Important: the system must store the baseline “do nothing” forecast used when this recommendation was presented.
+
+2) Checklist Item Completion
+
+Track per checklist item:
+
+recommendation_id
+
+item_id
+
+checked: boolean
+
+checked_at timestamp (on check and uncheck)
+
+optional: note (short, optional)
+
+Rules:
+
+unchecking is allowed and persists
+
+idempotent toggles (no duplicates)
+
+3) Owner Additional Actions (Free Text)
+
+Allow owner to input:
+
+gym_id
+
+period_start
+
+text
+
+created_at
+
+But before using it for learning:
+
+classify it into a known action_type if possible
+
+store classification output + confidence
+
+4) Outcome Snapshot (Automatic)
+
+For each gym + period, store outcome signals from your metrics pipeline:
+
+churn (monthly + rolling)
+
+active members
+
+new members / cancels
+
+MRR / ARM / LTV
+
+risk flags, etc.
+
+You likely already store most of this; just ensure it’s queryable by time window.
+
+EXECUTION STRENGTH
+
+Define for each recommendation card:
+
+total_items
+
+checked_items
+
+execution_strength = checked_items / total_items
+
+Include:
+
+execution_strength_threshold for learning eligibility (recommended: 0.5–0.7)
+
+LEARNING LOOP (HYBRID)
+A) When learning triggers
+
+Learning should occur only if:
+
+recommendation card exists for a past period
+
+time window has passed (minimum 30 days; 60/90 better for slower actions)
+
+execution_strength meets threshold (>= 0.6 recommended)
+
+baseline forecast snapshot exists
+
+outcome snapshot exists for evaluation date
+
+If any are missing:
+
+store execution data
+
+skip learning update
+
+B) What is learned
+
+Do not learn from raw churn/MRR change.
+
+Learn from delta vs baseline:
+
+For each evaluation window (30/60/90):
+
+delta_members = actual_members - baseline_members
+
+delta_mrr = actual_mrr - baseline_mrr
+
+optionally delta_churn = baseline_churn - actual_churn (direction normalized)
+
+Compute a single “impact score” for learning:
+
+weighted combination of deltas (MRR + members, etc.)
+
+Store:
+
+recommendation_type
+
+execution_strength
+
+evaluation_window
+
+impact_score
+
+C) Attribution + Confounding dampener
+
+If multiple recommendations were executed in the same window:
+
+reduce credit per recommendation
+
+Example rule:
+
+if 2 executed recommendations overlap → each gets 0.7 weight
+
+if 3+ overlap → each gets 0.5 weight
+
+Alternative:
+
+allocate credit proportional to their original deterministic “intervention score” at time of recommendation
+
+Either is acceptable; choose the simplest.
+
+D) Hybrid parameter update (global + gym)
+
+For each recommendation_type, maintain:
+
+Global parameters:
+
+global_expected_impact
+
+global_confidence
+
+global_sample_size
+
+Gym parameters:
+
+gym_expected_impact
+
+gym_confidence
+
+gym_sample_size
+
+Update rules:
+
+Update confidence first (stability)
+
+Then slowly adjust expected impact as data accumulates
+
+Weighting:
+
+gym updates should have smaller learning rate when roster is small (high variance)
+
+global updates should weight gyms by data quality (roster size + duration + completeness)
+
+Recommendation:
+Start with updating confidence only, and store the deltas for later.
+
+FREE TEXT SAFETY + VALIDATION
+Required behavior
+
+Owner free text should NOT directly influence learning unless it passes:
+
+Classification
+
+map text to a known action category (recommendation_type) if possible
+
+Confidence threshold
+
+only accept classification if confidence ≥ 0.8
+
+otherwise store as “unclassified”
+
+Sanity filtering
+Reject or ignore for learning if:
+
+nonsense / extremely short / random characters
+
+contains prohibited content
+
+does not imply any gym action
+
+is unrelated to operations (e.g., “lol”, “test”, “asdf”)
+
+Structured confirmation (optional)
+If classified, show the owner:
+
+“We logged this as: Referral Activation / Community Event / Coach Outreach”
+
+allow them to confirm or change category (simple dropdown)
+
+This confirmation step dramatically reduces garbage data.
+
+Even if you skip confirmation, keep the confidence threshold strict.
+
+UI/UX REQUIREMENTS
+Checklist interactions
+
+Clicking checkbox toggles state (checked/unchecked)
+
+Persist immediately
+
+Visual feedback stays simple and clean
+
+“What else did you do?” input
+
+small text area under each recommendation card OR once per report
+
+lightweight prompt: “Log any other actions you took this month (optional)”
+
+show “Logged” state
+
+show classification label if confidence high (“Logged as: Referral Sprint”)
+
+“Learning feedback” (optional but powerful)
+
+After 30/60/90 days, show:
+
+“This action appears to have helped: +$___ vs baseline”
+Or:
+
+“No measurable lift yet — keep running the system for another month”
+
+Don’t overclaim causality. Use “appears” / “suggests.”
+
+OUTPUTS THE PREDICTIVE LAYER SHOULD GET FROM THIS
+
+Once the learning layer stores results, the predictive generator can:
+
+increase confidence for recommendation_types that worked for this gym
+
+reduce confidence for those that didn’t
+
+prefer higher-performing recommendation types for this archetype/gym
+
+This is the personalization loop.
+
+ACCEPTANCE CRITERIA (TESTABLE)
+
+A checklist item can be checked and unchecked; state persists across refresh.
+
+Execution strength is computed correctly per recommendation.
+
+Baseline forecast snapshot is stored when recommendation is generated.
+
+After 30+ days, system records outcome deltas vs baseline.
+
+Learning updates store global + gym-level stats (hybrid).
+
+Free text is stored, classified only if high confidence, otherwise ignored for learning.
+
+If multiple recommendations overlap, attribution is dampened.
+
+Predictive output uses learned confidence to rank future recommendations differently for the same gym.
