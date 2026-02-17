@@ -425,16 +425,9 @@ function FocusRecommendationHero({ rec }: { rec: BriefRecommendation }) {
             <Target className="w-5 h-5 text-blue-500" />
             <p className="text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">Focus Recommendation</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {rec.crossfitContext && (
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal text-muted-foreground border-muted-foreground/20">
-                {rec.crossfitContext}
-              </Badge>
-            )}
-            <Badge variant="outline" className="text-xs text-blue-600 dark:text-blue-400 border-blue-500/30" data-testid="badge-focus-score">
-              Score: {rec.interventionScore.toLocaleString()}
-            </Badge>
-          </div>
+          <Badge variant="outline" className="text-xs text-blue-600 dark:text-blue-400 border-blue-500/30" data-testid="badge-focus-score">
+            Score: {rec.interventionScore.toLocaleString()}
+          </Badge>
         </div>
 
         <p className="text-xs text-muted-foreground italic">If you only do one thing this month — do this.</p>
@@ -571,7 +564,11 @@ function StrategicBriefView({ brief }: { brief: PredictiveIntelligence["strategi
         {brief.recommendations.map((rec, i) => (
           <Card key={i} className="hover-elevate transition-all duration-300" data-testid={`card-recommendation-${i}`}>
             <CardContent className="pt-5 space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold leading-snug">{rec.headline}</p>
+                  <span className="text-xs text-muted-foreground flex-shrink-0">{rec.timeframe}</span>
+                </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge
                     variant={rec.priority === "critical" ? "destructive" : "secondary"}
@@ -580,15 +577,8 @@ function StrategicBriefView({ brief }: { brief: PredictiveIntelligence["strategi
                     {rec.priority}
                   </Badge>
                   <span className="text-xs text-muted-foreground">{rec.category}</span>
-                  {rec.crossfitContext && (
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal text-muted-foreground border-muted-foreground/20">
-                      {rec.crossfitContext}
-                    </Badge>
-                  )}
                 </div>
-                <span className="text-xs text-muted-foreground">{rec.timeframe}</span>
               </div>
-              <p className="text-sm font-medium">{rec.headline}</p>
               <p className="text-sm text-muted-foreground leading-relaxed">{rec.detail}</p>
 
               {rec.executionChecklist && rec.executionChecklist.length > 0 && (
@@ -618,8 +608,6 @@ function StrategicBriefView({ brief }: { brief: PredictiveIntelligence["strategi
                   <p className="text-xs text-muted-foreground">{rec.interventionType}</p>
                 </div>
               </div>
-
-              <ScoreBreakdown rec={rec} />
             </CardContent>
           </Card>
         ))}
@@ -627,21 +615,6 @@ function StrategicBriefView({ brief }: { brief: PredictiveIntelligence["strategi
 
       <RevenueOutlookVisual comparison={brief.revenueComparison} outlook={brief.revenueOutlook} />
 
-      {brief.memberAlerts.length > 0 && (
-        <div className="space-y-3" data-testid="section-member-alerts">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Priority Member Alerts</h3>
-            <Badge variant="outline" className="text-xs text-red-600 dark:text-red-400 border-red-500/30">
-              {brief.memberAlerts.length} members need attention
-            </Badge>
-          </div>
-          <div className="grid gap-3">
-            {brief.memberAlerts.map((alert, i) => (
-              <MemberAlertCard key={alert.memberId} alert={alert} index={i} />
-            ))}
-          </div>
-        </div>
-      )}
 
       <Card className="animate-fade-in-up animation-delay-600 hover-elevate transition-all duration-300" data-testid="card-roi-projection">
         <CardContent className="pt-5 space-y-3">
