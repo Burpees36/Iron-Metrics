@@ -203,7 +203,7 @@ interface MemberContact {
   note: string | null;
 }
 
-export default function PredictiveIntelligenceView({ gymId }: { gymId: string }) {
+export default function PredictiveIntelligenceView({ gymId, gymName }: { gymId: string; gymName: string }) {
   const { data, isLoading, error } = useQuery<PredictiveIntelligence>({
     queryKey: [`/api/gyms/${gymId}/predictive`],
   });
@@ -238,7 +238,7 @@ export default function PredictiveIntelligenceView({ gymId }: { gymId: string })
         </TabsContent>
 
         <TabsContent value="planning" className="mt-6">
-          <FuturePlanningView cohorts={data.cohortIntelligence} scenario={data.revenueScenario} />
+          <FuturePlanningView cohorts={data.cohortIntelligence} scenario={data.revenueScenario} gymName={gymName} recommendations={data.strategicBrief.recommendations} memberPredictions={data.memberPredictions} />
         </TabsContent>
       </Tabs>
     </div>
@@ -814,41 +814,6 @@ function StrategicBriefView({ gymId, periodStart, brief, recommendationExecution
 
       <RevenueOutlookVisual comparison={brief.revenueComparison} outlook={brief.revenueOutlook} />
 
-      {brief.memberAlerts.length > 0 && (
-        <div className="space-y-3" data-testid="section-member-alerts">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Priority Member Alerts</h3>
-            <Badge variant="outline" className="text-xs text-red-600 dark:text-red-400 border-red-500/30">
-              {brief.memberAlerts.length} members need attention
-            </Badge>
-          </div>
-          <div className="grid gap-3">
-            {brief.memberAlerts.map((alert, i) => (
-              <MemberAlertCard key={alert.memberId} alert={alert} index={i} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      <Card className="animate-fade-in-up animation-delay-600 hover-elevate transition-all duration-300" data-testid="card-roi-projection">
-        <CardContent className="pt-5 space-y-3">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">ROI Projection</p>
-          <div className="grid sm:grid-cols-3 gap-4">
-            <div>
-              <p className="text-xs text-muted-foreground">Action</p>
-              <p className="text-sm">{brief.roiProjection.actionTaken}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Members Retained</p>
-              <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{brief.roiProjection.membersRetained}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Annual Revenue Preserved</p>
-              <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">${brief.roiProjection.annualImpact.toLocaleString()}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }
@@ -1204,9 +1169,12 @@ function MemberRiskView({ predictions, gymId }: { predictions: PredictiveIntelli
 // FUTURE PLANNING VIEW (merged Cohort + Scenario)
 // ═══════════════════════════════════════════════════════════════
 
-function FuturePlanningView({ cohorts, scenario }: {
+function FuturePlanningView({ cohorts, scenario, gymName, recommendations, memberPredictions }: {
   cohorts: PredictiveIntelligence["cohortIntelligence"];
   scenario: PredictiveIntelligence["revenueScenario"];
+  gymName: string;
+  recommendations: BriefRecommendation[];
+  memberPredictions: PredictiveIntelligence["memberPredictions"];
 }) {
   const riskColors: Record<string, string> = {
     low: "text-emerald-600 dark:text-emerald-400",
@@ -1390,217 +1358,82 @@ function FuturePlanningView({ cohorts, scenario }: {
         )}
       </div>
 
-      <div className="space-y-3">
-        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-          <BarChart3 className="w-3.5 h-3.5" /> Cohort Performance
-        </h3>
-
-        <Card data-testid="chart-cohort-survival">
-          <CardContent className="pt-5">
-            <p className="text-sm font-medium mb-4">Cohort Survival Rates</p>
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={cohorts.cohorts}>
-                <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                <XAxis dataKey="cohortLabel" tick={{ fontSize: 10 }} />
-                <YAxis domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11 }} />
-                <RechartsTooltip
-                  formatter={(v: number, name: string) => {
-                    if (name === "survivalRate") return [`${v}%`, "Survival Rate"];
-                    return [v, name];
-                  }}
-                  contentStyle={{ fontSize: "12px", borderRadius: "6px" }}
-                />
-                <Bar dataKey="survivalRate" fill="hsl(210, 60%, 50%)" radius={[4, 4, 0, 0]} name="Survival Rate" animationDuration={800} animationBegin={300} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        <div className="rounded-md border overflow-x-auto" data-testid="table-cohorts">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Cohort</TableHead>
-                <TableHead className="text-right">Joined</TableHead>
-                <TableHead className="text-right">Active</TableHead>
-                <TableHead className="text-right">Survival</TableHead>
-                <TableHead className="text-right">Avg Rate</TableHead>
-                <TableHead className="text-right">Revenue Retained</TableHead>
-                <TableHead className="text-right">Revenue Lost</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {cohorts.cohorts.map((c) => (
-                <TableRow key={c.cohortMonth}>
-                  <TableCell className="font-medium">{c.cohortLabel}</TableCell>
-                  <TableCell className="text-right">{c.totalJoined}</TableCell>
-                  <TableCell className="text-right">{c.stillActive}</TableCell>
-                  <TableCell className="text-right">
-                    <span className={`font-medium ${c.survivalRate >= 70 ? "text-emerald-600 dark:text-emerald-400" : c.survivalRate >= 50 ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"}`}>
-                      {c.survivalRate}%
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right text-sm">${c.avgMonthlyRate}</TableCell>
-                  <TableCell className="text-right text-sm text-emerald-600 dark:text-emerald-400">${c.revenueRetained.toLocaleString()}</TableCell>
-                  <TableCell className="text-right text-sm text-red-600 dark:text-red-400">${c.revenueLost.toLocaleString()}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
-
-      {cohorts.crossfitInsights.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-            <Zap className="w-3.5 h-3.5" /> CrossFit-Specific Insights
-          </h3>
-          <Card data-testid="card-crossfit-insights">
-            <CardContent className="pt-5 space-y-3">
-              {cohorts.crossfitInsights.map((ins, i) => (
-                <p key={i} className="text-sm leading-relaxed">{ins}</p>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
-      )}
+      <GymSpecificInsights gymName={gymName} recommendations={recommendations} memberPredictions={memberPredictions} />
     </div>
   );
 }
 
 // ═══════════════════════════════════════════════════════════════
-// COHORT VIEW
+// GYM-SPECIFIC INSIGHTS (condensed call-to-action)
 // ═══════════════════════════════════════════════════════════════
 
-function CohortView({ cohorts: data }: { cohorts: PredictiveIntelligence["cohortIntelligence"] }) {
+function GymSpecificInsights({ gymName, recommendations, memberPredictions }: {
+  gymName: string;
+  recommendations: BriefRecommendation[];
+  memberPredictions: PredictiveIntelligence["memberPredictions"];
+}) {
+  const sortedRecs = [...recommendations].sort((a, b) => b.interventionScore - a.interventionScore);
+  const totalRevenueAtRisk = memberPredictions.summary.totalRevenueAtRisk;
+  const totalAtRisk = memberPredictions.summary.totalAtRisk;
+  const totalImpact = sortedRecs.reduce((sum, r) => sum + r.expectedRevenueImpact, 0);
+
+  const priorityIcon = (priority: string) => {
+    if (priority === "critical" || priority === "high") return <AlertTriangle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />;
+    if (priority === "medium") return <TrendingUp className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />;
+    return <Target className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />;
+  };
+
   return (
-    <div className="space-y-6">
-      <div className="grid lg:grid-cols-2 gap-6">
-        <Card className="hover-elevate transition-all duration-300 animate-fade-in-up" data-testid="chart-survival-curve">
-          <CardContent className="pt-5">
-            <p className="text-sm font-medium mb-4">Retention Survival Curve</p>
-            <ResponsiveContainer width="100%" height={280}>
-              <AreaChart data={data.survivalCurve}>
-                <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                <XAxis dataKey="days" tickFormatter={(d) => d === 0 ? "Join" : d < 365 ? `${d}d` : `${(d/365).toFixed(1)}y`} tick={{ fontSize: 11 }} />
-                <YAxis domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11 }} />
-                <RechartsTooltip
-                  formatter={(v: number) => [`${v}%`, "Survival Rate"]}
-                  labelFormatter={(d) => `Day ${d}`}
-                  contentStyle={{ fontSize: "12px", borderRadius: "6px" }}
-                />
-                <defs>
-                  <linearGradient id="survivalGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(210, 60%, 50%)" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="hsl(210, 60%, 50%)" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <Area type="monotone" dataKey="survivalRate" stroke="hsl(210, 60%, 50%)" fill="url(#survivalGrad)" strokeWidth={2} animationDuration={1200} animationBegin={200} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+    <div className="space-y-3" data-testid="section-gym-specific-insights">
+      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+        <Zap className="w-3.5 h-3.5" /> {gymName}-Specific Insights
+      </h3>
 
-        <Card className="hover-elevate transition-all duration-300 animate-fade-in-up animation-delay-200" data-testid="chart-retention-windows">
-          <CardContent className="pt-5">
-            <p className="text-sm font-medium mb-4">Where Members Are Lost</p>
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={data.retentionWindows.filter(w => w.lostCount > 0)}>
-                <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                <XAxis dataKey="window" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <RechartsTooltip
-                  formatter={(v: number, name: string) => [name === "lostCount" ? `${v} members` : `$${v}`, name === "lostCount" ? "Members Lost" : "Revenue Lost"]}
-                  contentStyle={{ fontSize: "12px", borderRadius: "6px" }}
-                />
-                <Bar dataKey="lostCount" fill="hsl(0, 70%, 55%)" radius={[4, 4, 0, 0]} name="Members Lost" animationDuration={800} animationBegin={200} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
+      <Card className="hover-elevate transition-all duration-300 animate-fade-in-up animation-delay-500">
+        <CardContent className="pt-5 space-y-4">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Your action plan this month</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {totalAtRisk > 0
+                ? `${totalAtRisk} member${totalAtRisk === 1 ? " is" : "s are"} at risk representing $${totalRevenueAtRisk.toLocaleString()}/mo in revenue. `
+                : ""}
+              {sortedRecs.length > 0
+                ? `These ${sortedRecs.length} action${sortedRecs.length === 1 ? "" : "s"} can protect up to $${totalImpact.toLocaleString()}/mo. You have control over this outcome.`
+                : "No specific actions recommended right now — your gym is in a strong position."}
+            </p>
+          </div>
 
-      <Card className="hover-elevate transition-all duration-300 animate-fade-in-up animation-delay-300" data-testid="chart-cohort-survival">
-        <CardContent className="pt-5">
-          <p className="text-sm font-medium mb-4">Cohort Survival Rates</p>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={data.cohorts}>
-              <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-              <XAxis dataKey="cohortLabel" tick={{ fontSize: 10 }} />
-              <YAxis domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11 }} />
-              <RechartsTooltip
-                formatter={(v: number, name: string) => {
-                  if (name === "survivalRate") return [`${v}%`, "Survival Rate"];
-                  return [v, name];
-                }}
-                contentStyle={{ fontSize: "12px", borderRadius: "6px" }}
-              />
-              <Bar dataKey="survivalRate" fill="hsl(210, 60%, 50%)" radius={[4, 4, 0, 0]} name="Survival Rate" animationDuration={800} animationBegin={300} />
-            </BarChart>
-          </ResponsiveContainer>
+          {sortedRecs.length > 0 && (
+            <div className="space-y-2">
+              {sortedRecs.map((rec, i) => (
+                <div key={i} className="flex items-start gap-2.5 py-2 border-b last:border-0 last:pb-0">
+                  {priorityIcon(rec.priority)}
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <p className="text-sm font-medium leading-snug">{rec.headline}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">{rec.category}</Badge>
+                      <span className="text-[10px] text-muted-foreground">{rec.timeframe}</span>
+                      {rec.expectedRevenueImpact > 0 && (
+                        <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                          +${rec.expectedRevenueImpact.toLocaleString()}/mo potential
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {sortedRecs.length > 0 && (
+            <div className="pt-2 border-t">
+              <p className="text-xs text-muted-foreground leading-relaxed text-center">
+                Every recommendation above comes from your gym's real data. Check off tasks in the Strategic Brief to start tracking results.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
-
-      <div className="rounded-md border overflow-x-auto" data-testid="table-cohorts">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Cohort</TableHead>
-              <TableHead className="text-right">Joined</TableHead>
-              <TableHead className="text-right">Active</TableHead>
-              <TableHead className="text-right">Survival</TableHead>
-              <TableHead className="text-right">Avg Rate</TableHead>
-              <TableHead className="text-right">Revenue Retained</TableHead>
-              <TableHead className="text-right">Revenue Lost</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data.cohorts.map((c) => (
-              <TableRow key={c.cohortMonth}>
-                <TableCell className="font-medium">{c.cohortLabel}</TableCell>
-                <TableCell className="text-right">{c.totalJoined}</TableCell>
-                <TableCell className="text-right">{c.stillActive}</TableCell>
-                <TableCell className="text-right">
-                  <span className={`font-medium ${c.survivalRate >= 70 ? "text-emerald-600 dark:text-emerald-400" : c.survivalRate >= 50 ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"}`}>
-                    {c.survivalRate}%
-                  </span>
-                </TableCell>
-                <TableCell className="text-right text-sm">${c.avgMonthlyRate}</TableCell>
-                <TableCell className="text-right text-sm text-emerald-600 dark:text-emerald-400">${c.revenueRetained.toLocaleString()}</TableCell>
-                <TableCell className="text-right text-sm text-red-600 dark:text-red-400">${c.revenueLost.toLocaleString()}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-
-      {data.retentionWindows.length > 0 && (
-        <Card className="hover-elevate transition-all duration-300 animate-fade-in-up animation-delay-400" data-testid="card-retention-insights">
-          <CardContent className="pt-5 space-y-3">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Retention Window Insights</p>
-            {data.retentionWindows.filter(w => w.lostCount > 0).map((w, i) => (
-              <div key={i} className="border-b last:border-0 pb-3 last:pb-0">
-                <div className="flex flex-wrap items-center gap-2 mb-1">
-                  <Badge variant="outline" className="text-xs">{w.window}</Badge>
-                  <span className="text-xs text-red-600 dark:text-red-400">{w.lostCount} lost ({w.lostPct.toFixed(0)}%)</span>
-                </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">{w.insight}</p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      {data.crossfitInsights.length > 0 && (
-        <Card className="hover-elevate transition-all duration-300 animate-fade-in-up animation-delay-500" data-testid="card-crossfit-insights">
-          <CardContent className="pt-5 space-y-3">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">CrossFit-Specific Insights</p>
-            {data.crossfitInsights.map((ins, i) => (
-              <p key={i} className="text-sm leading-relaxed">{ins}</p>
-            ))}
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

@@ -274,7 +274,7 @@ export default function GymDetail() {
         </TabsContent>
 
         <TabsContent value="predictive" className="mt-8">
-          <PredictiveIntelligenceView gymId={gym.id} />
+          <PredictiveIntelligenceView gymId={gym.id} gymName={gym.name} />
         </TabsContent>
       </Tabs>
     </div>
