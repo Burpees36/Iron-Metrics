@@ -7,6 +7,38 @@ import type { Member, MemberContact } from "@shared/schema";
 
 export type EngagementClass = "core" | "drifter" | "at-risk" | "ghost";
 export type InterventionType = "personal-outreach" | "goal-setting" | "community-integration" | "win-back" | "pricing-review" | "coach-connection" | "milestone-celebration" | "onboarding-acceleration";
+export type GymArchetype = "growth-accelerator" | "community-anchor" | "premium-boutique" | "turnaround-lab";
+
+export interface CausalFactor {
+  factor: string;
+  impact: number;
+  confidence: number;
+  evidence: string;
+}
+
+export interface CounterfactualScenario {
+  action: InterventionType;
+  projectedChurnProbability: number;
+  projectedRevenueAtRisk: number;
+  churnDelta: number;
+}
+
+export interface InterventionPriority {
+  type: InterventionType;
+  score: number;
+  rationale: string;
+  expectedChurnDelta: number;
+  expectedRevenueDelta: number;
+  confidence: number;
+}
+
+export interface InterventionLearningSignal {
+  interventionType: InterventionType;
+  attempts: number;
+  retainedAfter30d: number;
+  retentionRate: number;
+  quarterlyWeight: number;
+}
 
 export interface MemberPrediction {
   memberId: string;
@@ -27,6 +59,13 @@ export interface MemberPrediction {
   interventionUrgency: "immediate" | "this-week" | "this-month" | "monitor";
   lastContactDays: number | null;
   isHighValue: boolean;
+  causalFactors: CausalFactor[];
+  counterfactuals: CounterfactualScenario[];
+  prioritizedInterventions: InterventionPriority[];
+  recommendationMemory: string;
+  gymArchetype: GymArchetype;
+  urgencyDecayScore: number;
+  languageTemplate: string;
 }
 
 export interface MemberPredictionSummary {
@@ -39,6 +78,9 @@ export interface MemberPredictionSummary {
     classBreakdown: Record<EngagementClass, number>;
     urgentInterventions: number;
     topRiskDriver: string;
+    gymArchetype: GymArchetype;
+    predictedRevenueDeltaFromTopActions: number;
+    interventionLearning: InterventionLearningSignal[];
   };
 }
 
@@ -222,7 +264,7 @@ export async function generatePredictiveIntelligence(gymId: string): Promise<Pre
     : 0.5;
 
   const memberPredictions = computeMemberPredictions(
-    activeMembers, contactMap, now, gymChurnRate, gymArm,
+    activeMembers, allContacts, contactMap, now, gymChurnRate, gymArm,
     top20Threshold, medianCancelTenure, pctCancelledBefore90
   );
 
@@ -249,6 +291,7 @@ export async function generatePredictiveIntelligence(gymId: string): Promise<Pre
 
 function computeMemberPredictions(
   activeMembers: Member[],
+  allContacts: MemberContact[],
   contactMap: Map<string, Date>,
   now: Date,
   gymChurnRate: number,
@@ -258,6 +301,16 @@ function computeMemberPredictions(
   pctCancelledBefore90: number
 ): MemberPredictionSummary {
   const predictions: MemberPrediction[] = [];
+  const gymArchetype = inferGymArchetype(activeMembers, gymChurnRate, gymArm);
+  const contactsByMember = new Map<string, MemberContact[]>();
+  const interventionLearning = computeInterventionLearningSignals(allContacts, activeMembers, now);
+  const quarterlyFeedbackWeights = buildQuarterlyFeedbackWeights(interventionLearning, now);
+
+  for (const contact of allContacts) {
+    const list = contactsByMember.get(contact.memberId) || [];
+    list.push(contact);
+    contactsByMember.set(contact.memberId, list);
+  }
 
   for (const m of activeMembers) {
     const joinDate = new Date(m.joinDate + "T00:00:00");
@@ -270,80 +323,75 @@ function computeMemberPredictions(
       : null;
     const isHighValue = rate >= top20Threshold && top20Threshold > 0;
 
-    let churnProb = 0;
-    const riskDrivers: string[] = [];
+    let churnProb = 0.03;
+    const causalFactors: CausalFactor[] = [];
+    const applyFactor = (factor: string, impact: number, confidence: number, evidence: string) => {
+      churnProb += impact;
+      causalFactors.push({ factor, impact, confidence, evidence });
+    };
 
-    // Tenure-based risk (30-60-90 day danger zones)
     if (tenureDays <= 14) {
-      churnProb += 0.35;
-      riskDrivers.push("Critical onboarding window (first 2 weeks)");
+      applyFactor("Onboarding friction", 0.34, 0.82, "Member is inside first 14 days where cancellation risk is structurally highest.");
     } else if (tenureDays <= 30) {
-      churnProb += 0.28;
-      riskDrivers.push("First month — habit formation period");
+      applyFactor("First-month habit fragility", 0.27, 0.79, "Member has not yet formed a stable class cadence.");
     } else if (tenureDays <= 60) {
-      churnProb += 0.22;
-      riskDrivers.push("Pre-habit window (30-60 days)");
+      applyFactor("Pre-habit drift", 0.21, 0.75, "Member is in the 30-60 day adaptation window.");
     } else if (tenureDays <= 90) {
-      churnProb += 0.15;
-      riskDrivers.push("Community integration phase (60-90 days)");
+      applyFactor("Belonging threshold risk", 0.14, 0.7, "Member is in 60-90 day belonging phase.");
     } else if (tenureDays <= 180) {
-      churnProb += 0.08;
+      applyFactor("Mid-tenure consistency variance", 0.07, 0.58, "Member tenure indicates moderate baseline uncertainty.");
     } else if (tenureDays <= 365) {
-      churnProb += 0.04;
-    } else {
-      churnProb += 0.02;
+      applyFactor("Established but exposed", 0.03, 0.52, "Member is stable but still behavior-sensitive.");
     }
 
-    // Contact recency risk
     if (lastContactDays === null) {
       if (tenureDays <= 60) {
-        churnProb += 0.20;
-        riskDrivers.push("Never contacted — no coach connection established");
+        applyFactor("Coach connection absent", 0.2, 0.83, "No outreach logged during early tenure.");
       } else if (tenureDays <= 180) {
-        churnProb += 0.10;
-        riskDrivers.push("No recorded outreach");
+        applyFactor("Sparse intervention history", 0.1, 0.72, "No recorded outreach despite meaningful tenure.");
       }
     } else if (lastContactDays > 30 && tenureDays <= 90) {
-      churnProb += 0.15;
-      riskDrivers.push("No contact in 30+ days during critical window");
+      applyFactor("Critical window communication gap", 0.15, 0.77, "No contact in 30+ days while member is still in early behavior window.");
     } else if (lastContactDays > 60) {
-      churnProb += 0.08;
-      riskDrivers.push("No contact in 60+ days");
+      applyFactor("Long communication gap", 0.08, 0.69, "No contact in 60+ days.");
+    } else if (lastContactDays <= 14) {
+      applyFactor("Recent coaching touchpoint", -0.06, 0.71, "Member recently received outreach.");
     }
 
-    // Gym-wide churn pressure
     if (gymChurnRate > 7) {
-      churnProb += 0.06;
-      if (tenureDays <= 90) riskDrivers.push("High gym-wide churn environment");
+      applyFactor("Systemic churn pressure", 0.06, 0.66, "Gym-level churn is elevated and raises individual risk.");
     } else if (gymChurnRate > 5) {
-      churnProb += 0.03;
+      applyFactor("Moderate churn pressure", 0.03, 0.58, "Gym-level churn is mildly elevated.");
     }
 
-    // Rate-based signals
     if (rate < gymArm * 0.7 && rate > 0) {
-      churnProb += 0.04;
-      riskDrivers.push("Below-average rate — possible discount or trial member");
+      applyFactor("Low-commitment price tier", 0.04, 0.62, "Member pays materially below ARM and may have lower sunk-cost commitment.");
     }
 
-    // Cohort danger zone amplifier
     if (tenureDays <= medianCancelTenure * 1.2 && pctCancelledBefore90 > 0.4) {
-      churnProb += 0.05;
-      if (tenureDays <= 90) riskDrivers.push("In the tenure range where most cancellations historically occur");
+      applyFactor("Historical cancellation zone", 0.05, 0.73, "Member is in tenure band where historical cancels concentrate.");
     }
 
-    // High-value member gets slight reduction (more invested)
     if (isHighValue && tenureDays > 90) {
-      churnProb -= 0.03;
+      applyFactor("High-investment commitment", -0.03, 0.56, "Higher monthly investment generally reflects stronger commitment.");
     }
 
-    // Tenure loyalty bonus
     if (tenureDays > 365) {
-      churnProb -= 0.05;
+      applyFactor("Loyalty compounding", -0.05, 0.8, "Long-tenured members have materially lower observed churn risk.");
+    }
+
+    const archetypeShift = getArchetypeRiskAdjustment(gymArchetype, tenureDays, lastContactDays);
+    if (archetypeShift !== 0) {
+      applyFactor("Gym archetype behavioral context", archetypeShift, 0.6, `Adjusted for ${gymArchetype} behavior profile.`);
+    }
+
+    const urgencyDecayScore = computeUrgencyDecayScore(tenureDays, lastContactDays, now);
+    if (urgencyDecayScore > 0.05) {
+      applyFactor("Time-window urgency decay", Math.min(0.08, urgencyDecayScore * 0.09), 0.68, "Risk amplified because early intervention window is decaying.");
     }
 
     churnProb = Math.max(0.01, Math.min(0.95, churnProb));
 
-    // Engagement classification
     let engagementClass: EngagementClass;
     if (churnProb <= 0.15 && tenureDays > 90) {
       engagementClass = "core";
@@ -355,20 +403,48 @@ function computeMemberPredictions(
       engagementClass = "ghost";
     }
 
-    // Expected LTV remaining
     const monthlyChurnProb = Math.min(churnProb, 0.5);
     const expectedMonthsRemaining = monthlyChurnProb > 0 ? (1 / monthlyChurnProb) : 24;
     const expectedLtvRemaining = Math.round(rate * Math.min(expectedMonthsRemaining, 60));
     const revenueAtRisk = Math.round(rate * Math.min(expectedMonthsRemaining * churnProb, 12));
 
-    // Primary risk driver
+    const rankedCausalFactors = [...causalFactors].sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact));
+    const riskDrivers = rankedCausalFactors.filter(f => f.impact > 0).map(f => f.factor);
+
     const primaryRiskDriver = riskDrivers.length > 0
       ? riskDrivers[0]
       : tenureDays <= 90 ? "Early-stage member" : "No significant risk signals";
 
+    const recommendationMemory = buildRecommendationMemory(contactsByMember.get(m.id) || [], now);
+
     const { type: interventionType, detail: interventionDetail, microGuidance: interventionMicroGuidance, urgency: interventionUrgency } = selectIntervention(
       churnProb, tenureDays, lastContactDays, isHighValue, rate, gymArm, riskDrivers
     );
+
+    const prioritizedInterventions = prioritizeInterventions(
+      churnProb,
+      tenureDays,
+      lastContactDays,
+      isHighValue,
+      rate,
+      gymArm,
+      gymArchetype,
+      recommendationMemory,
+      urgencyDecayScore,
+      quarterlyFeedbackWeights
+    );
+
+    const languageTemplate = selectCrossfitLanguageTemplate(
+      m.id,
+      prioritizedInterventions[0]?.type || interventionType,
+      gymArchetype,
+      now,
+      primaryRiskDriver,
+      tenureDays,
+      engagementClass
+    );
+
+    const counterfactuals = buildCounterfactuals(churnProb, rate, prioritizedInterventions);
 
     predictions.push({
       memberId: m.id,
@@ -384,11 +460,18 @@ function computeMemberPredictions(
       primaryRiskDriver,
       riskDrivers,
       interventionType,
-      interventionDetail,
+      interventionDetail: personalizeInterventionDetail(interventionDetail, gymArchetype),
       interventionMicroGuidance,
       interventionUrgency,
       lastContactDays,
       isHighValue,
+      causalFactors: rankedCausalFactors,
+      counterfactuals,
+      prioritizedInterventions,
+      recommendationMemory,
+      gymArchetype,
+      urgencyDecayScore: parseFloat(urgencyDecayScore.toFixed(3)),
+      languageTemplate,
     });
   }
 
@@ -420,6 +503,9 @@ function computeMemberPredictions(
   }
 
   const topDriver = Object.entries(driverCounts).sort((a, b) => b[1] - a[1])[0];
+  const predictedRevenueDeltaFromTopActions = predictions
+    .filter(p => p.engagementClass === "at-risk" || p.engagementClass === "ghost")
+    .reduce((sum, p) => sum + (p.prioritizedInterventions[0]?.expectedRevenueDelta || 0), 0);
 
   return {
     members: predictions,
@@ -431,6 +517,9 @@ function computeMemberPredictions(
       classBreakdown,
       urgentInterventions: urgentCount,
       topRiskDriver: topDriver ? topDriver[0] : "No significant risk drivers",
+      gymArchetype,
+      predictedRevenueDeltaFromTopActions: Math.round(predictedRevenueDeltaFromTopActions),
+      interventionLearning,
     },
   };
 }
@@ -537,6 +626,476 @@ function selectIntervention(
   };
 }
 
+function computeUrgencyDecayScore(tenureDays: number, lastContactDays: number | null, now: Date): number {
+  const quarterAnchor = Math.floor((now.getMonth() + 3) / 3);
+  const onboardingDecay = tenureDays <= 90 ? (90 - tenureDays) / 90 : 0;
+  const contactDecay = lastContactDays === null ? 1 : Math.min(1, lastContactDays / 45);
+  return Math.max(0, Math.min(1, onboardingDecay * 0.65 + contactDecay * 0.35 + quarterAnchor * 0.01));
+}
+
+function mapContactToInterventionType(note: string | null): InterventionType | null {
+  const normalized = (note || "").toLowerCase();
+  if (!normalized) return null;
+  if (normalized.includes("onboard") || normalized.includes("first week")) return "onboarding-acceleration";
+  if (normalized.includes("coach") || normalized.includes("check-in")) return "coach-connection";
+  if (normalized.includes("goal") || normalized.includes("milestone")) return "goal-setting";
+  if (normalized.includes("partner") || normalized.includes("event") || normalized.includes("community")) return "community-integration";
+  if (normalized.includes("win back") || normalized.includes("rejoin")) return "win-back";
+  if (normalized.includes("price") || normalized.includes("upgrade") || normalized.includes("nutrition")) return "pricing-review";
+  if (normalized.includes("anniversary") || normalized.includes("celebrate")) return "milestone-celebration";
+  if (normalized.includes("call") || normalized.includes("text") || normalized.includes("outreach")) return "personal-outreach";
+  return null;
+}
+
+function computeInterventionLearningSignals(allContacts: MemberContact[], activeMembers: Member[], now: Date): InterventionLearningSignal[] {
+  const activeSet = new Set(activeMembers.map(m => m.id));
+  const learning = new Map<InterventionType, { attempts: number; retainedAfter30d: number }>();
+
+  for (const contact of allContacts) {
+    const type = mapContactToInterventionType(contact.note);
+    if (!type) continue;
+
+    const record = learning.get(type) || { attempts: 0, retainedAfter30d: 0 };
+    record.attempts += 1;
+
+    if (contact.contactedAt) {
+      const daysSince = Math.floor((now.getTime() - new Date(contact.contactedAt).getTime()) / (1000 * 60 * 60 * 24));
+      if (daysSince >= 30 && activeSet.has(contact.memberId)) {
+        record.retainedAfter30d += 1;
+      }
+    }
+
+    learning.set(type, record);
+  }
+
+  return Array.from(learning.entries())
+    .map(([interventionType, value]) => ({
+      interventionType,
+      attempts: value.attempts,
+      retainedAfter30d: value.retainedAfter30d,
+      retentionRate: value.attempts > 0 ? parseFloat((value.retainedAfter30d / value.attempts).toFixed(3)) : 0,
+      quarterlyWeight: 1,
+    }))
+    .sort((a, b) => b.attempts - a.attempts);
+}
+
+function buildQuarterlyFeedbackWeights(
+  learningSignals: InterventionLearningSignal[],
+  now: Date
+): Partial<Record<InterventionType, number>> {
+  const monthInQuarter = now.getMonth() % 3;
+  const recencyBlend = monthInQuarter === 2 ? 1 : monthInQuarter === 1 ? 0.85 : 0.75;
+  const weights: Partial<Record<InterventionType, number>> = {};
+
+  for (const signal of learningSignals) {
+    const samplePenalty = signal.attempts < 4 ? 0.9 : 1;
+    const performanceShift = (signal.retentionRate - 0.55) * 0.4;
+    const weight = Math.max(0.75, Math.min(1.25, (1 + performanceShift) * recencyBlend * samplePenalty));
+    weights[signal.interventionType] = parseFloat(weight.toFixed(3));
+    signal.quarterlyWeight = parseFloat(weight.toFixed(3));
+  }
+
+  return weights;
+}
+
+function selectCrossfitLanguageTemplate(
+  memberId: string,
+  interventionType: InterventionType,
+  archetype: GymArchetype,
+  now: Date,
+  triggerReason: string,
+  tenureDays: number,
+  engagementClass: EngagementClass
+): string {
+  type LanguageMode = "new-athlete" | "established" | "longevity";
+  type TemplateCard = {
+    hook: string;
+    ownerAction: string;
+    coachCue: string;
+    winCondition: string;
+    timeBox: string;
+    memberScript: string;
+  };
+
+  const languageMode: LanguageMode = tenureDays <= 120
+    ? "new-athlete"
+    : tenureDays >= 540
+      ? "longevity"
+      : "established";
+
+  const riskCohort = engagementClass === "ghost" || engagementClass === "at-risk"
+    ? "acute"
+    : engagementClass === "drifter"
+      ? "drift"
+      : "stable";
+
+  const playBucket = mapInterventionToPlayBucket(interventionType, tenureDays);
+
+  const cardsByBucket: Record<string, Record<LanguageMode, TemplateCard[]>> = {
+    "onboarding-touchpoints": {
+      "new-athlete": [
+        {
+          hook: "Protect the first 30 days before habits fade.",
+          ownerAction: "What to do this week: ask the coach they usually see to do a 2-minute check-in after class and lock the next two class days.",
+          coachCue: "Coach cue: 'Let's pick two training days this week and protect them.'",
+          winCondition: "Win condition: member attends 2+ classes in the next 7 days.",
+          timeBox: "Time box: 7 days.",
+          memberScript: "Coach-to-member: 'You're building rhythm now; two classes this week is the win.'",
+        },
+      ],
+      "established": [
+        {
+          hook: "Member is acting like a reset case; treat as re-onboarding.",
+          ownerAction: "What to do this week: have their usual class coach run a quick reset check-in and confirm schedule fit.",
+          coachCue: "Coach cue: 'What's the friction this month? Let's make your next two weeks easier.'",
+          winCondition: "Win condition: no 7+ day attendance gap in next 14 days.",
+          timeBox: "Time box: 14 days.",
+          memberScript: "Coach-to-member: 'We're rebuilding training rhythm, not chasing intensity yet.'",
+        },
+      ],
+      "longevity": [
+        {
+          hook: "Long-term member needs rhythm reset, not hype.",
+          ownerAction: "What to do this week: coach they know best confirms one low-friction class lane for this month.",
+          coachCue: "Coach cue: 'Let's keep training pain-free and steady this month.'",
+          winCondition: "Win condition: 6+ sessions this month with no extended absence.",
+          timeBox: "Time box: 30 days.",
+          memberScript: "Coach-to-member: 'Consistency and recovery are the target right now.'",
+        },
+      ],
+    },
+    "engagement-checkin": {
+      "new-athlete": [
+        {
+          hook: "Early drift needs a fast human touchpoint.",
+          ownerAction: "What to do this week: ask their usual class coach for a post-class check-in focused on schedule obstacles.",
+          coachCue: "Coach cue: 'What's making attendance hard this week? We'll solve that first.'",
+          winCondition: "Win condition: member commits to 2 class dates before leaving today.",
+          timeBox: "Time box: 7 days.",
+          memberScript: "Coach-to-member: 'Let's get you back in a rhythm with two locked-in days.'",
+        },
+      ],
+      "established": [
+        {
+          hook: "Established athletes retain when coaching feels personal and specific.",
+          ownerAction: "What to do this week: have the coach they see most run a 3-question check-in after class.",
+          coachCue: "Coach cue: 'How's training rhythm, confidence, and recovery this month?'",
+          winCondition: "Win condition: one actionable change implemented in next 2 weeks.",
+          timeBox: "Time box: 14 days.",
+          memberScript: "Coach-to-member: 'Let's set one small target for the next two weeks.'",
+        },
+      ],
+      "longevity": [
+        {
+          hook: "Longevity athletes respond to quality and pain-free consistency language.",
+          ownerAction: "What to do this week: usual coach reviews movement quality and recovery constraints in a 2-minute conversation.",
+          coachCue: "Coach cue: 'Let's keep reps clean and keep you training week to week.'",
+          winCondition: "Win condition: athlete reports confidence and no flare-up in next 14 days.",
+          timeBox: "Time box: 14 days.",
+          memberScript: "Coach-to-member: 'Quality reps and consistency beat intensity spikes.'",
+        },
+      ],
+    },
+    "attendance-recovery": {
+      "new-athlete": [
+        {
+          hook: "Attendance recovery sprint: stop a cancellation before it starts.",
+          ownerAction: "What to do this week: trigger a 7-day recovery sprint with their usual class coach and one accountability text.",
+          coachCue: "Coach cue: 'Pick two classes now; I'll check in after each.'",
+          winCondition: "Win condition: 2 attendances in 7 days.",
+          timeBox: "Time box: 7 days.",
+          memberScript: "Coach-to-member: 'Let's stack two sessions first, then build from there.'",
+        },
+      ],
+      "established": [
+        {
+          hook: "Rebuild momentum with structure, not motivation speeches.",
+          ownerAction: "What to do this week: coach of record sets a back-to-rhythm plan and logs attendance checkpoints.",
+          coachCue: "Coach cue: 'We'll protect two training days and review after week one.'",
+          winCondition: "Win condition: no missed full week over next month.",
+          timeBox: "Time box: 30 days.",
+          memberScript: "Coach-to-member: 'Back-to-baseline week first, then we'll progress.'",
+        },
+      ],
+      "longevity": [
+        {
+          hook: "For long-tenure athletes, attendance recovery should protect capacity.",
+          ownerAction: "What to do this week: have familiar coach set conservative volume lane and consistency target.",
+          coachCue: "Coach cue: 'Let's keep capacity stable and training pain-free this month.'",
+          winCondition: "Win condition: 8+ classes this month with stable recovery notes.",
+          timeBox: "Time box: 30 days.",
+          memberScript: "Coach-to-member: 'Consistency is the PR now; we build from steady weeks.'",
+        },
+      ],
+    },
+    "milestones": {
+      "new-athlete": [
+        {
+          hook: "Milestone framing works best early when identity is forming.",
+          ownerAction: "What to do this week: coach they usually see sets one benchmark or first-Rx-adjacent target.",
+          coachCue: "Coach cue: 'One small benchmark in 2 weeks, then we celebrate progress.'",
+          winCondition: "Win condition: benchmark completed and logged.",
+          timeBox: "Time box: 14 days.",
+          memberScript: "Coach-to-member: 'We'll track progress, not perfection.'",
+        },
+      ],
+      "established": [
+        {
+          hook: "Celebrate consistency and training rhythm over novelty.",
+          ownerAction: "What to do this week: coach calls out a consistency milestone (e.g., 10-class month).",
+          coachCue: "Coach cue: 'You've been steady — let's keep this rhythm another month.'",
+          winCondition: "Win condition: consistency milestone repeated next month.",
+          timeBox: "Time box: 30 days.",
+          memberScript: "Coach-to-member: 'You're building durable capacity — keep stacking quality weeks.'",
+        },
+      ],
+      "longevity": [
+        {
+          hook: "Use longevity milestones, not PR-bell language.",
+          ownerAction: "What to do this week: coach highlights pain-free month, movement quality, or consistent attendance streak.",
+          coachCue: "Coach cue: 'Quality reps and recovery are your win metrics this cycle.'",
+          winCondition: "Win condition: athlete reports confidence and stable training availability.",
+          timeBox: "Time box: 30 days.",
+          memberScript: "Coach-to-member: 'Strength for life means training well, not forcing max days.'",
+        },
+      ],
+    },
+    "referrals": {
+      "new-athlete": [{ hook: "Referral asks should follow visible progress.", ownerAction: "What to do this week: after a positive class streak, invite one friend to foundations class.", coachCue: "Coach cue: 'Know someone who would enjoy this class vibe? Bring them Saturday.'", winCondition: "Win condition: 1 referral invite sent.", timeBox: "Time box: 7 days.", memberScript: "Coach-to-member: 'Bring-a-friend day is low pressure — great first step.'" }],
+      "established": [{ hook: "Established members are the highest-conversion referral channel.", ownerAction: "What to do this week: owner asks 3 core members for one intro each.", coachCue: "Coach cue: 'Who's one person you'd train better with? Invite them this month.'", winCondition: "Win condition: 3 warm intros logged.", timeBox: "Time box: 30 days.", memberScript: "Coach-to-member: 'If someone keeps saying they should start, bring them with you.'" }],
+      "longevity": [{ hook: "Long-tenure members carry credibility in the community.", ownerAction: "What to do this week: ask veterans to invite one friend to a community workout.", coachCue: "Coach cue: 'You're a culture carrier — help one person get started.'", winCondition: "Win condition: veteran-led referral attendance.", timeBox: "Time box: 30 days.", memberScript: "Coach-to-member: 'Your consistency story can help someone else begin.'" }],
+    },
+    "event-activation": {
+      "new-athlete": [{ hook: "Events accelerate belonging for newer members.", ownerAction: "What to do this week: ensure this member is personally invited to the next inclusive event.", coachCue: "Coach cue: 'You're on our team for the next event — scaled is perfect.'", winCondition: "Win condition: event RSVP confirmed.", timeBox: "Time box: 14 days.", memberScript: "Coach-to-member: 'Events are where friendships form fast — we'd love you there.'" }],
+      "established": [{ hook: "Events prevent mid-tenure drift.", ownerAction: "What to do this week: coach gives this member a specific role in upcoming event.", coachCue: "Coach cue: 'Can you anchor warm-up or a team lane Friday night?'", winCondition: "Win condition: attends and participates in event role.", timeBox: "Time box: 30 days.", memberScript: "Coach-to-member: 'Having a role keeps training connected to community.'" }],
+      "longevity": [{ hook: "Veterans stabilize event culture.", ownerAction: "What to do this week: ask a long-tenure member to mentor a newer teammate at event.", coachCue: "Coach cue: 'Pair with a newer athlete and guide their first event experience.'", winCondition: "Win condition: veteran-new athlete pairing completed.", timeBox: "Time box: 30 days.", memberScript: "Coach-to-member: 'Your experience can make someone else's first event a win.'" }],
+    },
+    "coaching-consistency": {
+      "new-athlete": [{ hook: "New athletes need consistent standards across all coaches.", ownerAction: "What to do this week: run a 15-minute coach huddle on onboarding cues.", coachCue: "Coach cue: 'Same warm welcome, same scaling clarity, every class.'", winCondition: "Win condition: onboarding checklist used in every intro class.", timeBox: "Time box: 14 days.", memberScript: "Coach-to-member: 'You'll get the same support no matter who coaches.'" }],
+      "established": [{ hook: "Consistency in coaching language protects retention.", ownerAction: "What to do this week: shadow one class per coach and audit whiteboard brief quality.", coachCue: "Coach cue: 'Clear intent, clear scaling, clear member touchpoint every class.'", winCondition: "Win condition: coaching audit completed with one improvement per coach.", timeBox: "Time box: 30 days.", memberScript: "Coach-to-member: 'Your training experience should feel reliable every day.'" }],
+      "longevity": [{ hook: "Long-term members notice quality drift first.", ownerAction: "What to do this week: gather feedback from veterans on class quality consistency.", coachCue: "Coach cue: 'Ask one veteran athlete what feels better and what needs tightening.'", winCondition: "Win condition: 3 veteran insights actioned this month.", timeBox: "Time box: 30 days.", memberScript: "Coach-to-member: 'Your feedback helps keep standards high for everyone.'" }],
+    },
+    "programming-experience": {
+      "new-athlete": [{ hook: "Programming clarity reduces new-member intimidation.", ownerAction: "What to do this week: ensure each class has clear intended stimulus and scaling path.", coachCue: "Coach cue: 'Explain today's goal in one sentence before warm-up.'", winCondition: "Win condition: new athlete reports confidence in class plan.", timeBox: "Time box: 14 days.", memberScript: "Coach-to-member: 'We'll scale this so you leave feeling successful.'" }],
+      "established": [{ hook: "Programming progression should feel visible month to month.", ownerAction: "What to do this week: review cycle progression and communicate next checkpoint.", coachCue: "Coach cue: 'Here's where this week fits in your bigger progression.'", winCondition: "Win condition: member can state next training checkpoint.", timeBox: "Time box: 30 days.", memberScript: "Coach-to-member: 'You're building skill confidence and training rhythm, not random effort.'" }],
+      "longevity": [{ hook: "Experience quality for longevity athletes means capacity + recovery balance.", ownerAction: "What to do this week: audit volume/intensity options for pain-free progression lanes.", coachCue: "Coach cue: 'Give a quality-reps option before intensity options.'", winCondition: "Win condition: no recovery-related drop-off this month.", timeBox: "Time box: 30 days.", memberScript: "Coach-to-member: 'We train for strength for life — quality first.'" }],
+    },
+  };
+
+  const poolByMode = cardsByBucket[playBucket]?.[languageMode] || cardsByBucket["engagement-checkin"][languageMode];
+  const triggerToken = triggerReason.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40) || "general";
+  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const rotationSeed = `${memberId}-${archetype}-${interventionType}-${playBucket}-${riskCohort}-${triggerToken}-${monthStart}`;
+  const index = hashString(rotationSeed) % poolByMode.length;
+  const selected = poolByMode[index];
+
+  return [
+    `Play: ${playBucket} (${languageMode})`,
+    `Hook: ${selected.hook}`,
+    selected.ownerAction,
+    selected.coachCue,
+    selected.winCondition,
+    selected.timeBox,
+    selected.memberScript,
+  ].join("\n");
+}
+
+function mapInterventionToPlayBucket(interventionType: InterventionType, tenureDays: number): string {
+  switch (interventionType) {
+    case "onboarding-acceleration":
+      return "onboarding-touchpoints";
+    case "coach-connection":
+      return "engagement-checkin";
+    case "goal-setting":
+      return tenureDays <= 120 ? "milestones" : "programming-experience";
+    case "community-integration":
+      return "event-activation";
+    case "win-back":
+      return "attendance-recovery";
+    case "pricing-review":
+      return "programming-experience";
+    case "milestone-celebration":
+      return "milestones";
+    case "personal-outreach":
+    default:
+      return tenureDays <= 120 ? "attendance-recovery" : "engagement-checkin";
+  }
+}
+
+function hashString(value: string): number {
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) {
+    hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+  }
+  return hash;
+}
+
+function inferGymArchetype(activeMembers: Member[], gymChurnRate: number, gymArm: number): GymArchetype {
+  const rates = activeMembers.map(m => Number(m.monthlyRate)).filter(r => r > 0);
+  const avgRate = rates.length > 0 ? rates.reduce((a, b) => a + b, 0) / rates.length : gymArm;
+
+  if (gymChurnRate >= 8) return "turnaround-lab";
+  if (gymChurnRate <= 4 && avgRate >= 180) return "premium-boutique";
+  if (gymChurnRate <= 5) return "community-anchor";
+  return "growth-accelerator";
+}
+
+function getArchetypeRiskAdjustment(archetype: GymArchetype, tenureDays: number, lastContactDays: number | null): number {
+  if (archetype === "turnaround-lab" && tenureDays <= 90) return 0.04;
+  if (archetype === "growth-accelerator" && lastContactDays !== null && lastContactDays <= 14) return -0.02;
+  if (archetype === "community-anchor" && tenureDays > 180) return -0.01;
+  if (archetype === "premium-boutique" && tenureDays <= 30) return 0.02;
+  return 0;
+}
+
+function buildRecommendationMemory(contacts: MemberContact[], now: Date): string {
+  if (contacts.length === 0) {
+    return "No prior interventions logged. Start with coach-led outreach and store outcome.";
+  }
+
+  const latest = contacts[0];
+  const latestDays = latest.contactedAt
+    ? Math.floor((now.getTime() - new Date(latest.contactedAt).getTime()) / (1000 * 60 * 60 * 24))
+    : null;
+
+  const notes = contacts.map(c => (c.note || "").toLowerCase()).join(" ");
+  const contains = (token: string) => notes.includes(token);
+
+  const interventions: string[] = [];
+  if (contains("goal") || contains("milestone")) interventions.push("goal-setting");
+  if (contains("call") || contains("phone") || contains("outreach")) interventions.push("personal-outreach");
+  if (contains("event") || contains("partner") || contains("community")) interventions.push("community-integration");
+
+  const cadenceSignal = latestDays === null
+    ? "unknown cadence"
+    : latestDays <= 14
+      ? "recent outreach cadence"
+      : latestDays <= 45
+        ? "moderate outreach cadence"
+        : "stale outreach cadence";
+
+  if (interventions.length === 0) {
+    return `Past notes found but no intervention pattern detected (${cadenceSignal}).`;
+  }
+
+  return `Previously attempted: ${Array.from(new Set(interventions)).join(", ")} (${cadenceSignal}).`;
+}
+
+function prioritizeInterventions(
+  churnProb: number,
+  tenureDays: number,
+  lastContactDays: number | null,
+  isHighValue: boolean,
+  rate: number,
+  gymArm: number,
+  archetype: GymArchetype,
+  recommendationMemory: string,
+  urgencyDecayScore: number,
+  quarterlyFeedbackWeights: Partial<Record<InterventionType, number>>
+): InterventionPriority[] {
+  const candidates: InterventionType[] = [
+    "personal-outreach",
+    "coach-connection",
+    "goal-setting",
+    "community-integration",
+    "onboarding-acceleration",
+    "win-back",
+    "milestone-celebration",
+    "pricing-review",
+  ];
+
+  return candidates.map((type) => {
+    const feedbackWeight = quarterlyFeedbackWeights[type] || 1;
+    const expectedChurnDelta = estimateInterventionDelta(type, churnProb, tenureDays, lastContactDays, isHighValue, archetype) * feedbackWeight;
+    const confidence = estimateInterventionConfidence(type, recommendationMemory, lastContactDays);
+    const urgency = (churnProb > 0.55 ? 1.25 : churnProb > 0.35 ? 1.1 : 0.95) + Math.min(0.22, urgencyDecayScore * 0.2);
+    const valueWeight = rate >= gymArm ? 1.15 : 1;
+    const expectedRevenueDelta = Math.max(0, rate * Math.min(12, expectedChurnDelta * 12));
+    const score = Math.max(0, expectedRevenueDelta * confidence * urgency * valueWeight);
+
+    return {
+      type,
+      score: parseFloat(score.toFixed(1)),
+      rationale: `${type} prioritized for ${archetype}; expected churn lift ${(expectedChurnDelta * 100).toFixed(1)}pp and ~$${Math.round(expectedRevenueDelta)}/mo protected value.`,
+      expectedChurnDelta: parseFloat(expectedChurnDelta.toFixed(3)),
+      expectedRevenueDelta: Math.round(expectedRevenueDelta),
+      confidence: parseFloat(confidence.toFixed(2)),
+    };
+  }).sort((a, b) => b.score - a.score).slice(0, 3);
+}
+
+function estimateInterventionDelta(
+  type: InterventionType,
+  churnProb: number,
+  tenureDays: number,
+  lastContactDays: number | null,
+  isHighValue: boolean,
+  archetype: GymArchetype
+): number {
+  const base = {
+    "onboarding-acceleration": tenureDays <= 30 ? 0.16 : 0.05,
+    "coach-connection": tenureDays <= 90 ? 0.12 : 0.06,
+    "personal-outreach": churnProb > 0.45 ? 0.11 : 0.07,
+    "goal-setting": tenureDays <= 120 ? 0.1 : 0.05,
+    "community-integration": tenureDays > 60 ? 0.09 : 0.04,
+    "win-back": churnProb > 0.55 ? 0.14 : 0.06,
+    "milestone-celebration": tenureDays > 365 ? 0.07 : 0.03,
+    "pricing-review": isHighValue ? 0.03 : 0.06,
+  }[type];
+
+  const archetypeMultiplier = archetype === "community-anchor"
+    ? (type === "community-integration" ? 1.2 : 1)
+    : archetype === "premium-boutique"
+      ? (type === "personal-outreach" ? 1.15 : 1)
+      : archetype === "turnaround-lab"
+        ? (type === "onboarding-acceleration" || type === "coach-connection" ? 1.2 : 1)
+        : 1;
+
+  const contactPenalty = lastContactDays !== null && lastContactDays <= 10 && type === "personal-outreach" ? 0.75 : 1;
+  return base * archetypeMultiplier * contactPenalty;
+}
+
+function estimateInterventionConfidence(type: InterventionType, recommendationMemory: string, lastContactDays: number | null): number {
+  let confidence = 0.62;
+
+  if (recommendationMemory.includes(type)) confidence -= 0.08;
+  if (recommendationMemory.includes("stale outreach cadence")) confidence += 0.05;
+  if (lastContactDays !== null && lastContactDays <= 7) confidence -= 0.04;
+
+  return Math.max(0.45, Math.min(0.9, confidence));
+}
+
+function buildCounterfactuals(
+  churnProb: number,
+  monthlyRate: number,
+  prioritizedInterventions: InterventionPriority[]
+): CounterfactualScenario[] {
+  const expectedMonthsRemaining = Math.min(60, 1 / Math.max(churnProb, 0.05));
+
+  return prioritizedInterventions.map((option) => {
+    const projectedChurnProbability = Math.max(0.01, churnProb - option.expectedChurnDelta);
+    const projectedRevenueAtRisk = Math.round(monthlyRate * Math.min(expectedMonthsRemaining * projectedChurnProbability, 12));
+
+    return {
+      action: option.type,
+      projectedChurnProbability: parseFloat(projectedChurnProbability.toFixed(3)),
+      projectedRevenueAtRisk,
+      churnDelta: parseFloat((churnProb - projectedChurnProbability).toFixed(3)),
+    };
+  });
+}
+
+function personalizeInterventionDetail(detail: string, archetype: GymArchetype): string {
+  const archetypeGuidance: Record<GymArchetype, string> = {
+    "growth-accelerator": "Focus on repeatable playbooks coaches can execute consistently as membership scales.",
+    "community-anchor": "Anchor the action in rituals that deepen member-to-member trust and belonging.",
+    "premium-boutique": "Preserve high-touch delivery quality and individual coaching precision.",
+    "turnaround-lab": "Execute rapidly with strict weekly follow-through and accountability checkpoints.",
+  };
+
+  return `${detail} ${archetypeGuidance[archetype]}`;
+}
+
 // ═══════════════════════════════════════════════════════════════
 // COHORT INTELLIGENCE ENGINE
 // ═══════════════════════════════════════════════════════════════
@@ -557,7 +1116,7 @@ function computeCohortIntelligence(
   }
 
   const cohorts: CohortBucket[] = [];
-  for (const [key, members] of cohortMap) {
+  for (const [key, members] of Array.from(cohortMap.entries())) {
     const active = members.filter(m => m.status === "active");
     const totalRate = members.reduce((s, m) => s + Number(m.monthlyRate), 0);
     const activeRate = active.reduce((s, m) => s + Number(m.monthlyRate), 0);
@@ -1579,6 +2138,9 @@ function getEmptyIntelligence(message: string): PredictiveIntelligence {
         classBreakdown: { core: 0, drifter: 0, "at-risk": 0, ghost: 0 },
         urgentInterventions: 0,
         topRiskDriver: message,
+        gymArchetype: "growth-accelerator",
+        predictedRevenueDeltaFromTopActions: 0,
+        interventionLearning: [],
       },
     },
     cohortIntelligence: {
