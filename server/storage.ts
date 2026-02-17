@@ -246,7 +246,7 @@ export class DatabaseStorage implements IStorage {
       .from(recommendationLearningStats)
       .where(
         and(
-          sql`${recommendationLearningStats.recommendationType} = ANY(${recommendationTypes})`,
+          sql`${recommendationLearningStats.recommendationType} = ANY(${sql`${recommendationTypes}::text[]`})`,
           sql`(${recommendationLearningStats.gymId} IS NULL OR ${recommendationLearningStats.gymId} = ${gymId})`
         )
       );
