@@ -331,63 +331,64 @@ function computeMemberPredictions(
     };
 
     if (tenureDays <= 14) {
-      applyFactor("Onboarding friction", 0.34, 0.82, "Member is inside first 14 days where cancellation risk is structurally highest.");
+      applyFactor("Brand new — highest dropout risk", 0.34, 0.82, "Members in their first two weeks are most likely to cancel before forming a routine.");
     } else if (tenureDays <= 30) {
-      applyFactor("First-month habit fragility", 0.27, 0.79, "Member has not yet formed a stable class cadence.");
+      applyFactor("Still building the habit", 0.27, 0.79, "This member hasn't settled into a consistent class schedule yet.");
     } else if (tenureDays <= 60) {
-      applyFactor("Pre-habit drift", 0.21, 0.75, "Member is in the 30-60 day adaptation window.");
+      applyFactor("Not yet locked in", 0.21, 0.75, "Member is in the 30–60 day window where many people drift away.");
     } else if (tenureDays <= 90) {
-      applyFactor("Belonging threshold risk", 0.14, 0.7, "Member is in 60-90 day belonging phase.");
+      applyFactor("Hasn't found their crew yet", 0.14, 0.7, "Members in the 60–90 day phase need to feel like they belong.");
     } else if (tenureDays <= 180) {
-      applyFactor("Mid-tenure consistency variance", 0.07, 0.58, "Member tenure indicates moderate baseline uncertainty.");
+      applyFactor("Attendance may be inconsistent", 0.07, 0.58, "Member is past the early phase but hasn't become a regular yet.");
     } else if (tenureDays <= 365) {
-      applyFactor("Established but exposed", 0.03, 0.52, "Member is stable but still behavior-sensitive.");
+      applyFactor("Stable but could still slip", 0.03, 0.52, "Member is established but a life change or bad experience could push them out.");
     }
 
     if (lastContactDays === null) {
       if (tenureDays <= 60) {
-        applyFactor("Coach connection absent", 0.2, 0.83, "No outreach logged during early tenure.");
+        applyFactor("No one has reached out yet", 0.2, 0.83, "This new member has no logged contact from staff — they may feel invisible.");
       } else if (tenureDays <= 180) {
-        applyFactor("Sparse intervention history", 0.1, 0.72, "No recorded outreach despite meaningful tenure.");
+        applyFactor("No recorded check-in", 0.1, 0.72, "No outreach logged despite being a member for months.");
       }
     } else if (lastContactDays > 30 && tenureDays <= 90) {
-      applyFactor("Critical window communication gap", 0.15, 0.77, "No contact in 30+ days while member is still in early behavior window.");
+      applyFactor("Losing touch during critical window", 0.15, 0.77, "It's been 30+ days since anyone reached out, and this member is still new.");
     } else if (lastContactDays > 60) {
-      applyFactor("Long communication gap", 0.08, 0.69, "No contact in 60+ days.");
+      applyFactor("Haven't heard from us in a while", 0.08, 0.69, "Over 60 days since last contact — they may feel forgotten.");
     } else if (lastContactDays <= 14) {
-      applyFactor("Recent coaching touchpoint", -0.06, 0.71, "Member recently received outreach.");
+      applyFactor("Recently connected", -0.06, 0.71, "Someone on the team reached out recently — that helps.");
     }
 
     if (gymChurnRate > 7) {
-      applyFactor("Systemic churn pressure", 0.06, 0.66, "Gym-level churn is elevated and raises individual risk.");
+      applyFactor("Gym-wide cancellation trend", 0.06, 0.66, "Your overall churn rate is high, which raises risk for every member.");
     } else if (gymChurnRate > 5) {
-      applyFactor("Moderate churn pressure", 0.03, 0.58, "Gym-level churn is mildly elevated.");
+      applyFactor("Slightly elevated cancellation rate", 0.03, 0.58, "Gym-wide churn is a bit above normal.");
     }
 
     if (rate < gymArm * 0.7 && rate > 0) {
-      applyFactor("Low-commitment price tier", 0.04, 0.62, "Member pays materially below ARM and may have lower sunk-cost commitment.");
+      applyFactor("Lower price plan — easier to walk away", 0.04, 0.62, "Members paying well below average may have less financial commitment keeping them.");
     }
 
     if (tenureDays <= medianCancelTenure * 1.2 && pctCancelledBefore90 > 0.4) {
-      applyFactor("Historical cancellation zone", 0.05, 0.73, "Member is in tenure band where historical cancels concentrate.");
+      applyFactor("In the danger zone for cancellation", 0.05, 0.73, "This member is at the tenure where most of your past cancellations happened.");
     }
 
     if (isHighValue && tenureDays > 90) {
-      applyFactor("High-investment commitment", -0.03, 0.56, "Higher monthly investment generally reflects stronger commitment.");
+      applyFactor("Invested at a higher level", -0.03, 0.56, "Members paying more tend to stay longer — they've made a bigger commitment.");
     }
 
     if (tenureDays > 365) {
-      applyFactor("Loyalty compounding", -0.05, 0.8, "Long-tenured members have materially lower observed churn risk.");
+      applyFactor("Long-term loyalty", -0.05, 0.8, "Members who've been here over a year are significantly less likely to leave.");
     }
 
     const archetypeShift = getArchetypeRiskAdjustment(gymArchetype, tenureDays, lastContactDays);
     if (archetypeShift !== 0) {
-      applyFactor("Gym archetype behavioral context", archetypeShift, 0.6, `Adjusted for ${gymArchetype} behavior profile.`);
+      const archetypeLabel = gymArchetype.replace(/-/g, " ");
+      applyFactor(`Adjusted for your gym's profile`, archetypeShift, 0.6, `Your gym operates as a ${archetypeLabel} — risk is adjusted accordingly.`);
     }
 
     const urgencyDecayScore = computeUrgencyDecayScore(tenureDays, lastContactDays, now);
     if (urgencyDecayScore > 0.05) {
-      applyFactor("Time-window urgency decay", Math.min(0.08, urgencyDecayScore * 0.09), 0.68, "Risk amplified because early intervention window is decaying.");
+      applyFactor("Connection window closing", Math.min(0.08, urgencyDecayScore * 0.09), 0.68, "The window to make an impact with this member is shrinking — act soon.");
     }
 
     churnProb = Math.max(0.01, Math.min(0.95, churnProb));
@@ -413,7 +414,7 @@ function computeMemberPredictions(
 
     const primaryRiskDriver = riskDrivers.length > 0
       ? riskDrivers[0]
-      : tenureDays <= 90 ? "Early-stage member" : "No significant risk signals";
+      : tenureDays <= 90 ? "New member — still settling in" : "No significant risk signals";
 
     const recommendationMemory = buildRecommendationMemory(contactsByMember.get(m.id) || [], now);
 
@@ -950,7 +951,7 @@ function getArchetypeRiskAdjustment(archetype: GymArchetype, tenureDays: number,
 
 function buildRecommendationMemory(contacts: MemberContact[], now: Date): string {
   if (contacts.length === 0) {
-    return "No prior interventions logged. Start with coach-led outreach and store outcome.";
+    return "No prior outreach logged. Start with a coach-led check-in and log the outcome.";
   }
 
   const latest = contacts[0];
@@ -961,10 +962,11 @@ function buildRecommendationMemory(contacts: MemberContact[], now: Date): string
   const notes = contacts.map(c => (c.note || "").toLowerCase()).join(" ");
   const contains = (token: string) => notes.includes(token);
 
-  const interventions: string[] = [];
-  if (contains("goal") || contains("milestone")) interventions.push("goal-setting");
-  if (contains("call") || contains("phone") || contains("outreach")) interventions.push("personal-outreach");
-  if (contains("event") || contains("partner") || contains("community")) interventions.push("community-integration");
+  const interventionLabels: string[] = [];
+  const interventionTypes: string[] = [];
+  if (contains("goal") || contains("milestone")) { interventionLabels.push("goal-setting"); interventionTypes.push("goal-setting"); }
+  if (contains("call") || contains("phone") || contains("outreach")) { interventionLabels.push("personal outreach"); interventionTypes.push("personal-outreach"); }
+  if (contains("event") || contains("partner") || contains("community")) { interventionLabels.push("community event"); interventionTypes.push("community-integration"); }
 
   const cadenceSignal = latestDays === null
     ? "unknown cadence"
@@ -974,11 +976,21 @@ function buildRecommendationMemory(contacts: MemberContact[], now: Date): string
         ? "moderate outreach cadence"
         : "stale outreach cadence";
 
-  if (interventions.length === 0) {
-    return `Past notes found but no intervention pattern detected (${cadenceSignal}).`;
+  const cadenceHuman = latestDays === null
+    ? "no recent contact on file"
+    : latestDays <= 14
+      ? "last contact was recent"
+      : latestDays <= 45
+        ? `last contact was ${latestDays} days ago`
+        : `it's been ${latestDays} days since last contact`;
+
+  const typeTags = interventionTypes.length > 0 ? ` [${interventionTypes.join(",")}]` : "";
+
+  if (interventionLabels.length === 0) {
+    return `Past notes found but no clear pattern. ${cadenceHuman.charAt(0).toUpperCase() + cadenceHuman.slice(1)}.${typeTags} [${cadenceSignal}]`;
   }
 
-  return `Previously attempted: ${Array.from(new Set(interventions)).join(", ")} (${cadenceSignal}).`;
+  return `Previously tried: ${Array.from(new Set(interventionLabels)).join(", ")}. ${cadenceHuman.charAt(0).toUpperCase() + cadenceHuman.slice(1)}.${typeTags} [${cadenceSignal}]`;
 }
 
 function prioritizeInterventions(
