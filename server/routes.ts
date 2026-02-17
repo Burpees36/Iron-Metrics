@@ -5,6 +5,7 @@ import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integra
 import { parseMembersCsv, previewCsv, parseAllRows, computeFileHash, type ColumnMapping } from "./csv-parser";
 import { recomputeAllMetrics, computeMonthlyMetrics, generateMetricReports, generateForecast, generateTrendIntelligence } from "./metrics";
 import { generatePredictiveIntelligence } from "./predictive";
+import { ensureRecommendationCards, getPeriodStart, getRecommendationExecutionState, logOwnerAction, runLearningUpdate, toggleChecklistItem } from "./recommendation-learning";
 import { insertGymSchema } from "@shared/schema";
 import multer from "multer";
 
@@ -608,10 +609,79 @@ export async function registerRoutes(
       if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
 
       const intelligence = await generatePredictiveIntelligence(req.params.id);
-      res.json(intelligence);
+      const periodStart = getPeriodStart();
+      const baselineForecast = {
+        baselineMembers: intelligence.memberPredictions.members.length,
+        baselineMrr: intelligence.strategicBrief.revenueComparison.currentMrr,
+        baselineChurn: intelligence.memberPredictions.summary.avgChurnProbability,
+      };
+
+      await ensureRecommendationCards(
+        req.params.id,
+        periodStart,
+        intelligence.strategicBrief.recommendations.map((recommendation) => ({
+          interventionType: recommendation.interventionType,
+          headline: recommendation.headline,
+          executionChecklist: recommendation.executionChecklist,
+        })),
+        baselineForecast,
+      );
+
+      await runLearningUpdate(req.params.id);
+      const recommendationExecution = await getRecommendationExecutionState(req.params.id, periodStart);
+      res.json({ ...intelligence, recommendationExecution, periodStart });
     } catch (error) {
       console.error("Error generating predictive intelligence:", error);
       res.status(500).json({ message: "Failed to generate predictive intelligence" });
+    }
+  });
+
+
+  app.get("/api/gyms/:id/recommendations/execution", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      const periodStart = typeof req.query.periodStart === "string" ? req.query.periodStart : getPeriodStart();
+      const cards = await getRecommendationExecutionState(req.params.id, periodStart);
+      res.json({ cards, periodStart });
+    } catch (error) {
+      console.error("Error fetching recommendation execution state:", error);
+      res.status(500).json({ message: "Failed to fetch recommendation execution state" });
+    }
+  });
+
+  app.post("/api/gyms/:id/recommendations/:recommendationId/checklist/:itemId", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      await toggleChecklistItem(req.params.id, req.params.recommendationId, req.params.itemId, Boolean(req.body.checked), req.body.note);
+      const cards = await getRecommendationExecutionState(req.params.id, typeof req.body.periodStart === "string" ? req.body.periodStart : getPeriodStart());
+      res.json({ cards });
+    } catch (error: any) {
+      console.error("Error updating checklist item:", error);
+      res.status(400).json({ message: error.message || "Failed to update checklist item" });
+    }
+  });
+
+  app.post("/api/gyms/:id/recommendations/actions", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      const text = String(req.body.text || "").trim();
+      if (!text) return res.status(400).json({ message: "Action text is required" });
+
+      const periodStart = typeof req.body.periodStart === "string" ? req.body.periodStart : getPeriodStart();
+      const action = await logOwnerAction(req.params.id, periodStart, text);
+      res.status(201).json(action);
+    } catch (error) {
+      console.error("Error logging owner action:", error);
+      res.status(500).json({ message: "Failed to log action" });
     }
   });
 

@@ -277,6 +277,25 @@ export async function generatePredictiveIntelligence(gymId: string): Promise<Pre
     sortedMetrics, gymChurnRate, gymArm, activeMembers.length
   );
 
+  const recommendationTypes = strategicBrief.recommendations.map((recommendation) => recommendation.interventionType);
+  const learningStats = await storage.getLearningStats(gymId, recommendationTypes);
+  const recommendationRanks = new Map<string, number>();
+
+  for (const recommendationType of recommendationTypes) {
+    const gymStats = learningStats.find((row) => row.recommendationType === recommendationType && row.gymId === gymId);
+    const globalStats = learningStats.find((row) => row.recommendationType === recommendationType && row.gymId === null);
+    const gymConfidence = gymStats?.confidence ?? 0;
+    const globalConfidence = globalStats?.confidence ?? 0;
+    const personalizedBoost = gymConfidence * 0.6 + globalConfidence * 0.4 + (gymStats?.expectedImpact ?? 0) * 0.002;
+    recommendationRanks.set(recommendationType, personalizedBoost);
+  }
+
+  strategicBrief.recommendations = [...strategicBrief.recommendations].sort((a, b) => {
+    const aBoost = recommendationRanks.get(a.interventionType) ?? 0;
+    const bBoost = recommendationRanks.get(b.interventionType) ?? 0;
+    return (b.interventionScore + bBoost) - (a.interventionScore + aBoost);
+  });
+
   return {
     memberPredictions,
     cohortIntelligence,
