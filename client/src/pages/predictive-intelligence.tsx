@@ -82,6 +82,20 @@ interface PredictiveIntelligence {
   };
 }
 
+interface CausalFactor {
+  factor: string;
+  impact: number;
+  confidence: number;
+  evidence: string;
+}
+
+interface CounterfactualScenario {
+  action: string;
+  projectedChurnProbability: number;
+  projectedRevenueAtRisk: number;
+  churnDelta: number;
+}
+
 interface MemberPrediction {
   memberId: string;
   name: string;
@@ -101,6 +115,10 @@ interface MemberPrediction {
   interventionUrgency: string;
   lastContactDays: number | null;
   isHighValue: boolean;
+  causalFactors?: CausalFactor[];
+  counterfactuals?: CounterfactualScenario[];
+  recommendationMemory?: string;
+  gymArchetype?: string;
 }
 
 interface MemberAlertEnriched {
@@ -1667,6 +1685,56 @@ function PredictiveMemberDrawer({ member, prediction, gymId, onClose }: { member
                       </p>
                     )}
                   </div>
+                </div>
+              )}
+
+              {prediction?.causalFactors && prediction.causalFactors.length > 0 && (
+                <div className="space-y-2" data-testid="section-causal-factors">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Why This Member Is At Risk</p>
+                  <div className="space-y-1.5">
+                    {prediction.causalFactors.slice(0, 5).map((cf, i) => (
+                      <div key={i} className="flex items-start gap-2 text-xs" data-testid={`causal-factor-${i}`}>
+                        <div className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${cf.impact > 0.05 ? "bg-destructive" : cf.impact > 0 ? "bg-yellow-500" : "bg-emerald-500"}`} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium">{cf.factor}</span>
+                            <span className="text-muted-foreground">
+                              {cf.impact > 0 ? "+" : ""}{(cf.impact * 100).toFixed(1)}% risk
+                            </span>
+                          </div>
+                          <p className="text-muted-foreground mt-0.5">{cf.evidence}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {prediction?.counterfactuals && prediction.counterfactuals.length > 0 && (
+                <div className="space-y-2" data-testid="section-counterfactual">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">If You Act Now</p>
+                  <div className="space-y-1.5">
+                    {prediction.counterfactuals.map((cs, i) => (
+                      <div key={i} className="rounded-md bg-muted/30 p-2 text-xs space-y-0.5" data-testid={`counterfactual-${i}`}>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium capitalize">{cs.action.replace(/-/g, " ")}</span>
+                          <Badge variant="outline" className="text-[10px]">
+                            {Math.abs(cs.churnDelta * 100).toFixed(0)}% reduction
+                          </Badge>
+                        </div>
+                        <p className="text-muted-foreground">
+                          Projected churn: {(cs.projectedChurnProbability * 100).toFixed(0)}% — ${cs.projectedRevenueAtRisk.toLocaleString()} revenue at risk
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {prediction?.gymArchetype && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground" data-testid="text-gym-archetype">
+                  <Target className="w-3 h-3" />
+                  <span>Gym profile: <span className="capitalize font-medium text-foreground">{prediction.gymArchetype.replace(/-/g, " ")}</span></span>
                 </div>
               )}
 
