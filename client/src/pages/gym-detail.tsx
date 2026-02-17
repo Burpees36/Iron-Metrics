@@ -1623,39 +1623,6 @@ function TrendsView({ gymId }: { gymId: string }) {
         </div>
       </div>
 
-      {/* ── STRATEGIC FOCUS ── */}
-      {strategicRecommendations.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-            <Target className="w-3.5 h-3.5" /> Strategic Focus Recommendation
-          </h3>
-          <div className="grid sm:grid-cols-2 gap-4" data-testid="section-strategic-focus">
-            {strategicRecommendations.map((rec, i) => {
-              const recColors = {
-                priority: { badge: "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30", icon: <AlertTriangle className="w-3.5 h-3.5" /> },
-                maintain: { badge: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30", icon: <ShieldCheck className="w-3.5 h-3.5" /> },
-                monitor: { badge: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30", icon: <Eye className="w-3.5 h-3.5" /> },
-              };
-              const rc = recColors[rec.status];
-              return (
-                <Card key={i} data-testid={`strategic-rec-${i}`}>
-                  <CardContent className="p-4 space-y-2">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{rec.area}</span>
-                      <Badge variant="outline" className={`text-[10px] ${rc.badge}`}>
-                        {rc.icon}
-                        <span className="ml-1 capitalize">{rec.status}</span>
-                      </Badge>
-                    </div>
-                    <p className="text-sm font-medium">{rec.headline}</p>
-                    <p className="text-xs text-muted-foreground leading-relaxed">{rec.detail}</p>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
