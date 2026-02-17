@@ -1,4 +1,4 @@
-import { and, asc, eq, lte, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
 import {
   checklistItemCompletions,
   gymMonthlyMetrics,
@@ -73,7 +73,7 @@ export async function getRecommendationExecutionState(gymId: string, periodStart
   const allCompletions = cards.length === 0 ? [] : await db
     .select()
     .from(checklistItemCompletions)
-    .where(sql`${checklistItemCompletions.recommendationId} = ANY(${cards.map((card) => card.id)})`);
+    .where(inArray(checklistItemCompletions.recommendationId, cards.map((card) => card.id)));
 
   const completionMap = new Map<string, { checked: boolean; checkedAt: Date; note: string | null }>();
   for (const row of allCompletions) {

@@ -8,7 +8,7 @@ import {
   type ImportJob, type InsertImportJob,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, sql, gte, lte, desc } from "drizzle-orm";
+import { eq, and, sql, gte, lte, desc, inArray } from "drizzle-orm";
 
 export interface IStorage {
   createGym(gym: InsertGym): Promise<Gym>;
@@ -246,7 +246,7 @@ export class DatabaseStorage implements IStorage {
       .from(recommendationLearningStats)
       .where(
         and(
-          sql`${recommendationLearningStats.recommendationType} = ANY(${sql`${recommendationTypes}::text[]`})`,
+          inArray(recommendationLearningStats.recommendationType, recommendationTypes),
           sql`(${recommendationLearningStats.gymId} IS NULL OR ${recommendationLearningStats.gymId} = ${gymId})`
         )
       );
