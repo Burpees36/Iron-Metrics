@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lte, sql } from "drizzle-orm";
 import {
   checklistItemCompletions,
   gymMonthlyMetrics,
@@ -200,6 +200,28 @@ export async function logOwnerAction(gymId: string, periodStart: string, text: s
     ...created,
     classificationConfidence: Number(created.classificationConfidence ?? 0),
   };
+}
+
+export async function getOwnerActions(gymId: string, limit: number = 50, offset: number = 0) {
+  const rows = await db
+    .select()
+    .from(ownerAdditionalActions)
+    .where(eq(ownerAdditionalActions.gymId, gymId))
+    .orderBy(desc(ownerAdditionalActions.createdAt))
+    .limit(limit + 1)
+    .offset(offset);
+
+  const hasMore = rows.length > limit;
+  const items = rows.slice(0, limit).map((row) => ({
+    id: row.id,
+    periodStart: row.periodStart,
+    text: row.text,
+    classificationType: row.classificationType,
+    classificationStatus: row.classificationStatus,
+    createdAt: row.createdAt,
+  }));
+
+  return { items, hasMore, offset, limit };
 }
 
 function addDays(dateValue: string, days: number): string {

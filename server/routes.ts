@@ -5,7 +5,7 @@ import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integra
 import { parseMembersCsv, previewCsv, parseAllRows, computeFileHash, type ColumnMapping } from "./csv-parser";
 import { recomputeAllMetrics, computeMonthlyMetrics, generateMetricReports, generateForecast, generateTrendIntelligence } from "./metrics";
 import { generatePredictiveIntelligence } from "./predictive";
-import { ensureRecommendationCards, getPeriodStart, getRecommendationExecutionState, logOwnerAction, runLearningUpdate, toggleChecklistItem } from "./recommendation-learning";
+import { ensureRecommendationCards, getOwnerActions, getPeriodStart, getRecommendationExecutionState, logOwnerAction, runLearningUpdate, toggleChecklistItem } from "./recommendation-learning";
 import { insertGymSchema } from "@shared/schema";
 import multer from "multer";
 
@@ -682,6 +682,22 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error logging owner action:", error);
       res.status(500).json({ message: "Failed to log action" });
+    }
+  });
+
+  app.get("/api/gyms/:id/recommendations/actions", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      const limit = Math.min(Number(req.query.limit) || 50, 200);
+      const offset = Math.max(Number(req.query.offset) || 0, 0);
+      const actions = await getOwnerActions(req.params.id, limit, offset);
+      res.json(actions);
+    } catch (error) {
+      console.error("Error fetching owner actions:", error);
+      res.status(500).json({ message: "Failed to fetch actions" });
     }
   });
 

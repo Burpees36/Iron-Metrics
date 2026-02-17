@@ -321,6 +321,161 @@ function StabilityVerdictBar({ level, verdict }: { level: string; verdict: strin
 // REVENUE OUTLOOK BAR VISUAL
 // ═══════════════════════════════════════════════════════════════
 
+interface OwnerAction {
+  id: string;
+  periodStart: string;
+  text: string;
+  classificationType: string | null;
+  classificationStatus: string;
+  createdAt: string;
+}
+
+function OwnerActionsCard({ gymId, periodStart }: { gymId: string; periodStart: string }) {
+  const { toast } = useToast();
+  const [actionText, setActionText] = useState("");
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyPage, setHistoryPage] = useState(0);
+  const PAGE_SIZE = 10;
+
+  const ownerActionMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/gyms/${gymId}/recommendations/actions`, { text: actionText, periodStart });
+      return res.json();
+    },
+    onSuccess: (payload: { classificationType?: string | null }) => {
+      setActionText("");
+      queryClient.invalidateQueries({ queryKey: [`/api/gyms/${gymId}/recommendations/actions`] });
+      toast({
+        title: "Action logged",
+        description: payload.classificationType
+          ? `Logged as: ${payload.classificationType}`
+          : "Saved as unclassified action.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Unable to log action", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const historyQuery = useQuery<{ items: OwnerAction[]; hasMore: boolean }>({
+    queryKey: [`/api/gyms/${gymId}/recommendations/actions`, historyPage],
+    queryFn: async () => {
+      const res = await fetch(`/api/gyms/${gymId}/recommendations/actions?limit=${PAGE_SIZE}&offset=${historyPage * PAGE_SIZE}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load");
+      return res.json();
+    },
+    enabled: showHistory,
+  });
+
+  const groupedByPeriod = useMemo(() => {
+    if (!historyQuery.data?.items) return [];
+    const map = new Map<string, OwnerAction[]>();
+    for (const action of historyQuery.data.items) {
+      const key = action.periodStart;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(action);
+    }
+    return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [historyQuery.data]);
+
+  return (
+    <Card className="animate-fade-in-up animation-delay-500 hover-elevate transition-all duration-300">
+      <CardContent className="pt-4 space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">What else did you do?</p>
+        <Textarea
+          value={actionText}
+          onChange={(event) => setActionText(event.target.value)}
+          placeholder="Log any other actions you took this month (optional)"
+          data-testid="textarea-owner-actions"
+        />
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <button
+            type="button"
+            className="text-xs text-muted-foreground flex items-center gap-1"
+            onClick={() => setShowHistory(!showHistory)}
+            data-testid="button-toggle-action-history"
+          >
+            <Clock className="w-3 h-3" />
+            {showHistory ? "Hide past actions" : "View past actions"}
+            <ChevronRight className={`w-3 h-3 transition-transform duration-200 ${showHistory ? "rotate-90" : ""}`} />
+          </button>
+          <Button
+            size="sm"
+            disabled={!actionText.trim() || ownerActionMutation.isPending}
+            onClick={() => ownerActionMutation.mutate()}
+            data-testid="button-log-owner-action"
+          >
+            {ownerActionMutation.isPending ? "Logging..." : "Log action"}
+          </Button>
+        </div>
+
+        {showHistory && (
+          <div className="border-t pt-3 space-y-3" data-testid="section-action-history">
+            {historyQuery.isLoading && (
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-4 w-1/2" />
+              </div>
+            )}
+            {historyQuery.data && historyQuery.data.items.length === 0 && (
+              <p className="text-xs text-muted-foreground text-center py-2">No actions logged yet.</p>
+            )}
+            {groupedByPeriod.map(([period, actions]) => (
+              <div key={period} className="space-y-1.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  {new Date(period + "T00:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long" })}
+                </p>
+                {actions.map((action) => (
+                  <div key={action.id} className="flex items-start gap-2 py-1" data-testid={`action-item-${action.id}`}>
+                    <FileText className="w-3 h-3 mt-0.5 flex-shrink-0 text-muted-foreground/50" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs leading-relaxed break-words">{action.text}</p>
+                      <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                        <span className="text-[10px] text-muted-foreground">
+                          {new Date(action.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                        </span>
+                        {action.classificationType && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
+                            {action.classificationType}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+            {historyQuery.data && (historyQuery.data.hasMore || historyPage > 0) && (
+              <div className="flex items-center justify-center gap-2 pt-1">
+                {historyPage > 0 && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setHistoryPage(historyPage - 1)}
+                    data-testid="button-action-history-prev"
+                  >
+                    Newer
+                  </Button>
+                )}
+                {historyQuery.data.hasMore && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setHistoryPage(historyPage + 1)}
+                    data-testid="button-action-history-next"
+                  >
+                    Older
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function RevenueOutlookVisual({ comparison, outlook }: {
   comparison: PredictiveIntelligence["strategicBrief"]["revenueComparison"];
   outlook: string;
@@ -508,7 +663,6 @@ function StrategicBriefView({ gymId, periodStart, brief, recommendationExecution
     weekday: "long", year: "numeric", month: "long", day: "numeric",
   });
   const { toast } = useToast();
-  const [actionText, setActionText] = useState("");
   const executionByHeadline = useMemo(() => new Map(recommendationExecution.map((card) => [card.headline, card])), [recommendationExecution]);
 
   const toggleChecklistMutation = useMutation({
@@ -520,25 +674,6 @@ function StrategicBriefView({ gymId, periodStart, brief, recommendationExecution
     },
     onError: (error: Error) => {
       toast({ title: "Unable to save checklist", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const ownerActionMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", `/api/gyms/${gymId}/recommendations/actions`, { text: actionText, periodStart });
-      return res.json();
-    },
-    onSuccess: (payload: { classificationType?: string | null }) => {
-      setActionText("");
-      toast({
-        title: "Action logged",
-        description: payload.classificationType
-          ? `Logged as: ${payload.classificationType}`
-          : "Saved as unclassified action.",
-      });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Unable to log action", description: error.message, variant: "destructive" });
     },
   });
 
@@ -675,27 +810,7 @@ function StrategicBriefView({ gymId, periodStart, brief, recommendationExecution
         ))}
       </div>
 
-      <Card className="animate-fade-in-up animation-delay-500 hover-elevate transition-all duration-300">
-        <CardContent className="pt-4 space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">What else did you do?</p>
-          <Textarea
-            value={actionText}
-            onChange={(event) => setActionText(event.target.value)}
-            placeholder="Log any other actions you took this month (optional)"
-            data-testid="textarea-owner-actions"
-          />
-          <div className="flex justify-end">
-            <Button
-              size="sm"
-              disabled={!actionText.trim() || ownerActionMutation.isPending}
-              onClick={() => ownerActionMutation.mutate()}
-              data-testid="button-log-owner-action"
-            >
-              {ownerActionMutation.isPending ? "Logging..." : "Log action"}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <OwnerActionsCard gymId={gymId} periodStart={periodStart} />
 
       <RevenueOutlookVisual comparison={brief.revenueComparison} outlook={brief.revenueOutlook} />
 
