@@ -14,15 +14,15 @@ import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/auth-utils";
 import {
   Brain, AlertTriangle, TrendingDown, TrendingUp, Users, DollarSign,
   Shield, ShieldAlert, ShieldCheck, Target, Zap, FileText, BarChart3,
   ChevronRight, Clock, Minus, ArrowUp, ArrowDown, CheckCircle2, Circle,
-  MessageSquare, Phone, UserCheck, CalendarDays, Search, Star,
+  MessageSquare, Phone, UserCheck, CalendarDays, Search, Star, Check,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -80,6 +80,19 @@ interface PredictiveIntelligence {
     memberAlerts: MemberAlertEnriched[];
     roiProjection: { actionTaken: string; membersRetained: number; revenuePreserved: number; annualImpact: number };
   };
+  recommendationExecution: RecommendationExecutionCard[];
+  periodStart: string;
+}
+
+interface RecommendationExecutionCard {
+  id: string;
+  recommendationType: string;
+  headline: string;
+  totalItems: number;
+  checkedItems: number;
+  executionStrength: number;
+  executionStrengthThreshold: number;
+  checklist: Array<{ itemId: string; text: string; checked: boolean }>;
 }
 
 interface MemberPrediction {
@@ -217,7 +230,7 @@ export default function PredictiveIntelligenceView({ gymId }: { gymId: string })
         </TabsList>
 
         <TabsContent value="brief" className="mt-6">
-          <StrategicBriefView brief={data.strategicBrief} />
+          <StrategicBriefView gymId={gymId} periodStart={data.periodStart} brief={data.strategicBrief} recommendationExecution={data.recommendationExecution} />
         </TabsContent>
 
         <TabsContent value="members" className="mt-6">
@@ -490,9 +503,43 @@ function ScoreBreakdown({ rec }: { rec: BriefRecommendation }) {
 // STRATEGIC BRIEF
 // ═══════════════════════════════════════════════════════════════
 
-function StrategicBriefView({ brief }: { brief: PredictiveIntelligence["strategicBrief"] }) {
+function StrategicBriefView({ gymId, periodStart, brief, recommendationExecution }: { gymId: string; periodStart: string; brief: PredictiveIntelligence["strategicBrief"]; recommendationExecution: RecommendationExecutionCard[] }) {
   const dateStr = new Date(brief.generatedAt).toLocaleDateString("en-US", {
     weekday: "long", year: "numeric", month: "long", day: "numeric",
+  });
+  const { toast } = useToast();
+  const [actionText, setActionText] = useState("");
+  const executionByHeadline = useMemo(() => new Map(recommendationExecution.map((card) => [card.headline, card])), [recommendationExecution]);
+
+  const toggleChecklistMutation = useMutation({
+    mutationFn: async ({ recommendationId, itemId, checked }: { recommendationId: string; itemId: string; checked: boolean }) => {
+      await apiRequest("POST", `/api/gyms/${gymId}/recommendations/${recommendationId}/checklist/${itemId}`, { checked, periodStart });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/gyms/${gymId}/predictive`] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Unable to save checklist", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const ownerActionMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/gyms/${gymId}/recommendations/actions`, { text: actionText, periodStart });
+      return res.json();
+    },
+    onSuccess: (payload: { classificationType?: string | null }) => {
+      setActionText("");
+      toast({
+        title: "Action logged",
+        description: payload.classificationType
+          ? `Logged as: ${payload.classificationType}`
+          : "Saved as unclassified action.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Unable to log action", description: error.message, variant: "destructive" });
+    },
   });
 
   return (
@@ -575,17 +622,38 @@ function StrategicBriefView({ brief }: { brief: PredictiveIntelligence["strategi
 
               {rec.executionChecklist && rec.executionChecklist.length > 0 && (
                 <div className="pt-3 border-t space-y-2" data-testid={`checklist-recommendation-${i}`}>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    Execution Checklist
-                  </p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Execution Checklist
+                    </p>
+                    {executionByHeadline.get(rec.headline) && (
+                      <Badge variant="outline" className="text-[10px]">
+                        Strength {(executionByHeadline.get(rec.headline)!.executionStrength * 100).toFixed(0)}%
+                      </Badge>
+                    )}
+                  </div>
                   <div className="space-y-1.5 pl-1">
-                    {rec.executionChecklist.map((item, j) => (
-                      <div key={j} className="flex items-start gap-2 group" data-testid={`checklist-item-${i}-${j}`}>
-                        <Circle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-muted-foreground/50" />
-                        <span className="text-xs leading-relaxed text-muted-foreground">{item}</span>
-                      </div>
-                    ))}
+                    {rec.executionChecklist.map((item, j) => {
+                      const card = executionByHeadline.get(rec.headline);
+                      const checklistItem = card?.checklist.find((entry: { itemId: string; text: string; checked: boolean }) => entry.text === item);
+                      const checked = checklistItem?.checked ?? false;
+                      return (
+                        <button
+                          key={j}
+                          type="button"
+                          className="flex items-start gap-2 group w-full text-left"
+                          data-testid={`checklist-item-${i}-${j}`}
+                          onClick={() => {
+                            if (!card || !checklistItem) return;
+                            toggleChecklistMutation.mutate({ recommendationId: card.id, itemId: checklistItem.itemId, checked: !checked });
+                          }}
+                        >
+                          {checked ? <Check className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-emerald-500" /> : <Circle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-muted-foreground/50" />}
+                          <span className={`text-xs leading-relaxed ${checked ? "text-foreground" : "text-muted-foreground"}`}>{item}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -606,6 +674,28 @@ function StrategicBriefView({ brief }: { brief: PredictiveIntelligence["strategi
           </Card>
         ))}
       </div>
+
+      <Card className="animate-fade-in-up animation-delay-500 hover-elevate transition-all duration-300">
+        <CardContent className="pt-4 space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">What else did you do?</p>
+          <Textarea
+            value={actionText}
+            onChange={(event) => setActionText(event.target.value)}
+            placeholder="Log any other actions you took this month (optional)"
+            data-testid="textarea-owner-actions"
+          />
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              disabled={!actionText.trim() || ownerActionMutation.isPending}
+              onClick={() => ownerActionMutation.mutate()}
+              data-testid="button-log-owner-action"
+            >
+              {ownerActionMutation.isPending ? "Logging..." : "Log action"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <RevenueOutlookVisual comparison={brief.revenueComparison} outlook={brief.revenueOutlook} />
 
