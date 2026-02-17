@@ -14,15 +14,15 @@ import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/auth-utils";
 import {
   Brain, AlertTriangle, TrendingDown, TrendingUp, Users, DollarSign,
   Shield, ShieldAlert, ShieldCheck, Target, Zap, FileText, BarChart3,
   ChevronRight, Clock, Minus, ArrowUp, ArrowDown, CheckCircle2, Circle,
-  MessageSquare, Phone, UserCheck, CalendarDays, Search, Star,
+  MessageSquare, Phone, UserCheck, CalendarDays, Search, Star, Check,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -80,20 +80,19 @@ interface PredictiveIntelligence {
     memberAlerts: MemberAlertEnriched[];
     roiProjection: { actionTaken: string; membersRetained: number; revenuePreserved: number; annualImpact: number };
   };
+  recommendationExecution: RecommendationExecutionCard[];
+  periodStart: string;
 }
 
-interface CausalFactor {
-  factor: string;
-  impact: number;
-  confidence: number;
-  evidence: string;
-}
-
-interface CounterfactualScenario {
-  action: string;
-  projectedChurnProbability: number;
-  projectedRevenueAtRisk: number;
-  churnDelta: number;
+interface RecommendationExecutionCard {
+  id: string;
+  recommendationType: string;
+  headline: string;
+  totalItems: number;
+  checkedItems: number;
+  executionStrength: number;
+  executionStrengthThreshold: number;
+  checklist: Array<{ itemId: string; text: string; checked: boolean }>;
 }
 
 interface MemberPrediction {
@@ -115,10 +114,6 @@ interface MemberPrediction {
   interventionUrgency: string;
   lastContactDays: number | null;
   isHighValue: boolean;
-  causalFactors?: CausalFactor[];
-  counterfactuals?: CounterfactualScenario[];
-  recommendationMemory?: string;
-  gymArchetype?: string;
 }
 
 interface MemberAlertEnriched {
@@ -235,7 +230,7 @@ export default function PredictiveIntelligenceView({ gymId }: { gymId: string })
         </TabsList>
 
         <TabsContent value="brief" className="mt-6">
-          <StrategicBriefView brief={data.strategicBrief} />
+          <StrategicBriefView gymId={gymId} periodStart={data.periodStart} brief={data.strategicBrief} recommendationExecution={data.recommendationExecution} />
         </TabsContent>
 
         <TabsContent value="members" className="mt-6">
@@ -425,9 +420,16 @@ function FocusRecommendationHero({ rec }: { rec: BriefRecommendation }) {
             <Target className="w-5 h-5 text-blue-500" />
             <p className="text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">Focus Recommendation</p>
           </div>
-          <Badge variant="outline" className="text-xs text-blue-600 dark:text-blue-400 border-blue-500/30" data-testid="badge-focus-score">
-            Score: {rec.interventionScore.toLocaleString()}
-          </Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            {rec.crossfitContext && (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal text-muted-foreground border-muted-foreground/20">
+                {rec.crossfitContext}
+              </Badge>
+            )}
+            <Badge variant="outline" className="text-xs text-blue-600 dark:text-blue-400 border-blue-500/30" data-testid="badge-focus-score">
+              Score: {rec.interventionScore.toLocaleString()}
+            </Badge>
+          </div>
         </div>
 
         <p className="text-xs text-muted-foreground italic">If you only do one thing this month — do this.</p>
@@ -501,9 +503,43 @@ function ScoreBreakdown({ rec }: { rec: BriefRecommendation }) {
 // STRATEGIC BRIEF
 // ═══════════════════════════════════════════════════════════════
 
-function StrategicBriefView({ brief }: { brief: PredictiveIntelligence["strategicBrief"] }) {
+function StrategicBriefView({ gymId, periodStart, brief, recommendationExecution }: { gymId: string; periodStart: string; brief: PredictiveIntelligence["strategicBrief"]; recommendationExecution: RecommendationExecutionCard[] }) {
   const dateStr = new Date(brief.generatedAt).toLocaleDateString("en-US", {
     weekday: "long", year: "numeric", month: "long", day: "numeric",
+  });
+  const { toast } = useToast();
+  const [actionText, setActionText] = useState("");
+  const executionByHeadline = useMemo(() => new Map(recommendationExecution.map((card) => [card.headline, card])), [recommendationExecution]);
+
+  const toggleChecklistMutation = useMutation({
+    mutationFn: async ({ recommendationId, itemId, checked }: { recommendationId: string; itemId: string; checked: boolean }) => {
+      await apiRequest("POST", `/api/gyms/${gymId}/recommendations/${recommendationId}/checklist/${itemId}`, { checked, periodStart });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/gyms/${gymId}/predictive`] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Unable to save checklist", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const ownerActionMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/gyms/${gymId}/recommendations/actions`, { text: actionText, periodStart });
+      return res.json();
+    },
+    onSuccess: (payload: { classificationType?: string | null }) => {
+      setActionText("");
+      toast({
+        title: "Action logged",
+        description: payload.classificationType
+          ? `Logged as: ${payload.classificationType}`
+          : "Saved as unclassified action.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Unable to log action", description: error.message, variant: "destructive" });
+    },
   });
 
   return (
@@ -564,11 +600,7 @@ function StrategicBriefView({ brief }: { brief: PredictiveIntelligence["strategi
         {brief.recommendations.map((rec, i) => (
           <Card key={i} className="hover-elevate transition-all duration-300" data-testid={`card-recommendation-${i}`}>
             <CardContent className="pt-5 space-y-3">
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm font-semibold leading-snug">{rec.headline}</p>
-                  <span className="text-xs text-muted-foreground flex-shrink-0">{rec.timeframe}</span>
-                </div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge
                     variant={rec.priority === "critical" ? "destructive" : "secondary"}
@@ -577,23 +609,51 @@ function StrategicBriefView({ brief }: { brief: PredictiveIntelligence["strategi
                     {rec.priority}
                   </Badge>
                   <span className="text-xs text-muted-foreground">{rec.category}</span>
+                  {rec.crossfitContext && (
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal text-muted-foreground border-muted-foreground/20">
+                      {rec.crossfitContext}
+                    </Badge>
+                  )}
                 </div>
+                <span className="text-xs text-muted-foreground">{rec.timeframe}</span>
               </div>
+              <p className="text-sm font-medium">{rec.headline}</p>
               <p className="text-sm text-muted-foreground leading-relaxed">{rec.detail}</p>
 
               {rec.executionChecklist && rec.executionChecklist.length > 0 && (
                 <div className="pt-3 border-t space-y-2" data-testid={`checklist-recommendation-${i}`}>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    Execution Checklist
-                  </p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Execution Checklist
+                    </p>
+                    {executionByHeadline.get(rec.headline) && (
+                      <Badge variant="outline" className="text-[10px]">
+                        Strength {(executionByHeadline.get(rec.headline)!.executionStrength * 100).toFixed(0)}%
+                      </Badge>
+                    )}
+                  </div>
                   <div className="space-y-1.5 pl-1">
-                    {rec.executionChecklist.map((item, j) => (
-                      <div key={j} className="flex items-start gap-2 group" data-testid={`checklist-item-${i}-${j}`}>
-                        <Circle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-muted-foreground/50" />
-                        <span className="text-xs leading-relaxed text-muted-foreground">{item}</span>
-                      </div>
-                    ))}
+                    {rec.executionChecklist.map((item, j) => {
+                      const card = executionByHeadline.get(rec.headline);
+                      const checklistItem = card?.checklist.find((entry: { itemId: string; text: string; checked: boolean }) => entry.text === item);
+                      const checked = checklistItem?.checked ?? false;
+                      return (
+                        <button
+                          key={j}
+                          type="button"
+                          className="flex items-start gap-2 group w-full text-left"
+                          data-testid={`checklist-item-${i}-${j}`}
+                          onClick={() => {
+                            if (!card || !checklistItem) return;
+                            toggleChecklistMutation.mutate({ recommendationId: card.id, itemId: checklistItem.itemId, checked: !checked });
+                          }}
+                        >
+                          {checked ? <Check className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-emerald-500" /> : <Circle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-muted-foreground/50" />}
+                          <span className={`text-xs leading-relaxed ${checked ? "text-foreground" : "text-muted-foreground"}`}>{item}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -608,13 +668,52 @@ function StrategicBriefView({ brief }: { brief: PredictiveIntelligence["strategi
                   <p className="text-xs text-muted-foreground">{rec.interventionType}</p>
                 </div>
               </div>
+
+              <ScoreBreakdown rec={rec} />
             </CardContent>
           </Card>
         ))}
       </div>
 
+      <Card className="animate-fade-in-up animation-delay-500 hover-elevate transition-all duration-300">
+        <CardContent className="pt-4 space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">What else did you do?</p>
+          <Textarea
+            value={actionText}
+            onChange={(event) => setActionText(event.target.value)}
+            placeholder="Log any other actions you took this month (optional)"
+            data-testid="textarea-owner-actions"
+          />
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              disabled={!actionText.trim() || ownerActionMutation.isPending}
+              onClick={() => ownerActionMutation.mutate()}
+              data-testid="button-log-owner-action"
+            >
+              {ownerActionMutation.isPending ? "Logging..." : "Log action"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <RevenueOutlookVisual comparison={brief.revenueComparison} outlook={brief.revenueOutlook} />
 
+      {brief.memberAlerts.length > 0 && (
+        <div className="space-y-3" data-testid="section-member-alerts">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Priority Member Alerts</h3>
+            <Badge variant="outline" className="text-xs text-red-600 dark:text-red-400 border-red-500/30">
+              {brief.memberAlerts.length} members need attention
+            </Badge>
+          </div>
+          <div className="grid gap-3">
+            {brief.memberAlerts.map((alert, i) => (
+              <MemberAlertCard key={alert.memberId} alert={alert} index={i} />
+            ))}
+          </div>
+        </div>
+      )}
 
       <Card className="animate-fade-in-up animation-delay-600 hover-elevate transition-all duration-300" data-testid="card-roi-projection">
         <CardContent className="pt-5 space-y-3">
@@ -1658,56 +1757,6 @@ function PredictiveMemberDrawer({ member, prediction, gymId, onClose }: { member
                       </p>
                     )}
                   </div>
-                </div>
-              )}
-
-              {prediction?.causalFactors && prediction.causalFactors.length > 0 && (
-                <div className="space-y-2" data-testid="section-causal-factors">
-                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Why This Member Is At Risk</p>
-                  <div className="space-y-1.5">
-                    {prediction.causalFactors.slice(0, 5).map((cf, i) => (
-                      <div key={i} className="flex items-start gap-2 text-xs" data-testid={`causal-factor-${i}`}>
-                        <div className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${cf.impact > 0.05 ? "bg-destructive" : cf.impact > 0 ? "bg-yellow-500" : "bg-emerald-500"}`} />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-medium">{cf.factor}</span>
-                            <span className="text-muted-foreground">
-                              {cf.impact > 0 ? "+" : ""}{(cf.impact * 100).toFixed(1)}% risk
-                            </span>
-                          </div>
-                          <p className="text-muted-foreground mt-0.5">{cf.evidence}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {prediction?.counterfactuals && prediction.counterfactuals.length > 0 && (
-                <div className="space-y-2" data-testid="section-counterfactual">
-                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">If You Act Now</p>
-                  <div className="space-y-1.5">
-                    {prediction.counterfactuals.map((cs, i) => (
-                      <div key={i} className="rounded-md bg-muted/30 p-2 text-xs space-y-0.5" data-testid={`counterfactual-${i}`}>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium capitalize">{cs.action.replace(/-/g, " ")}</span>
-                          <Badge variant="outline" className="text-[10px]">
-                            {Math.abs(cs.churnDelta * 100).toFixed(0)}% reduction
-                          </Badge>
-                        </div>
-                        <p className="text-muted-foreground">
-                          Projected churn: {(cs.projectedChurnProbability * 100).toFixed(0)}% — ${cs.projectedRevenueAtRisk.toLocaleString()} revenue at risk
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {prediction?.gymArchetype && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground" data-testid="text-gym-archetype">
-                  <Target className="w-3 h-3" />
-                  <span>Gym profile: <span className="capitalize font-medium text-foreground">{prediction.gymArchetype.replace(/-/g, " ")}</span></span>
                 </div>
               )}
 

@@ -1,5 +1,6 @@
 import {
   gyms, members, gymMonthlyMetrics, memberContacts, importJobs,
+  recommendationLearningStats,
   type Gym, type InsertGym,
   type Member, type InsertMember,
   type GymMonthlyMetrics, type InsertGymMonthlyMetrics,
@@ -34,6 +35,13 @@ export interface IStorage {
   getImportJobsByGym(gymId: string): Promise<ImportJob[]>;
   updateImportJob(id: string, updates: Partial<ImportJob>): Promise<ImportJob>;
   findImportByHash(gymId: string, fileHash: string): Promise<ImportJob | undefined>;
+  getLearningStats(gymId: string, recommendationTypes: string[]): Promise<Array<{
+    recommendationType: string;
+    gymId: string | null;
+    confidence: number;
+    expectedImpact: number;
+    sampleSize: number;
+  }>>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -228,6 +236,28 @@ export class DatabaseStorage implements IStorage {
       .from(importJobs)
       .where(and(eq(importJobs.gymId, gymId), eq(importJobs.fileHash, fileHash)));
     return job;
+  }
+
+  async getLearningStats(gymId: string, recommendationTypes: string[]) {
+    if (recommendationTypes.length === 0) return [];
+
+    const rows = await db
+      .select()
+      .from(recommendationLearningStats)
+      .where(
+        and(
+          sql`${recommendationLearningStats.recommendationType} = ANY(${recommendationTypes})`,
+          sql`(${recommendationLearningStats.gymId} IS NULL OR ${recommendationLearningStats.gymId} = ${gymId})`
+        )
+      );
+
+    return rows.map((row) => ({
+      recommendationType: row.recommendationType,
+      gymId: row.gymId,
+      confidence: Number(row.confidence),
+      expectedImpact: Number(row.expectedImpact),
+      sampleSize: row.sampleSize,
+    }));
   }
 }
 
