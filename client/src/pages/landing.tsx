@@ -271,7 +271,7 @@ export default function LandingPage() {
             <FadeInCard delay={200}>
               <OutcomeRow
                 number="3"
-                title="Get one clear next step"
+                title="Take the next best step"
                 description="Every intervention is ranked by expected revenue impact and urgency. One clear priority surfaces automatically. No noise. No guessing."
               />
             </FadeInCard>
