@@ -304,7 +304,7 @@ export default function LandingPage() {
                 <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
                   <span className="text-sm font-bold text-primary">3</span>
                 </div>
-                <h3 className="font-semibold text-sm">Act</h3>
+                <h3 className="font-semibold text-sm">Act With Precision</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">Iron Metrics ranks interventions by revenue impact and urgency.
                 You execute. Track outcomes. The system learns what works.</p>
               </div>
