@@ -248,9 +248,8 @@ export default function LandingPage() {
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-center" data-testid="text-outcomes-title">Know the risk.
             Know the dollars.
             Know the move.</h2>
-            <p className="text-muted-foreground max-w-xl mx-auto leading-relaxed">
-              Upload your member data. Iron Metrics shows you who's at risk, what to do about it, and what it's worth.
-            </p>
+            <p className="text-muted-foreground max-w-xl mx-auto leading-relaxed">Iron Metrics turns retention into a decision system — not another dashboard
+</p>
           </div>
 
           <div className="space-y-6">
