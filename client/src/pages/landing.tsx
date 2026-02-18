@@ -5,22 +5,10 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { useState, useEffect, useRef } from "react";
 import {
   Activity,
-  BarChart3,
-  Shield,
-  TrendingUp,
-  Users,
   ArrowRight,
-  Target,
-  Gauge,
-  Radar,
-  LineChart,
   ArrowDown,
   ArrowUp,
-  Brain,
   CheckCircle2,
-  Zap,
-  FileText,
-  AlertTriangle,
 } from "lucide-react";
 
 interface GymScenario {
@@ -68,7 +56,7 @@ const gymScenarios: GymScenario[] = [
     churn: { value: "4.5%", trend: "-0.2%" },
     atRisk: 3,
     revenueProtected: "$1,100/mo",
-    verdict: "Strong — just crossed stability threshold",
+    verdict: "Strong — stability threshold crossed",
   },
 ];
 
@@ -149,15 +137,17 @@ export default function LandingPage() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             <div className="space-y-8">
-              <p className="text-sm font-medium text-primary tracking-wide uppercase animate-fade-in-up">The Stability Command Center</p>
+              <p className="text-sm font-medium text-primary tracking-wide uppercase animate-fade-in-up" data-testid="text-subtitle">The Stability Command Center</p>
               <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight leading-tight animate-fade-in-up animation-delay-100" data-testid="text-hero-headline">
                 Stop guessing.
                 <br />
                 Start <span className="text-primary">knowing.</span>
               </h1>
-              <p className="text-muted-foreground text-base sm:text-lg max-w-md leading-relaxed animate-fade-in-up animation-delay-200">
-                Iron Metrics turns your member data into retention intelligence, churn predictions, and ranked interventions — so you know exactly what to do next.
-              </p>
+              <div className="space-y-2 text-muted-foreground text-base sm:text-lg max-w-md leading-relaxed animate-fade-in-up animation-delay-200" data-testid="text-hero-copy">
+                <p>Know who's going to cancel — before they do.</p>
+                <p>See how much revenue is actually at risk.</p>
+                <p>And act on what matters most.</p>
+              </div>
               <div className="flex flex-wrap items-center gap-3 animate-fade-in-up animation-delay-300">
                 <a href="/api/login">
                   <Button size="lg" data-testid="button-get-started">
@@ -167,7 +157,7 @@ export default function LandingPage() {
                 </a>
               </div>
               <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground animate-fade-in-up animation-delay-400">
-                <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-emerald-500" /> Import your CSV</span>
+                <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-emerald-500" /> Import a CSV</span>
                 <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-emerald-500" /> See risks instantly</span>
                 <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-emerald-500" /> Act with confidence</span>
               </div>
@@ -254,178 +244,84 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="py-20 sm:py-28 border-t" data-testid="section-what-it-does">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="py-20 sm:py-28 border-t" data-testid="section-outcomes">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16 space-y-4">
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight" data-testid="text-how-title">What Iron Metrics Does</h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              Upload your member data. Iron Metrics analyzes retention patterns, predicts who's likely to leave, and tells you exactly what to do — ranked by financial impact.
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight" data-testid="text-outcomes-title">More predictable revenue. Fewer cancellations. Less stress.</h2>
+            <p className="text-muted-foreground max-w-xl mx-auto leading-relaxed">
+              Upload your member data. Iron Metrics shows you who's at risk, what to do about it, and what it's worth.
             </p>
           </div>
 
-          <div className="grid sm:grid-cols-3 gap-6">
+          <div className="space-y-6">
             <FadeInCard delay={0}>
-              <Card className="h-full">
-                <CardContent className="p-6 space-y-4">
-                  <div className="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center">
-                    <FileText className="w-5 h-5 text-primary" />
-                  </div>
-                  <h3 className="font-semibold text-sm">Import your member data</h3>
-                  <p className="text-muted-foreground text-sm leading-relaxed">
-                    Upload a CSV from Wodify, PushPress, Zen Planner, or any system. Iron Metrics auto-detects your columns and validates every row.
-                  </p>
-                </CardContent>
-              </Card>
+              <OutcomeRow
+                number="1"
+                title="See who's going to leave"
+                description="Every member gets a risk score based on tenure, payment gaps, and behavior patterns. You see exactly who needs attention — and how urgent it is."
+              />
             </FadeInCard>
             <FadeInCard delay={100}>
-              <Card className="h-full">
-                <CardContent className="p-6 space-y-4">
-                  <div className="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center">
-                    <Brain className="w-5 h-5 text-primary" />
-                  </div>
-                  <h3 className="font-semibold text-sm">Get predictive intelligence</h3>
-                  <p className="text-muted-foreground text-sm leading-relaxed">
-                    Member-level churn predictions, risk classification, retention stability scoring, and revenue scenario modeling — all computed from your real data.
-                  </p>
-                </CardContent>
-              </Card>
+              <OutcomeRow
+                number="2"
+                title="Know what it's costing you"
+                description="Revenue at risk, lifetime value remaining, churn trends — translated into dollars, not percentages. You see the real financial picture."
+              />
             </FadeInCard>
             <FadeInCard delay={200}>
-              <Card className="h-full">
-                <CardContent className="p-6 space-y-4">
-                  <div className="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center">
-                    <Target className="w-5 h-5 text-primary" />
-                  </div>
-                  <h3 className="font-semibold text-sm">Act on ranked recommendations</h3>
-                  <p className="text-muted-foreground text-sm leading-relaxed">
-                    Every recommendation is scored by expected revenue impact, confidence, and urgency. Check off tasks and track what actually works over time.
-                  </p>
-                </CardContent>
-              </Card>
+              <OutcomeRow
+                number="3"
+                title="Get one clear next step"
+                description="Every recommendation is ranked by financial impact. The single highest-value action surfaces automatically. Check it off, track the outcome, repeat."
+              />
             </FadeInCard>
           </div>
         </div>
       </section>
 
-      <section className="py-20 sm:py-28 border-t" data-testid="section-intelligence-stack">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16 space-y-4">
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">The Intelligence Stack</h2>
-            <p className="text-muted-foreground max-w-xl mx-auto leading-relaxed">Six systems working together to protect your revenue and strengthen your community.</p>
-          </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            <FadeInCard delay={0}><ModuleCard icon={Gauge} title="Retention Stability Index" description="One score that tells you how stable your gym really is. Your north star for retention health." /></FadeInCard>
-            <FadeInCard delay={80}><ModuleCard icon={BarChart3} title="Revenue Stability Panel" description="Monthly churn, net growth, revenue per member, and volatility indicators — all with 90-day trends." /></FadeInCard>
-            <FadeInCard delay={160}><ModuleCard icon={Radar} title="Member Risk Radar" description="Every member classified by risk level with personalized intervention recommendations and urgency scores." /></FadeInCard>
-            <FadeInCard delay={240}><ModuleCard icon={TrendingUp} title="Lifetime Value Engine" description="True LTV calculations and scenario modeling. See exactly what a 1% churn improvement is worth." /></FadeInCard>
-            <FadeInCard delay={320}><ModuleCard icon={Zap} title="Ranked Interventions" description="Recommendations scored by revenue impact, confidence, and urgency. The top action surfaces automatically." /></FadeInCard>
-            <FadeInCard delay={400}><ModuleCard icon={LineChart} title="Learning Loop" description="Track which actions you take. Iron Metrics evaluates outcomes at 30/60/90 days and learns what works." /></FadeInCard>
-          </div>
-        </div>
-      </section>
-
-      <section className="py-20 sm:py-28 border-t" data-testid="section-how-scoring-works">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div className="space-y-6">
-              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Every recommendation is mathematically scored</h2>
-              <p className="text-muted-foreground leading-relaxed">
-                No vague advice. Every action Iron Metrics suggests comes with a score based on three factors:
-              </p>
-              <div className="space-y-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <TrendingUp className="w-4 h-4 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold">Expected Revenue Impact</p>
-                    <p className="text-sm text-muted-foreground leading-relaxed">How many members it affects, their remaining LTV, and the estimated churn reduction.</p>
-                  </div>
+      <section className="py-20 sm:py-28 border-t" data-testid="section-how-it-works">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-12">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">How it works</h2>
+          <div className="grid sm:grid-cols-3 gap-8">
+            <FadeInCard delay={0}>
+              <div className="space-y-3">
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+                  <span className="text-sm font-bold text-primary">1</span>
                 </div>
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Shield className="w-4 h-4 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold">Confidence Weight</p>
-                    <p className="text-sm text-muted-foreground leading-relaxed">Based on your data quality — how many months of data, how many members, and how clear the retention signals are.</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <AlertTriangle className="w-4 h-4 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold">Urgency Factor</p>
-                    <p className="text-sm text-muted-foreground leading-relaxed">Time-sensitive actions score higher. Context multipliers adjust for seasonal patterns and churn acceleration.</p>
-                  </div>
-                </div>
+                <h3 className="font-semibold text-sm">Import</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">Upload a CSV from any gym management system. Columns are auto-detected.</p>
               </div>
-            </div>
-
-            <div className="space-y-3">
-              <Card>
-                <CardContent className="p-5 space-y-3">
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">How a score is built</p>
-                  </div>
-                  <div className="space-y-2 font-mono text-sm">
-                    <div className="flex items-center justify-between gap-2 py-1.5 border-b">
-                      <span className="text-muted-foreground">churnReduction</span>
-                      <span>0.8%</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 py-1.5 border-b">
-                      <span className="text-muted-foreground">membersAffected</span>
-                      <span>12</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 py-1.5 border-b">
-                      <span className="text-muted-foreground">avgLtvRemaining</span>
-                      <span>$4,200</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 py-1.5 border-b">
-                      <span className="text-muted-foreground">revenueImpact</span>
-                      <span className="text-emerald-600 dark:text-emerald-400">$403/mo</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 py-1.5 border-b">
-                      <span className="text-muted-foreground">confidence</span>
-                      <span>0.85</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 py-1.5">
-                      <span className="text-muted-foreground">urgency</span>
-                      <span>1.2x</span>
-                    </div>
-                  </div>
-                  <div className="pt-2 border-t flex items-center justify-between gap-2 flex-wrap">
-                    <span className="text-sm font-semibold">interventionScore</span>
-                    <span className="text-lg font-bold font-mono text-primary">411</span>
-                  </div>
-                </CardContent>
-              </Card>
-              <p className="text-xs text-muted-foreground text-center leading-relaxed">Higher score = higher priority. The top-scored action becomes your Focus Recommendation.</p>
-            </div>
+            </FadeInCard>
+            <FadeInCard delay={100}>
+              <div className="space-y-3">
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+                  <span className="text-sm font-bold text-primary">2</span>
+                </div>
+                <h3 className="font-semibold text-sm">Predict</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">Member-level risk scores, churn predictions, and revenue scenarios — computed instantly.</p>
+              </div>
+            </FadeInCard>
+            <FadeInCard delay={200}>
+              <div className="space-y-3">
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+                  <span className="text-sm font-bold text-primary">3</span>
+                </div>
+                <h3 className="font-semibold text-sm">Act</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">One ranked recommendation at a time. Track what you do. See what works.</p>
+              </div>
+            </FadeInCard>
           </div>
         </div>
       </section>
 
-      <section className="py-20 sm:py-28 border-t">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="py-16 sm:py-20 border-t" data-testid="section-trust">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl mx-auto text-center space-y-6">
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Built for gym owners who want clarity, not chaos.</h2>
-            <div className="space-y-4 text-muted-foreground leading-relaxed">
-              <p>You built a community. You coach people through transformations every day. You shouldn't have to guess whether your business will be here next year.</p>
-              <p>Iron Metrics gives you the financial clarity to make confident decisions. Not more charts. Not more complexity. Actionable intelligence that tells you what to do, why it matters, and what it's worth.</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="py-20 sm:py-28 border-t">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-center mb-8">Strength Through Clarity</h2>
-          <div className="grid sm:grid-cols-3 gap-6 max-w-3xl mx-auto">
-            <FadeInCard delay={0}><PrincipleCard icon={Shield} title="Reduce volatility" body="Know where revenue risk lives. Know how to reduce it. See the dollar impact of every action." /></FadeInCard>
-            <FadeInCard delay={100}><PrincipleCard icon={Users} title="Strengthen community" body="When retention improves, your community deepens. That's the real outcome — and Iron Metrics makes it measurable." /></FadeInCard>
-            <FadeInCard delay={200}><PrincipleCard icon={Activity} title="Lower stress" body="Clarity reduces anxiety. Know your numbers. Know your risks. Know your next move." /></FadeInCard>
+            <h2 className="text-xl sm:text-2xl font-bold tracking-tight">You built a community. You shouldn't have to guess whether it's sustainable.</h2>
+            <p className="text-muted-foreground leading-relaxed text-sm sm:text-base">
+              Iron Metrics gives you financial clarity — not more dashboards.
+              Fewer decisions. Clear direction. A feeling of control.
+            </p>
           </div>
         </div>
       </section>
@@ -433,7 +329,7 @@ export default function LandingPage() {
       <section className="py-20 sm:py-28 border-t">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-8">
           <div className="max-w-lg mx-auto space-y-4">
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Your gym's stability is in your hands.</h2>
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Your gym's stability starts here.</h2>
             <p className="text-muted-foreground leading-relaxed">Import your members. See your risks. Act on what matters.</p>
           </div>
           <a href="/api/login">
@@ -475,28 +371,16 @@ function FadeInCard({ children, delay = 0 }: { children: React.ReactNode; delay?
   );
 }
 
-function ModuleCard({ icon: Icon, title, description }: { icon: typeof Gauge; title: string; description: string }) {
+function OutcomeRow({ number, title, description }: { number: string; title: string; description: string }) {
   return (
-    <Card className="hover-elevate h-full">
-      <CardContent className="p-6 space-y-4">
-        <div className="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center">
-          <Icon className="w-5 h-5 text-primary" />
-        </div>
+    <div className="flex items-start gap-5">
+      <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+        <span className="text-sm font-bold text-primary">{number}</span>
+      </div>
+      <div className="space-y-1">
         <h3 className="font-semibold text-sm">{title}</h3>
-        <p className="text-muted-foreground text-sm leading-relaxed">{description}</p>
-      </CardContent>
-    </Card>
-  );
-}
-
-function PrincipleCard({ icon: Icon, title, body }: { icon: typeof Shield; title: string; body: string }) {
-  return (
-    <Card>
-      <CardContent className="p-6 space-y-3">
-        <Icon className="w-6 h-6 text-primary" />
-        <h3 className="font-semibold text-sm">{title}</h3>
-        <p className="text-sm text-muted-foreground leading-relaxed">{body}</p>
-      </CardContent>
-    </Card>
+        <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>
+      </div>
+    </div>
   );
 }
