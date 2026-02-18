@@ -305,7 +305,8 @@ export default function LandingPage() {
                   <span className="text-sm font-bold text-primary">3</span>
                 </div>
                 <h3 className="font-semibold text-sm">Act</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">One ranked recommendation at a time. Track what you do. See what works.</p>
+                <p className="text-sm text-muted-foreground leading-relaxed">Iron Metrics ranks interventions by revenue impact and urgency.
+                You execute. Track outcomes. The system learns what works.</p>
               </div>
             </FadeInCard>
           </div>
