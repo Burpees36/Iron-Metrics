@@ -296,7 +296,7 @@ export default function LandingPage() {
                   <span className="text-sm font-bold text-primary">2</span>
                 </div>
                 <h3 className="font-semibold text-sm">Predict</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">Member-level risk scores, churn predictions, and revenue scenarios — computed instantly.</p>
+                <p className="text-sm text-muted-foreground leading-relaxed">We calculate your Retention Stability Index, classify every member by risk level, and model revenue scenarios.</p>
               </div>
             </FadeInCard>
             <FadeInCard delay={200}>
