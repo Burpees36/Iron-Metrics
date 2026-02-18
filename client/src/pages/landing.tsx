@@ -315,7 +315,8 @@ export default function LandingPage() {
       <section className="py-16 sm:py-20 border-t" data-testid="section-trust">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl mx-auto text-center space-y-6">
-            <h2 className="text-xl sm:text-2xl font-bold tracking-tight">You built a community. You shouldn't have to guess whether it's sustainable.</h2>
+            <h2 className="text-xl sm:text-2xl font-bold tracking-tight">Strong gyms create strong communities.
+            Strong communities create healthier lives.</h2>
             <p className="text-muted-foreground leading-relaxed text-sm sm:text-base">
               Iron Metrics gives you financial clarity — not more dashboards.
               Fewer decisions. Clear direction. A feeling of control.
