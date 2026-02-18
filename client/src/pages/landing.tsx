@@ -265,7 +265,7 @@ export default function LandingPage() {
               <OutcomeRow
                 number="2"
                 title="Know what it's costing you"
-                description="Revenue at risk, lifetime value remaining, churn trends — translated into dollars, not percentages. You see the real financial picture."
+                description="Revenue at risk. Lifetime value remaining. Scenario projections. We translate churn into dollars so you understand the real financial impact."
               />
             </FadeInCard>
             <FadeInCard delay={200}>
