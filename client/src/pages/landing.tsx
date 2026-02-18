@@ -258,7 +258,7 @@ export default function LandingPage() {
               <OutcomeRow
                 number="1"
                 title="Identify the risk"
-                description="Every member gets a risk score based on tenure, payment gaps, and behavior patterns. You see exactly who needs attention — and how urgent it is."
+                description="Every member gets a live risk score based on tenure, attendance patterns, payment behavior, and engagement signals. You see exactly who needs attention -- and how urgent it is."
               />
             </FadeInCard>
             <FadeInCard delay={100}>
