@@ -257,7 +257,7 @@ export default function LandingPage() {
             <FadeInCard delay={0}>
               <OutcomeRow
                 number="1"
-                title="See who's going to leave"
+                title="Identify the risk"
                 description="Every member gets a risk score based on tenure, payment gaps, and behavior patterns. You see exactly who needs attention — and how urgent it is."
               />
             </FadeInCard>
