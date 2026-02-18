@@ -272,7 +272,7 @@ export default function LandingPage() {
               <OutcomeRow
                 number="3"
                 title="Get one clear next step"
-                description="Every recommendation is ranked by financial impact. The single highest-value action surfaces automatically. Check it off, track the outcome, repeat."
+                description="Every intervention is ranked by expected revenue impact and urgency. One clear priority surfaces automatically. No noise. No guessing."
               />
             </FadeInCard>
           </div>
