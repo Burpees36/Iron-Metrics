@@ -110,11 +110,12 @@ shared/
 
 ## Design Tokens
 - Font: Inter (sans), Libre Baskerville (serif), JetBrains Mono (mono)
-- Primary: Deep blue (210 60%)
-- Sidebar: Dark steel/charcoal (215 20% 14%)
-- Dark mode: True operational control room feel
+- Primary: Near-black (244 81% 4%) in light mode, near-white (0 0% 98%) in dark mode
+- Sidebar: Light neutral (0 0% 98%) in light mode, dark neutral (0 0% 11%) in dark mode
+- Clean neutral palette — pure grays, no blue tint
+- Dark mode: Pure neutral dark (0 0% 7% background)
 - Red used minimally, only for risk alerts
-- Border radius: Small (0.375rem)
+- Border radius: 0.625rem (lg), 0.5rem (md), 0.375rem (sm)
 
 ## Feature Filter
 Before implementing any feature, validate:
