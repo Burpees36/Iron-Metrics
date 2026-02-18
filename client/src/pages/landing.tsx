@@ -28,7 +28,7 @@ const gymScenarios: GymScenario[] = [
     rsi: { value: "72", level: "moderate" },
     churn: { value: "6.8%", trend: "-0.3%" },
     atRisk: 8,
-    revenueProtected: "$3,200/mo",
+    revenueProtected: "$3,200",
     verdict: "Moderate — intervention window open",
   },
   {
@@ -37,7 +37,7 @@ const gymScenarios: GymScenario[] = [
     rsi: { value: "88", level: "strong" },
     churn: { value: "3.1%", trend: "-0.5%" },
     atRisk: 2,
-    revenueProtected: "$890/mo",
+    revenueProtected: "$890",
     verdict: "Strong — maintain current trajectory",
   },
   {
@@ -46,7 +46,7 @@ const gymScenarios: GymScenario[] = [
     rsi: { value: "54", level: "fragile" },
     churn: { value: "9.2%", trend: "+1.8%" },
     atRisk: 19,
-    revenueProtected: "$7,400/mo",
+    revenueProtected: "$7,400",
     verdict: "Fragile — immediate action required",
   },
   {
@@ -55,7 +55,7 @@ const gymScenarios: GymScenario[] = [
     rsi: { value: "81", level: "strong" },
     churn: { value: "4.5%", trend: "-0.2%" },
     atRisk: 3,
-    revenueProtected: "$1,100/mo",
+    revenueProtected: "$1,100",
     verdict: "Strong — stability threshold crossed",
   },
 ];
@@ -117,48 +117,61 @@ export default function LandingPage() {
       <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md bg-background/80 border-b">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4 h-14">
           <div className="flex items-center gap-2">
-            <Activity className="w-5 h-5 text-primary" />
+            <Activity className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
             <span className="font-semibold text-base tracking-tight" data-testid="text-logo">Iron Metrics</span>
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
             <a href="/api/login">
-              <Button data-testid="button-login">Log In</Button>
+              <Button
+                className="bg-emerald-600 text-white border-emerald-700"
+                data-testid="button-login"
+              >
+                Log In
+              </Button>
             </a>
           </div>
         </div>
       </nav>
+
       <section className="pt-32 pb-20 sm:pt-40 sm:pb-28 relative overflow-hidden">
         <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-20 left-10 w-72 h-72 bg-primary/5 rounded-full blur-3xl animate-float-slow" />
-          <div className="absolute bottom-10 right-10 w-96 h-96 bg-primary/3 rounded-full blur-3xl animate-float-slower" />
+          <div className="absolute top-20 left-10 w-72 h-72 bg-emerald-500/5 rounded-full blur-3xl animate-float-slow" />
+          <div className="absolute bottom-10 right-10 w-96 h-96 bg-emerald-500/3 rounded-full blur-3xl animate-float-slower" />
         </div>
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             <div className="space-y-8">
-              <p className="text-sm font-medium text-primary tracking-wide uppercase animate-fade-in-up" data-testid="text-subtitle">The Stability Command Center</p>
+              <span
+                className="inline-block text-xs font-semibold text-emerald-600 dark:text-emerald-400 tracking-widest uppercase border border-emerald-600/30 dark:border-emerald-400/30 rounded-full px-4 py-1.5 animate-fade-in-up"
+                data-testid="text-subtitle"
+              >
+                The Stability Command Center
+              </span>
               <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight leading-tight animate-fade-in-up animation-delay-100" data-testid="text-hero-headline">
                 Stop guessing.
                 <br />
-                Start <span className="text-primary">knowing.</span>
+                <span className="text-emerald-600 dark:text-emerald-400">Start knowing.</span>
               </h1>
-              <div className="space-y-2 text-muted-foreground text-base sm:text-lg max-w-md leading-relaxed animate-fade-in-up animation-delay-200" data-testid="text-hero-copy">
-                <p>Know who's going to cancel — before they do.</p>
-                <p>See how much revenue is actually at risk.</p>
-                <p>And act on what matters most.</p>
+              <div className="space-y-1 text-muted-foreground text-base sm:text-lg max-w-md leading-relaxed animate-fade-in-up animation-delay-200" data-testid="text-hero-copy">
+                <p>Iron Metrics turns your member data into retention intelligence, churn predictions, and ranked interventions - so you know exactly what to do next.</p>
               </div>
               <div className="flex flex-wrap items-center gap-3 animate-fade-in-up animation-delay-300">
                 <a href="/api/login">
-                  <Button size="lg" data-testid="button-get-started">
+                  <Button
+                    size="lg"
+                    className="bg-emerald-600 text-white border-emerald-700"
+                    data-testid="button-get-started"
+                  >
                     Get Started
                     <ArrowRight className="w-4 h-4 ml-1" />
                   </Button>
                 </a>
               </div>
               <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground animate-fade-in-up animation-delay-400">
-                <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-emerald-500" /> Import a CSV</span>
-                <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-emerald-500" /> See risks instantly</span>
-                <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-emerald-500" /> Act with confidence</span>
+                <span className="flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> Import your CSV</span>
+                <span className="flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> See risks instantly</span>
+                <span className="flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> Act with confidence</span>
               </div>
             </div>
 
@@ -172,7 +185,7 @@ export default function LandingPage() {
                     <button
                       key={i}
                       onClick={() => triggerTransition(i)}
-                      className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${i === activeIdx ? "bg-primary w-4" : "bg-muted-foreground/30"}`}
+                      className={`w-2 h-2 rounded-full transition-all duration-300 ${i === activeIdx ? "bg-emerald-500 w-4" : "bg-muted-foreground/30"}`}
                       data-testid={`dot-scenario-${i}`}
                     />
                   ))}
@@ -181,7 +194,7 @@ export default function LandingPage() {
 
               <div className={`transition-all duration-400 ${transitioning ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"}`}>
                 <p className="text-xs font-medium text-muted-foreground mb-3 flex items-center gap-2" data-testid="text-scenario-name">
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   {scenario.name} — {scenario.members} members
                 </p>
                 <div className="space-y-3">
@@ -232,7 +245,7 @@ export default function LandingPage() {
                       <CardContent className="p-3 text-center">
                         <p className="text-[10px] text-muted-foreground mb-1">Protectable</p>
                         <p className="text-base font-bold font-mono text-emerald-600 dark:text-emerald-400">{scenario.revenueProtected}</p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">revenue</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">/mo revenue</p>
                       </CardContent>
                     </Card>
                   </div>
@@ -242,6 +255,7 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
       <section className="py-20 sm:py-28 border-t" data-testid="section-outcomes">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16 space-y-4">
@@ -277,14 +291,15 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
       <section className="py-20 sm:py-28 border-t" data-testid="section-how-it-works">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-12">
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">How it works</h2>
           <div className="grid sm:grid-cols-3 gap-8">
             <FadeInCard delay={0}>
               <div className="space-y-3">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
-                  <span className="text-sm font-bold text-primary">1</span>
+                <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto">
+                  <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">1</span>
                 </div>
                 <h3 className="font-semibold text-sm">Connect Your Data</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">Upload a CSV from any gym management system. Columns are auto-detected.</p>
@@ -292,8 +307,8 @@ export default function LandingPage() {
             </FadeInCard>
             <FadeInCard delay={100}>
               <div className="space-y-3">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
-                  <span className="text-sm font-bold text-primary">2</span>
+                <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto">
+                  <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">2</span>
                 </div>
                 <h3 className="font-semibold text-sm">Reveal the Risk</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">We calculate your Retention Stability Index, classify every member by risk level, and model revenue scenarios.</p>
@@ -301,8 +316,8 @@ export default function LandingPage() {
             </FadeInCard>
             <FadeInCard delay={200}>
               <div className="space-y-3">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
-                  <span className="text-sm font-bold text-primary">3</span>
+                <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto">
+                  <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">3</span>
                 </div>
                 <h3 className="font-semibold text-sm">Act With Precision</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">Iron Metrics ranks interventions by revenue impact and urgency.
@@ -312,6 +327,7 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
       <section className="py-16 sm:py-20 border-t" data-testid="section-trust">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl mx-auto text-center space-y-6">
@@ -321,24 +337,32 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
-      <section className="py-20 sm:py-28 border-t">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-8">
+
+      <section className="py-20 sm:py-28 relative overflow-hidden">
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(180deg, transparent 0%, rgba(16, 185, 129, 0.06) 40%, rgba(16, 185, 129, 0.10) 100%)" }} />
+        <div className="absolute inset-0 pointer-events-none dark:hidden" style={{ background: "linear-gradient(180deg, transparent 0%, rgba(16, 185, 129, 0.04) 40%, rgba(16, 185, 129, 0.08) 100%)" }} />
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-8 relative">
           <div className="max-w-lg mx-auto space-y-4">
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Your gym's stability starts here.</h2>
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Your gym's stability is in your hands.</h2>
             <p className="text-muted-foreground leading-relaxed">Import your members. See your risks. Act on what matters.</p>
           </div>
           <a href="/api/login">
-            <Button size="lg" data-testid="button-cta-bottom">
+            <Button
+              size="lg"
+              className="bg-emerald-600 text-white border-emerald-700"
+              data-testid="button-cta-bottom"
+            >
               Get Started
               <ArrowRight className="w-4 h-4 ml-1" />
             </Button>
           </a>
         </div>
       </section>
+
       <footer className="border-t py-10">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-wrap items-center justify-between gap-4 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
-            <Activity className="w-4 h-4 text-primary" />
+            <Activity className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
             <span className="font-semibold text-foreground">Iron Metrics</span>
           </div>
           <p>The Stability Command Center for gyms.</p>
@@ -368,8 +392,8 @@ function FadeInCard({ children, delay = 0 }: { children: React.ReactNode; delay?
 function OutcomeRow({ number, title, description }: { number: string; title: string; description: string }) {
   return (
     <div className="flex items-start gap-5">
-      <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-        <span className="text-sm font-bold text-primary">{number}</span>
+      <div className="w-9 h-9 rounded-full bg-emerald-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+        <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{number}</span>
       </div>
       <div className="space-y-1">
         <h3 className="font-semibold text-sm">{title}</h3>
