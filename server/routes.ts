@@ -6,10 +6,12 @@ import { parseMembersCsv, previewCsv, parseAllRows, computeFileHash, type Column
 import { recomputeAllMetrics, computeMonthlyMetrics, generateMetricReports, generateForecast, generateTrendIntelligence } from "./metrics";
 import { generatePredictiveIntelligence } from "./predictive";
 import { ensureRecommendationCards, getOwnerActions, getPeriodStart, getRecommendationExecutionState, logOwnerAction, runLearningUpdate, toggleChecklistItem } from "./recommendation-learning";
-import { insertGymSchema } from "@shared/schema";
+import { insertGymSchema, insertKnowledgeSourceSchema } from "@shared/schema";
 import multer from "multer";
 import { encryptApiKey, generateFingerprint, testWodifyConnection } from "./wodify-connector";
 import { runWodifySync } from "./wodify-sync";
+import { ingestSource, reprocessDocument, TAXONOMY_TAGS } from "./knowledge-ingestion";
+import { searchKnowledge } from "./knowledge-retrieval";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -856,6 +858,143 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("Error fetching sync history:", error);
       res.status(500).json({ message: "Failed to fetch sync history" });
+    }
+  });
+
+  app.get("/api/knowledge/sources", isAuthenticated, async (_req: any, res) => {
+    try {
+      const sources = await storage.getKnowledgeSources();
+      res.json(sources);
+    } catch (error) {
+      console.error("Error fetching knowledge sources:", error);
+      res.status(500).json({ message: "Failed to fetch sources" });
+    }
+  });
+
+  app.post("/api/knowledge/sources", isAuthenticated, async (req: any, res) => {
+    try {
+      const parsed = insertKnowledgeSourceSchema.parse(req.body);
+      const source = await storage.createKnowledgeSource(parsed);
+      res.status(201).json(source);
+    } catch (error: any) {
+      console.error("Error creating knowledge source:", error);
+      res.status(400).json({ message: error.message || "Invalid data" });
+    }
+  });
+
+  app.delete("/api/knowledge/sources/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      await storage.deleteKnowledgeSource(req.params.id);
+      res.json({ message: "Source deleted" });
+    } catch (error) {
+      console.error("Error deleting knowledge source:", error);
+      res.status(500).json({ message: "Failed to delete source" });
+    }
+  });
+
+  app.post("/api/knowledge/sources/:id/ingest", isAuthenticated, async (req: any, res) => {
+    try {
+      const source = await storage.getKnowledgeSource(req.params.id);
+      if (!source) return res.status(404).json({ message: "Source not found" });
+
+      res.json({ message: "Ingestion started", sourceId: req.params.id });
+
+      ingestSource(req.params.id).catch(err =>
+        console.error("Background ingestion failed:", err)
+      );
+    } catch (error) {
+      console.error("Error starting ingestion:", error);
+      res.status(500).json({ message: "Failed to start ingestion" });
+    }
+  });
+
+  app.get("/api/knowledge/sources/:id/documents", isAuthenticated, async (req: any, res) => {
+    try {
+      const docs = await storage.getKnowledgeDocuments(req.params.id);
+      res.json(docs.map(d => ({
+        id: d.id,
+        title: d.title,
+        url: d.url,
+        status: d.status,
+        chunkCount: d.chunkCount,
+        channelName: d.channelName,
+        durationSeconds: d.durationSeconds,
+        ingestedAt: d.ingestedAt,
+      })));
+    } catch (error) {
+      console.error("Error fetching documents:", error);
+      res.status(500).json({ message: "Failed to fetch documents" });
+    }
+  });
+
+  app.get("/api/knowledge/documents/:id/chunks", isAuthenticated, async (req: any, res) => {
+    try {
+      const chunks = await storage.getKnowledgeChunks(req.params.id);
+      res.json(chunks.map(c => ({
+        id: c.id,
+        chunkIndex: c.chunkIndex,
+        content: c.content,
+        taxonomy: c.taxonomy,
+        tokenCount: c.tokenCount,
+        hasEmbedding: c.embedding !== null,
+      })));
+    } catch (error) {
+      console.error("Error fetching chunks:", error);
+      res.status(500).json({ message: "Failed to fetch chunks" });
+    }
+  });
+
+  app.get("/api/knowledge/stats", isAuthenticated, async (_req: any, res) => {
+    try {
+      const stats = await storage.getKnowledgeStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching knowledge stats:", error);
+      res.status(500).json({ message: "Failed to fetch stats" });
+    }
+  });
+
+  app.post("/api/knowledge/search", isAuthenticated, async (req: any, res) => {
+    try {
+      const { query, tags, limit } = req.body;
+      if (!query || typeof query !== "string") {
+        return res.status(400).json({ message: "Query is required" });
+      }
+      const results = await searchKnowledge(query, tags || [], limit || 10);
+      res.json(results);
+    } catch (error) {
+      console.error("Error searching knowledge:", error);
+      res.status(500).json({ message: "Failed to search knowledge" });
+    }
+  });
+
+  app.get("/api/knowledge/taxonomy", isAuthenticated, async (_req: any, res) => {
+    res.json(TAXONOMY_TAGS);
+  });
+
+  app.get("/api/knowledge/ingest-jobs", isAuthenticated, async (req: any, res) => {
+    try {
+      const sourceId = typeof req.query.sourceId === "string" ? req.query.sourceId : undefined;
+      const jobs = await storage.getIngestJobs(sourceId);
+      res.json(jobs);
+    } catch (error) {
+      console.error("Error fetching ingest jobs:", error);
+      res.status(500).json({ message: "Failed to fetch ingest jobs" });
+    }
+  });
+
+  app.get("/api/gyms/:id/knowledge/audits", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      const periodStart = typeof req.query.periodStart === "string" ? req.query.periodStart : getPeriodStart();
+      const audits = await storage.getRecommendationAudits(req.params.id, periodStart);
+      res.json(audits);
+    } catch (error) {
+      console.error("Error fetching recommendation audits:", error);
+      res.status(500).json({ message: "Failed to fetch audits" });
     }
   });
 

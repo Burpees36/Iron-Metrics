@@ -81,24 +81,26 @@ If it does not drive action, it is not shown.
 ## Project Structure
 ```
 client/src/
-  pages/         - Landing, Dashboard (Command Center), GymDetail, GymNew, CsvImport, WodifyIntegration
+  pages/         - Landing, Dashboard (Command Center), GymDetail, GymNew, CsvImport, WodifyIntegration, KnowledgeAdmin, PredictiveIntelligence
   components/    - AppSidebar, ThemeProvider, ThemeToggle, shadcn ui
   hooks/         - use-auth, use-toast
   lib/           - queryClient, auth-utils, utils
 
 server/
-  routes.ts          - All API endpoints
-  storage.ts         - DatabaseStorage (IStorage interface)
-  metrics.ts         - Metrics computation + report generation + 90-day trends
-  predictive.ts      - Predictive intelligence engine (member churn prediction, cohort analysis, revenue scenarios, strategic briefs)
-  csv-parser.ts      - CSV parsing for member imports
-  wodify-connector.ts - Wodify API client (auth, pagination, rate limiting, retries, data extraction/transform)
-  wodify-sync.ts     - Sync engine (backfill/incremental orchestrator, raw data landing, transform to canonical members, metrics recompute trigger)
-  db.ts              - Drizzle + pg pool
+  routes.ts              - All API endpoints
+  storage.ts             - DatabaseStorage (IStorage interface)
+  metrics.ts             - Metrics computation + report generation + 90-day trends
+  predictive.ts          - Predictive intelligence engine (member churn prediction, cohort analysis, revenue scenarios, strategic briefs)
+  knowledge-ingestion.ts - YouTube transcript ingestion, chunking, embedding, taxonomy auto-tagging
+  knowledge-retrieval.ts - Hybrid vector/text search, deterministic template rotation, grounded insight generation
+  csv-parser.ts          - CSV parsing for member imports
+  wodify-connector.ts    - Wodify API client (auth, pagination, rate limiting, retries, data extraction/transform)
+  wodify-sync.ts         - Sync engine (backfill/incremental orchestrator, raw data landing, transform to canonical members, metrics recompute trigger)
+  db.ts                  - Drizzle + pg pool
   replit_integrations/auth/ - Replit Auth module
 
 shared/
-  schema.ts      - Drizzle schemas (gyms, members, import_jobs, gym_monthly_metrics, wodify_connections, wodify_sync_runs, wodify_raw_clients, wodify_raw_memberships)
+  schema.ts      - Drizzle schemas (gyms, members, import_jobs, gym_monthly_metrics, wodify_connections, wodify_sync_runs, wodify_raw_clients, wodify_raw_memberships, knowledge_sources, knowledge_documents, knowledge_chunks, recommendation_chunk_audit, ingest_jobs)
   models/auth.ts - Auth schemas (users, sessions)
 ```
 
@@ -127,6 +129,18 @@ shared/
 - `GET /api/gyms/:id/wodify/status` - Connection status + recent sync runs
 - `POST /api/gyms/:id/wodify/sync` - Trigger sync (incremental or backfill)
 - `GET /api/gyms/:id/wodify/sync-history` - Full sync run history
+
+### Knowledge Pack API
+- `GET /api/knowledge/sources` - List knowledge sources
+- `POST /api/knowledge/sources` - Add a YouTube source (video or playlist)
+- `DELETE /api/knowledge/sources/:id` - Remove source and all its documents/chunks
+- `POST /api/knowledge/sources/:id/ingest` - Trigger ingestion (fetch transcripts, chunk, embed)
+- `GET /api/knowledge/sources/:id/documents` - List documents for a source
+- `GET /api/knowledge/documents/:id/chunks` - List chunks for a document
+- `GET /api/knowledge/stats` - Knowledge base statistics (sources, docs, chunks, embedded)
+- `POST /api/knowledge/search` - Semantic search (vector + text fallback)
+- `GET /api/knowledge/taxonomy` - List taxonomy tags
+- `GET /api/knowledge/ingest-jobs` - Ingestion job status
 
 ## Design Tokens
 - Font: Inter (sans), Libre Baskerville (serif), JetBrains Mono (mono)

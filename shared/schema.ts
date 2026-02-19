@@ -1,7 +1,22 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, integer, numeric, date, timestamp, uniqueIndex, index, jsonb, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, numeric, date, timestamp, uniqueIndex, index, jsonb, boolean, customType } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+const vector = customType<{ data: number[]; driverParam: string }>({
+  dataType() {
+    return "vector(1536)";
+  },
+  toDriver(value: number[]): string {
+    return `[${value.join(",")}]`;
+  },
+  fromDriver(value: string): number[] {
+    if (typeof value === "string") {
+      return value.replace(/[\[\]]/g, "").split(",").map(Number);
+    }
+    return value as unknown as number[];
+  },
+});
 
 export * from "./models/auth";
 import { users } from "./models/auth";
@@ -306,3 +321,95 @@ export const outcomeSnapshots = pgTable("outcome_snapshots", {
 }, (table) => [
   uniqueIndex("idx_outcome_snapshot_gym_period").on(table.gymId, table.periodStart),
 ]);
+
+export const knowledgeSources = pgTable("knowledge_sources", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sourceType: text("source_type").notNull().default("youtube_playlist"),
+  name: text("name").notNull(),
+  url: text("url").notNull(),
+  description: text("description"),
+  enabled: boolean("enabled").notNull().default(true),
+  lastIngestedAt: timestamp("last_ingested_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  uniqueIndex("idx_knowledge_source_url").on(table.url),
+]);
+
+export const insertKnowledgeSourceSchema = createInsertSchema(knowledgeSources).omit({ id: true, lastIngestedAt: true, createdAt: true });
+export type InsertKnowledgeSource = z.infer<typeof insertKnowledgeSourceSchema>;
+export type KnowledgeSource = typeof knowledgeSources.$inferSelect;
+
+export const knowledgeDocuments = pgTable("knowledge_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sourceId: varchar("source_id").notNull().references(() => knowledgeSources.id),
+  externalId: text("external_id").notNull(),
+  title: text("title").notNull(),
+  url: text("url").notNull(),
+  channelName: text("channel_name"),
+  durationSeconds: integer("duration_seconds"),
+  rawTranscript: text("raw_transcript"),
+  status: text("status").notNull().default("pending"),
+  chunkCount: integer("chunk_count").notNull().default(0),
+  ingestedAt: timestamp("ingested_at").defaultNow(),
+}, (table) => [
+  uniqueIndex("idx_knowledge_doc_external").on(table.sourceId, table.externalId),
+  index("idx_knowledge_doc_source").on(table.sourceId),
+]);
+
+export const insertKnowledgeDocumentSchema = createInsertSchema(knowledgeDocuments).omit({ id: true, ingestedAt: true });
+export type InsertKnowledgeDocument = z.infer<typeof insertKnowledgeDocumentSchema>;
+export type KnowledgeDocument = typeof knowledgeDocuments.$inferSelect;
+
+export const knowledgeChunks = pgTable("knowledge_chunks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  documentId: varchar("document_id").notNull().references(() => knowledgeDocuments.id),
+  chunkIndex: integer("chunk_index").notNull(),
+  content: text("content").notNull(),
+  embedding: vector("embedding"),
+  taxonomy: jsonb("taxonomy").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  tsv: text("tsv"),
+  tokenCount: integer("token_count").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_knowledge_chunk_doc").on(table.documentId),
+  index("idx_knowledge_chunk_taxonomy").using("gin", table.taxonomy),
+]);
+
+export const insertKnowledgeChunkSchema = createInsertSchema(knowledgeChunks).omit({ id: true, createdAt: true });
+export type InsertKnowledgeChunk = z.infer<typeof insertKnowledgeChunkSchema>;
+export type KnowledgeChunk = typeof knowledgeChunks.$inferSelect;
+
+export const recommendationChunkAudit = pgTable("recommendation_chunk_audit", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gymId: varchar("gym_id").notNull().references(() => gyms.id),
+  periodStart: date("period_start").notNull(),
+  recommendationType: text("recommendation_type").notNull(),
+  chunkId: varchar("chunk_id").notNull().references(() => knowledgeChunks.id),
+  similarityScore: numeric("similarity_score", { precision: 6, scale: 4 }),
+  usedAt: timestamp("used_at").defaultNow(),
+}, (table) => [
+  index("idx_rec_chunk_audit_gym").on(table.gymId, table.periodStart),
+  index("idx_rec_chunk_audit_chunk").on(table.chunkId),
+]);
+
+export const insertRecommendationChunkAuditSchema = createInsertSchema(recommendationChunkAudit).omit({ id: true, usedAt: true });
+export type InsertRecommendationChunkAudit = z.infer<typeof insertRecommendationChunkAuditSchema>;
+export type RecommendationChunkAudit = typeof recommendationChunkAudit.$inferSelect;
+
+export const ingestJobs = pgTable("ingest_jobs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sourceId: varchar("source_id").notNull().references(() => knowledgeSources.id),
+  status: text("status").notNull().default("pending"),
+  videosFound: integer("videos_found").notNull().default(0),
+  videosProcessed: integer("videos_processed").notNull().default(0),
+  chunksCreated: integer("chunks_created").notNull().default(0),
+  errorDetails: text("error_details"),
+  startedAt: timestamp("started_at").defaultNow(),
+  finishedAt: timestamp("finished_at"),
+}, (table) => [
+  index("idx_ingest_job_source").on(table.sourceId),
+]);
+
+export const insertIngestJobSchema = createInsertSchema(ingestJobs).omit({ id: true, startedAt: true, finishedAt: true });
+export type InsertIngestJob = z.infer<typeof insertIngestJobSchema>;
+export type IngestJob = typeof ingestJobs.$inferSelect;

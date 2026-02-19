@@ -17,6 +17,7 @@ import GymDetail from "@/pages/gym-detail";
 import GymNew from "@/pages/gym-new";
 import CsvImport from "@/pages/csv-import";
 import WodifyIntegration from "@/pages/wodify-integration";
+import KnowledgeAdmin from "@/pages/knowledge-admin";
 
 function AuthenticatedApp() {
   const style = {
@@ -39,6 +40,7 @@ function AuthenticatedApp() {
               <Route path="/gyms/new" component={GymNew} />
               <Route path="/gyms/:id/import" component={CsvImport} />
               <Route path="/gyms/:id/wodify" component={WodifyIntegration} />
+              <Route path="/knowledge" component={KnowledgeAdmin} />
               <Route path="/gyms/:id" component={GymDetail} />
               <Route component={NotFound} />
             </Switch>
