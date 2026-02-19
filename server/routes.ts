@@ -12,6 +12,7 @@ import { encryptApiKey, generateFingerprint, testWodifyConnection } from "./wodi
 import { runWodifySync } from "./wodify-sync";
 import { ingestSource, reprocessDocument, TAXONOMY_TAGS } from "./knowledge-ingestion";
 import { searchKnowledge } from "./knowledge-retrieval";
+import { seedKnowledgeBase } from "./seed-knowledge";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -970,6 +971,20 @@ export async function registerRoutes(
 
   app.get("/api/knowledge/taxonomy", isAuthenticated, async (_req: any, res) => {
     res.json(TAXONOMY_TAGS);
+  });
+
+  app.post("/api/knowledge/seed", isAuthenticated, async (_req: any, res) => {
+    try {
+      res.json({ message: "Seeding started" });
+      seedKnowledgeBase().then(result => {
+        console.log("[SEED] Result:", JSON.stringify(result));
+      }).catch(err => {
+        console.error("[SEED] Failed:", err);
+      });
+    } catch (error) {
+      console.error("Error starting seed:", error);
+      res.status(500).json({ message: "Failed to start seed" });
+    }
   });
 
   app.get("/api/knowledge/ingest-jobs", isAuthenticated, async (req: any, res) => {

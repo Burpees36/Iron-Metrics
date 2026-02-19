@@ -73,6 +73,7 @@ export interface IStorage {
   createKnowledgeSource(source: InsertKnowledgeSource): Promise<KnowledgeSource>;
   getKnowledgeSources(): Promise<KnowledgeSource[]>;
   getKnowledgeSource(id: string): Promise<KnowledgeSource | undefined>;
+  getKnowledgeSourceByUrl(url: string): Promise<KnowledgeSource | undefined>;
   updateKnowledgeSource(id: string, updates: Partial<KnowledgeSource>): Promise<KnowledgeSource>;
   deleteKnowledgeSource(id: string): Promise<void>;
 
@@ -418,6 +419,11 @@ export class DatabaseStorage implements IStorage {
 
   async getKnowledgeSource(id: string): Promise<KnowledgeSource | undefined> {
     const [source] = await db.select().from(knowledgeSources).where(eq(knowledgeSources.id, id));
+    return source;
+  }
+
+  async getKnowledgeSourceByUrl(url: string): Promise<KnowledgeSource | undefined> {
+    const [source] = await db.select().from(knowledgeSources).where(eq(knowledgeSources.url, url));
     return source;
   }
 

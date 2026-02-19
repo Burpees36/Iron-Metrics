@@ -93,6 +93,7 @@ server/
   predictive.ts          - Predictive intelligence engine (member churn prediction, cohort analysis, revenue scenarios, strategic briefs)
   knowledge-ingestion.ts - YouTube transcript ingestion, chunking, embedding, taxonomy auto-tagging
   knowledge-retrieval.ts - Hybrid vector/text search, deterministic template rotation, grounded insight generation
+  seed-knowledge.ts      - Pre-built CrossFit affiliate doctrine content (Two-Brain, BHOTD, CrossFit HQ) for seeding knowledge base
   csv-parser.ts          - CSV parsing for member imports
   wodify-connector.ts    - Wodify API client (auth, pagination, rate limiting, retries, data extraction/transform)
   wodify-sync.ts         - Sync engine (backfill/incremental orchestrator, raw data landing, transform to canonical members, metrics recompute trigger)
@@ -141,6 +142,7 @@ shared/
 - `POST /api/knowledge/search` - Semantic search (vector + text fallback)
 - `GET /api/knowledge/taxonomy` - List taxonomy tags
 - `GET /api/knowledge/ingest-jobs` - Ingestion job status
+- `POST /api/knowledge/seed` - Seed knowledge base with curated CrossFit affiliate doctrine content (17 articles)
 
 ## Design Tokens
 - Font: Inter (sans), Libre Baskerville (serif), JetBrains Mono (mono)

@@ -120,6 +120,23 @@ export default function KnowledgeAdmin() {
     },
   });
 
+  const seedKnowledge = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/knowledge/seed");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Knowledge base seeding started", description: "Processing doctrine content in the background. Refresh stats in a minute to see progress." });
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["/api/knowledge/stats"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/knowledge/sources"] });
+      }, 10000);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Seed failed", description: err.message, variant: "destructive" });
+    },
+  });
+
   const searchMutation = useMutation({
     mutationFn: async (q: string) => {
       const res = await apiRequest("POST", "/api/knowledge/search", { query: q, limit: 10 });
@@ -146,7 +163,7 @@ export default function KnowledgeAdmin() {
         <BookOpen className="w-6 h-6 text-primary" />
         <div>
           <h1 className="text-2xl font-bold" data-testid="text-knowledge-title">Knowledge Pack</h1>
-          <p className="text-sm text-muted-foreground">Manage video sources that ground your recommendations in real affiliate doctrine</p>
+          <p className="text-sm text-muted-foreground">Manage knowledge sources that ground your recommendations in real affiliate doctrine</p>
         </div>
       </div>
 
@@ -160,7 +177,7 @@ export default function KnowledgeAdmin() {
         <Card>
           <CardContent className="p-4 text-center">
             <p className="text-2xl font-bold" data-testid="text-stat-documents">{stats?.documents ?? 0}</p>
-            <p className="text-xs text-muted-foreground">Videos</p>
+            <p className="text-xs text-muted-foreground">Documents</p>
           </CardContent>
         </Card>
         <Card>
@@ -176,6 +193,25 @@ export default function KnowledgeAdmin() {
           </CardContent>
         </Card>
       </div>
+
+      {stats && stats.sources === 0 && stats.chunks === 0 && (
+        <Card className="border-dashed">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="font-medium text-sm">Knowledge base is empty</p>
+              <p className="text-xs text-muted-foreground">Seed with curated CrossFit affiliate business doctrine from Two-Brain Business, Best Hour of Their Day, and CrossFit HQ</p>
+            </div>
+            <Button
+              data-testid="button-seed-knowledge"
+              onClick={() => seedKnowledge.mutate()}
+              disabled={seedKnowledge.isPending}
+            >
+              {seedKnowledge.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Database className="w-4 h-4 mr-2" />}
+              Seed Knowledge Base
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {runningJobs.length > 0 && (
         <Card className="border-primary/30">
