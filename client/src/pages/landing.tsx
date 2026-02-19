@@ -138,18 +138,18 @@ export default function LandingPage() {
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             <div className="space-y-8">
               <span
-                className="inline-block text-xs font-semibold text-primary tracking-widest uppercase border border-primary/30 rounded-full px-4 py-1.5 animate-fade-in-up"
+                className="inline-block text-xs font-bold text-primary tracking-widest uppercase bg-primary/10 border border-primary/25 rounded-full px-4 py-1.5 animate-fade-in-up"
                 data-testid="text-subtitle"
               >
                 The Stability Command Center
               </span>
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight leading-tight animate-fade-in-up animation-delay-100" data-testid="text-hero-headline">
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.1] animate-fade-in-up animation-delay-100" data-testid="text-hero-headline">
                 Stop guessing.
                 <br />
                 <span className="text-primary">Start knowing.</span>
               </h1>
               <div className="space-y-1 text-muted-foreground text-base sm:text-lg max-w-md leading-relaxed animate-fade-in-up animation-delay-200" data-testid="text-hero-copy">
-                <p>Iron Metrics turns your member data into retention intelligence, churn predictions, and ranked interventions \u2014 so you know exactly what to do next.</p>
+                <p>Iron Metrics turns your member data into retention intelligence, churn predictions, and ranked interventions - so you know exactly what to do next.</p>
               </div>
               <div className="flex flex-wrap items-center gap-3 animate-fade-in-up animation-delay-300">
                 <a href="/api/login">

@@ -102,10 +102,11 @@ export function LuxuryThemeShell({ children }: { children: React.ReactNode }) {
         style={{
           zIndex: 1,
           background: [
-            "radial-gradient(ellipse 60% 50% at 15% 20%, hsl(var(--primary) / 0.04) 0%, transparent 70%)",
-            "radial-gradient(ellipse 50% 60% at 85% 40%, hsl(var(--silver) / 0.03) 0%, transparent 70%)",
+            "radial-gradient(ellipse 70% 60% at 50% 50%, transparent 40%, hsl(var(--background) / 0.7) 100%)",
+            "radial-gradient(ellipse 60% 50% at 15% 20%, hsl(var(--primary) / 0.06) 0%, transparent 70%)",
+            "radial-gradient(ellipse 50% 60% at 85% 40%, hsl(var(--silver) / 0.04) 0%, transparent 70%)",
           ].join(", "),
-          boxShadow: "inset 0 0 120px rgba(0, 0, 0, 0.5)",
+          boxShadow: "inset 0 0 200px 40px rgba(0, 0, 0, 0.55)",
         }}
         aria-hidden="true"
       />
@@ -115,10 +116,11 @@ export function LuxuryThemeShell({ children }: { children: React.ReactNode }) {
         style={{
           zIndex: 1,
           background: [
-            "radial-gradient(ellipse 60% 50% at 15% 20%, hsl(var(--primary) / 0.025) 0%, transparent 70%)",
-            "radial-gradient(ellipse 50% 60% at 85% 40%, hsl(var(--silver) / 0.02) 0%, transparent 70%)",
+            "radial-gradient(ellipse 65% 55% at 50% 50%, transparent 35%, hsl(var(--background) / 0.6) 100%)",
+            "radial-gradient(ellipse 60% 50% at 15% 20%, hsl(var(--primary) / 0.04) 0%, transparent 70%)",
+            "radial-gradient(ellipse 50% 60% at 85% 40%, hsl(var(--silver) / 0.03) 0%, transparent 70%)",
           ].join(", "),
-          boxShadow: "inset 0 0 80px rgba(0, 0, 0, 0.08)",
+          boxShadow: "inset 0 0 180px 30px rgba(0, 0, 0, 0.12)",
         }}
         aria-hidden="true"
       />

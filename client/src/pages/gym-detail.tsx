@@ -240,23 +240,26 @@ export default function GymDetail() {
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-xl font-bold tracking-tight" data-testid="text-gym-name">
-            {gym.name}
-          </h1>
-          {gym.location && (
-            <p className="text-sm text-muted-foreground">{gym.location}</p>
-          )}
+        <div className="flex items-center gap-3">
+          <Activity className="w-5 h-5 text-primary flex-shrink-0" />
+          <div className="space-y-0.5">
+            <h1 className="text-xl font-bold tracking-tight" data-testid="text-gym-name">
+              {gym.name}
+            </h1>
+            {gym.location && (
+              <p className="text-sm text-muted-foreground">{gym.location}</p>
+            )}
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link href={`/gyms/${gym.id}/wodify`}>
-            <Button variant="outline" data-testid="button-wodify-integration">
+            <Button data-testid="button-wodify-integration">
               <Plug className="w-4 h-4 mr-1" />
               Wodify
             </Button>
           </Link>
           <Link href={`/gyms/${gym.id}/import`}>
-            <Button variant="outline" data-testid="button-import-csv">
+            <Button data-testid="button-import-csv">
               <Upload className="w-4 h-4 mr-1" />
               Import CSV
             </Button>
@@ -592,7 +595,7 @@ function ScoreCard({
               {fullName && <p className="text-[10px] text-muted-foreground/70 leading-tight">{fullName}</p>}
             </div>
           </div>
-          <Icon className="w-4 h-4 text-muted-foreground" />
+          <Icon className="w-4 h-4 text-primary/60" />
         </div>
         <p className={`text-2xl font-bold font-mono tracking-tight ${statusColor}`}>
           {value}
@@ -608,7 +611,7 @@ function SmallMetric({ label, value, icon: Icon }: { label: string; value: strin
     <Card className="hover-elevate transition-all duration-300">
       <CardContent className="p-4 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Icon className="w-3.5 h-3.5 text-muted-foreground" />
+          <Icon className="w-3.5 h-3.5 text-primary/50" />
           <span className="text-xs text-muted-foreground">{label}</span>
         </div>
         <span className="font-mono text-sm font-semibold">{value}</span>
@@ -673,15 +676,30 @@ function ReportCard({ report, gymId, atRiskMembers, monthDate }: { report: Metri
 
         <div className="grid sm:grid-cols-3 gap-5">
           <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">What This Means</p>
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <TrendingUp className="w-3 h-3 text-primary" />
+              </div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">What This Means</p>
+            </div>
             <p className="text-sm leading-relaxed">{report.meaning}</p>
           </div>
           <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Why It Matters</p>
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <Target className="w-3 h-3 text-primary" />
+              </div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Why It Matters</p>
+            </div>
             <p className="text-sm leading-relaxed text-muted-foreground">{report.whyItMatters}</p>
           </div>
           <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">What To Do Next</p>
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <Activity className="w-3 h-3 text-primary" />
+              </div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">What To Do Next</p>
+            </div>
             <p className="text-sm leading-relaxed text-muted-foreground">{report.action}</p>
           </div>
         </div>
