@@ -32,6 +32,9 @@ The Stability Command Center for CrossFit gyms. A financial resilience operating
 - Core member interventions include: quarterly goal-setting, skill progression tracking, competition participation, movement quality reinforcement
 - CrossFit event recommendations rotate seasonally (Open, Hero WODs, seminars, nutrition challenges, holiday events, yoga/mobility clinics, bring-a-friend days)
 - Stability verdicts are clear and actionable (strong/moderate/fragile)
+- Doctrine Library content (Two-Brain, BHOTD, CrossFit HQ) is woven invisibly into recommendation copy — no citations, source chips, or "based on" references shown to users
+- Optional "Execution Standard:" line on recommendation cards with 2-4 short actionable clauses derived from doctrine
+- Internal audit trail logs which doctrine chunks informed each recommendation (recommendation_chunk_audit table)
 
 ## Report Format
 Every metric block contains:
@@ -81,7 +84,7 @@ If it does not drive action, it is not shown.
 ## Project Structure
 ```
 client/src/
-  pages/         - Landing, Dashboard (Command Center), GymDetail, GymNew, CsvImport, WodifyIntegration, KnowledgeAdmin, PredictiveIntelligence
+  pages/         - Landing, Dashboard (Command Center), GymDetail, GymNew, CsvImport, WodifyIntegration, PredictiveIntelligence
   components/    - AppSidebar, ThemeProvider, ThemeToggle, shadcn ui
   hooks/         - use-auth, use-toast
   lib/           - queryClient, auth-utils, utils
@@ -91,9 +94,9 @@ server/
   storage.ts             - DatabaseStorage (IStorage interface)
   metrics.ts             - Metrics computation + report generation + 90-day trends
   predictive.ts          - Predictive intelligence engine (member churn prediction, cohort analysis, revenue scenarios, strategic briefs)
-  knowledge-ingestion.ts - YouTube transcript ingestion, chunking, embedding, taxonomy auto-tagging
-  knowledge-retrieval.ts - Hybrid vector/text search, deterministic template rotation, grounded insight generation
-  seed-knowledge.ts      - Pre-built CrossFit affiliate doctrine content (Two-Brain, BHOTD, CrossFit HQ) for seeding knowledge base
+  knowledge-ingestion.ts - Doctrine Library ingestion engine (chunking, embedding, taxonomy auto-tagging) — internal only, no user-facing UI
+  knowledge-retrieval.ts - Doctrine Library retrieval (hybrid vector/text search, detail augmentation, execution standards) — internal only
+  seed-knowledge.ts      - Pre-built CrossFit affiliate doctrine content (Two-Brain, BHOTD, CrossFit HQ) for seeding doctrine library
   csv-parser.ts          - CSV parsing for member imports
   wodify-connector.ts    - Wodify API client (auth, pagination, rate limiting, retries, data extraction/transform)
   wodify-sync.ts         - Sync engine (backfill/incremental orchestrator, raw data landing, transform to canonical members, metrics recompute trigger)
@@ -131,18 +134,12 @@ shared/
 - `POST /api/gyms/:id/wodify/sync` - Trigger sync (incremental or backfill)
 - `GET /api/gyms/:id/wodify/sync-history` - Full sync run history
 
-### Knowledge Pack API
-- `GET /api/knowledge/sources` - List knowledge sources
-- `POST /api/knowledge/sources` - Add a YouTube source (video or playlist)
-- `DELETE /api/knowledge/sources/:id` - Remove source and all its documents/chunks
-- `POST /api/knowledge/sources/:id/ingest` - Trigger ingestion (fetch transcripts, chunk, embed)
-- `GET /api/knowledge/sources/:id/documents` - List documents for a source
-- `GET /api/knowledge/documents/:id/chunks` - List chunks for a document
-- `GET /api/knowledge/stats` - Knowledge base statistics (sources, docs, chunks, embedded)
-- `POST /api/knowledge/search` - Semantic search (vector + text fallback)
-- `GET /api/knowledge/taxonomy` - List taxonomy tags
-- `GET /api/knowledge/ingest-jobs` - Ingestion job status
-- `POST /api/knowledge/seed` - Seed knowledge base with curated CrossFit affiliate doctrine content (17 articles)
+### Doctrine Library (Internal Only — No User-Facing UI)
+- Doctrine content is stored in knowledge_chunks table, retrieved by the predictive engine
+- Doctrine augments recommendation copy (detail paragraph + optional Execution Standard line)
+- No citations, source chips, or article titles shown to the user
+- Internal audit trail: recommendation_chunk_audit table logs which chunks informed each recommendation
+- Backend API routes (/api/knowledge/*) retained for internal/dev ingestion only — not navigable from the app
 
 ## Design Tokens
 - Font: Inter (sans), Libre Baskerville (serif), JetBrains Mono (mono)

@@ -22,7 +22,6 @@ import {
   Plus,
   Building2,
   LogOut,
-  BookOpen,
 } from "lucide-react";
 
 export function AppSidebar() {
@@ -57,14 +56,6 @@ export function AppSidebar() {
                   <Link href="/">
                     <LayoutDashboard className="w-4 h-4" />
                     <span>Command Center</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/knowledge"}>
-                  <Link href="/knowledge">
-                    <BookOpen className="w-4 h-4" />
-                    <span>Knowledge Pack</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

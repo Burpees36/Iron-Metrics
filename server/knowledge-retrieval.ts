@@ -1,11 +1,6 @@
-import OpenAI from "openai";
 import { storage } from "./storage";
 import { generateEmbedding } from "./knowledge-ingestion";
 import type { BriefRecommendation } from "./predictive";
-import crypto from "crypto";
-
-// the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const INTERVENTION_TO_SEARCH: Record<string, { query: string; tags: string[] }> = {
   "New Member Onboarding Touchpoints": { query: "new member onboarding first 90 days retention touchpoints coach check-in", tags: ["onboarding", "retention"] },
@@ -23,67 +18,22 @@ const INTERVENTION_TO_SEARCH: Record<string, { query: string; tags: string[] }> 
   "Programming & Experience Audit": { query: "programming strength cycle scaling consistency facility standards", tags: ["coaching", "programming", "operations"] },
 };
 
-export interface GroundedInsight {
+export interface DoctrineGuidance {
   interventionType: string;
-  insight: string;
-  sources: Array<{ title: string; url: string; chunkId: string; similarity: number }>;
+  detailAugmentation: string;
+  executionStandard: string | null;
+  _audit: { chunkIds: string[]; avgConfidence: number };
 }
 
-export interface GroundingResult {
-  insights: GroundedInsight[];
+export interface DoctrineGroundingResult {
+  guidances: DoctrineGuidance[];
   auditEntries: Array<{ recommendationType: string; chunkId: string; similarity: number }>;
-}
-
-function buildDeterministicSeed(gymId: string, monthStart: string, interventionType: string): number {
-  const hash = crypto.createHash("sha256")
-    .update(`${gymId}:${monthStart}:${interventionType}`)
-    .digest();
-  return hash.readUInt32BE(0);
-}
-
-const TEMPLATE_VARIANTS: Record<string, string[]> = {
-  "New Member Onboarding Touchpoints": [
-    "Affiliate doctrine emphasizes: {insight}. Consider adapting this to your onboarding flow.",
-    "Proven affiliate playbook: {insight}. This aligns with building early habits in new members.",
-    "Source-grounded practice: {insight}. Early touchpoints like these drive 90-day retention.",
-  ],
-  "Member Engagement Check-In System": [
-    "Affiliate best practice: {insight}. Re-engage drifting members before they become ghosts.",
-    "Doctrine-grounded approach: {insight}. Personal outreach to established members preserves your core.",
-    "Proven strategy: {insight}. Consistent check-ins with your veteran members build lasting loyalty.",
-  ],
-  "Attendance Recovery Sprint": [
-    "Recovery doctrine: {insight}. A structured recovery sprint can reactivate drifting members.",
-    "Affiliate playbook: {insight}. Personal outreach within the first 7-14 days of absence is critical.",
-  ],
-  "Coaching Consistency Audit": [
-    "Coaching doctrine: {insight}. Consistency across coaches is a direct retention lever.",
-    "Affiliate best practice: {insight}. Great coaching is the product — everything else is infrastructure.",
-  ],
-  "Referral Activation Sprint": [
-    "Growth doctrine: {insight}. Your best members are your best marketing channel.",
-    "Affiliate playbook: {insight}. Structured referral sprints outperform open-ended referral programs.",
-  ],
-  "Nutrition Challenge Cycle": [
-    "Revenue expansion doctrine: {insight}. Nutrition coaching bridges the gap between fitness and results.",
-    "Affiliate playbook: {insight}. Challenges re-engage plateauing members and create natural upsell paths.",
-  ],
-  "_default": [
-    "Affiliate doctrine: {insight}.",
-    "Source-grounded insight: {insight}.",
-    "Based on proven affiliate practice: {insight}.",
-  ],
-};
-
-function selectTemplate(interventionType: string, seed: number): string {
-  const templates = TEMPLATE_VARIANTS[interventionType] || TEMPLATE_VARIANTS["_default"];
-  return templates[seed % templates.length];
 }
 
 async function retrieveForIntervention(
   interventionType: string,
-  limit: number = 3
-): Promise<Array<{ content: string; chunkId: string; similarity: number; docTitle: string; docUrl: string }>> {
+  limit: number = 6
+): Promise<Array<{ content: string; chunkId: string; similarity: number }>> {
   const searchConfig = INTERVENTION_TO_SEARCH[interventionType] || {
     query: interventionType.replace(/_/g, " "),
     tags: [],
@@ -98,8 +48,6 @@ async function retrieveForIntervention(
         content: r.content,
         chunkId: r.id,
         similarity: r.similarity,
-        docTitle: r.docTitle,
-        docUrl: r.docUrl,
       }));
     }
   }
@@ -109,75 +57,119 @@ async function retrieveForIntervention(
     content: r.content,
     chunkId: r.id,
     similarity: 0.5,
-    docTitle: r.docTitle,
-    docUrl: r.docUrl,
   }));
 }
 
-function distillInsight(chunks: Array<{ content: string }>): string {
-  if (chunks.length === 0) return "";
+function extractActionableSentences(chunks: Array<{ content: string }>, maxSentences: number = 3): string[] {
+  if (chunks.length === 0) return [];
 
   const combined = chunks.map(c => c.content).join(" ");
-
   const sentences = combined.match(/[^.!?]+[.!?]+/g) || [combined];
-  const actionable = sentences.filter(s => {
-    const lower = s.toLowerCase();
-    return (
-      lower.includes("you") ||
-      lower.includes("member") ||
-      lower.includes("coach") ||
-      lower.includes("should") ||
-      lower.includes("need") ||
-      lower.includes("make sure") ||
-      lower.includes("important") ||
-      lower.includes("focus") ||
-      lower.includes("create") ||
-      lower.includes("build") ||
-      lower.includes("start") ||
-      lower.includes("every")
-    );
+
+  const scored = sentences.map(s => {
+    const lower = s.toLowerCase().trim();
+    let score = 0;
+    if (lower.includes("member")) score += 2;
+    if (lower.includes("coach")) score += 2;
+    if (lower.includes("should")) score += 1;
+    if (lower.includes("make sure")) score += 2;
+    if (lower.includes("every")) score += 1;
+    if (lower.includes("create") || lower.includes("build") || lower.includes("start")) score += 1;
+    if (lower.includes("week") || lower.includes("day") || lower.includes("month")) score += 1;
+    if (lower.includes("check-in") || lower.includes("outreach") || lower.includes("conversation")) score += 2;
+    if (lower.includes("class") || lower.includes("workout") || lower.includes("wod")) score += 1;
+    if (lower.length < 30) score -= 2;
+    if (lower.length > 300) score -= 1;
+    if (lower.startsWith("according to") || lower.startsWith("research") || lower.startsWith("studies")) score -= 3;
+    return { text: s.trim(), score };
   });
 
-  const bestSentences = (actionable.length > 0 ? actionable : sentences).slice(0, 2);
-  return bestSentences.map(s => s.trim()).join(" ");
+  return scored
+    .sort((a, b) => b.score - a.score)
+    .slice(0, maxSentences)
+    .map(s => s.text);
+}
+
+function buildDetailAugmentation(sentences: string[]): string {
+  if (sentences.length === 0) return "";
+  const unique: string[] = [];
+  for (const s of sentences) {
+    if (!unique.some(u => u === s || u.includes(s) || s.includes(u))) unique.push(s);
+  }
+  const best = unique.slice(0, 2);
+  let augmentation = best.join(" ");
+  augmentation = augmentation
+    .replace(/according to [^,.]+(,|\.)/gi, "")
+    .replace(/research (shows|suggests|indicates)/gi, "typically")
+    .replace(/studies (show|suggest|indicate)/gi, "in many affiliates")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  return augmentation;
+}
+
+function buildExecutionStandard(sentences: string[]): string | null {
+  if (sentences.length < 2) return null;
+
+  const clauses: string[] = [];
+  for (const sentence of sentences) {
+    const lower = sentence.toLowerCase();
+    const hasTimeline = /\d+\s*(day|week|month|hour|minute)s?/i.test(sentence);
+    const hasAction = /(check-in|outreach|call|message|conversation|review|goal|milestone|event|challenge)/i.test(lower);
+    const hasFrequency = /(every|weekly|monthly|quarterly|daily|annually)/i.test(lower);
+
+    if (hasTimeline || hasAction || hasFrequency) {
+      let clause = sentence
+        .replace(/^[^a-zA-Z0-9]+/, "")
+        .replace(/[.!?]+$/, "")
+        .trim();
+      if (clause.length > 80) {
+        const parts = clause.split(/[,;]/);
+        clause = parts[0].trim();
+      }
+      if (clause.length > 15 && clause.length < 100) {
+        clauses.push(clause);
+      }
+    }
+  }
+
+  if (clauses.length < 2) return null;
+  return clauses.slice(0, 4).join(". ") + ".";
 }
 
 export async function groundRecommendations(
   recommendations: BriefRecommendation[],
   gymId: string,
   periodStart: string
-): Promise<GroundingResult> {
+): Promise<DoctrineGroundingResult> {
   const stats = await storage.getKnowledgeStats();
   if (stats.chunks === 0) {
-    return { insights: [], auditEntries: [] };
+    return { guidances: [], auditEntries: [] };
   }
 
-  const insights: GroundedInsight[] = [];
+  const guidances: DoctrineGuidance[] = [];
   const auditEntries: Array<{ recommendationType: string; chunkId: string; similarity: number }> = [];
 
   const topRecs = recommendations.slice(0, 5);
 
   for (const rec of topRecs) {
     try {
-      const chunks = await retrieveForIntervention(rec.interventionType, 3);
+      const chunks = await retrieveForIntervention(rec.interventionType, 6);
       if (chunks.length === 0) continue;
 
-      const rawInsight = distillInsight(chunks);
-      if (!rawInsight) continue;
+      const sentences = extractActionableSentences(chunks, 6);
+      const detailAugmentation = buildDetailAugmentation(sentences);
+      const executionStandard = buildExecutionStandard(sentences);
 
-      const seed = buildDeterministicSeed(gymId, periodStart, rec.interventionType);
-      const template = selectTemplate(rec.interventionType, seed);
-      const formattedInsight = template.replace("{insight}", rawInsight);
+      if (!detailAugmentation && !executionStandard) continue;
 
-      insights.push({
+      const chunkIds = chunks.map(c => c.chunkId);
+      const avgConfidence = chunks.reduce((sum, c) => sum + c.similarity, 0) / chunks.length;
+
+      guidances.push({
         interventionType: rec.interventionType,
-        insight: formattedInsight,
-        sources: chunks.map(c => ({
-          title: c.docTitle,
-          url: c.docUrl,
-          chunkId: c.chunkId,
-          similarity: c.similarity,
-        })),
+        detailAugmentation,
+        executionStandard,
+        _audit: { chunkIds, avgConfidence },
       });
 
       for (const chunk of chunks) {
@@ -188,7 +180,7 @@ export async function groundRecommendations(
         });
       }
     } catch (err) {
-      console.error(`Grounding failed for ${rec.interventionType}:`, err);
+      console.error(`Doctrine retrieval failed for ${rec.interventionType}:`, err);
     }
   }
 
@@ -206,7 +198,13 @@ export async function groundRecommendations(
     }
   }
 
-  return { insights, auditEntries };
+  if (guidances.length > 0) {
+    console.log(`[Doctrine Library] Grounded ${guidances.length} recommendations for gym ${gymId}:`,
+      guidances.map(g => `${g.interventionType} (${g._audit.chunkIds.length} chunks, conf: ${g._audit.avgConfidence.toFixed(2)})`).join(", ")
+    );
+  }
+
+  return { guidances, auditEntries };
 }
 
 export async function searchKnowledge(

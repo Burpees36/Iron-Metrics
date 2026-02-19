@@ -153,6 +153,7 @@ export interface BriefRecommendation {
   crossfitContext: string;
   timeframe: string;
   executionChecklist: string[];
+  executionStandard?: string;
   interventionScore: number;
   expectedRevenueImpact: number;
   confidenceWeight: number;
@@ -210,11 +211,6 @@ export interface PredictiveIntelligence {
   cohortIntelligence: CohortIntelligence;
   revenueScenario: RevenueScenario;
   strategicBrief: StrategicBrief;
-  groundedInsights?: Array<{
-    interventionType: string;
-    insight: string;
-    sources: Array<{ title: string; url: string; chunkId: string; similarity: number }>;
-  }>;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -301,16 +297,22 @@ export async function generatePredictiveIntelligence(gymId: string): Promise<Pre
     return (b.interventionScore + bBoost) - (a.interventionScore + aBoost);
   });
 
-  let groundedInsights: PredictiveIntelligence["groundedInsights"];
   try {
     const { groundRecommendations } = await import("./knowledge-retrieval");
     const latestMonth = sortedMetrics.length > 0 ? sortedMetrics[sortedMetrics.length - 1].monthStart : new Date().toISOString().slice(0, 10);
     const grounding = await groundRecommendations(strategicBrief.recommendations, gymId, latestMonth);
-    if (grounding.insights.length > 0) {
-      groundedInsights = grounding.insights;
+    for (const guidance of grounding.guidances) {
+      const rec = strategicBrief.recommendations.find(r => r.interventionType === guidance.interventionType);
+      if (!rec) continue;
+      if (guidance.detailAugmentation) {
+        rec.detail = rec.detail.replace(/\s*$/, " " + guidance.detailAugmentation);
+      }
+      if (guidance.executionStandard) {
+        rec.executionStandard = guidance.executionStandard;
+      }
     }
   } catch (err) {
-    console.error("Knowledge grounding failed (non-fatal):", err);
+    console.error("Doctrine grounding failed (non-fatal):", err);
   }
 
   return {
@@ -318,7 +320,6 @@ export async function generatePredictiveIntelligence(gymId: string): Promise<Pre
     cohortIntelligence,
     revenueScenario,
     strategicBrief,
-    groundedInsights,
   };
 }
 

@@ -21,7 +21,6 @@ import {
   Shield, ShieldAlert, ShieldCheck, Target, Zap, FileText, BarChart3,
   ChevronRight, Clock, Minus, ArrowUp, ArrowDown, CheckCircle2, Circle,
   MessageSquare, Phone, UserCheck, CalendarDays, Search, Star, Check,
-  BookOpen, ExternalLink,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
@@ -81,11 +80,6 @@ interface PredictiveIntelligence {
     memberAlerts: MemberAlertEnriched[];
     roiProjection: { actionTaken: string; membersRetained: number; revenuePreserved: number; annualImpact: number };
   };
-  groundedInsights?: Array<{
-    interventionType: string;
-    insight: string;
-    sources: Array<{ title: string; url: string; chunkId: string; similarity: number }>;
-  }>;
   recommendationExecution: RecommendationExecutionCard[];
   periodStart: string;
 }
@@ -175,6 +169,7 @@ interface BriefRecommendation {
   crossfitContext: string;
   timeframe: string;
   executionChecklist: string[];
+  executionStandard?: string;
   interventionScore: number;
   expectedRevenueImpact: number;
   confidenceWeight: number;
@@ -236,7 +231,7 @@ export default function PredictiveIntelligenceView({ gymId, gymName }: { gymId: 
         </TabsList>
 
         <TabsContent value="brief" className="mt-6">
-          <StrategicBriefView gymId={gymId} periodStart={data.periodStart} brief={data.strategicBrief} recommendationExecution={data.recommendationExecution} groundedInsights={data.groundedInsights} />
+          <StrategicBriefView gymId={gymId} periodStart={data.periodStart} brief={data.strategicBrief} recommendationExecution={data.recommendationExecution} />
         </TabsContent>
 
         <TabsContent value="members" className="mt-6">
@@ -664,13 +659,12 @@ function ScoreBreakdown({ rec }: { rec: BriefRecommendation }) {
 // STRATEGIC BRIEF
 // ═══════════════════════════════════════════════════════════════
 
-function StrategicBriefView({ gymId, periodStart, brief, recommendationExecution, groundedInsights }: { gymId: string; periodStart: string; brief: PredictiveIntelligence["strategicBrief"]; recommendationExecution: RecommendationExecutionCard[]; groundedInsights?: PredictiveIntelligence["groundedInsights"] }) {
+function StrategicBriefView({ gymId, periodStart, brief, recommendationExecution }: { gymId: string; periodStart: string; brief: PredictiveIntelligence["strategicBrief"]; recommendationExecution: RecommendationExecutionCard[] }) {
   const dateStr = new Date(brief.generatedAt).toLocaleDateString("en-US", {
     weekday: "long", year: "numeric", month: "long", day: "numeric",
   });
   const { toast } = useToast();
   const executionByHeadline = useMemo(() => new Map(recommendationExecution.map((card) => [card.headline, card])), [recommendationExecution]);
-  const insightByType = useMemo(() => new Map((groundedInsights || []).map(gi => [gi.interventionType, gi])), [groundedInsights]);
 
   const toggleChecklistMutation = useMutation({
     mutationFn: async ({ recommendationId, itemId, checked }: { recommendationId: string; itemId: string; checked: boolean }) => {
@@ -811,30 +805,14 @@ function StrategicBriefView({ gymId, periodStart, brief, recommendationExecution
                 </div>
               </div>
 
-              {insightByType.has(rec.interventionType) && (() => {
-                const gi = insightByType.get(rec.interventionType)!;
-                return (
-                  <div className="pt-3 border-t space-y-2" data-testid={`grounded-insight-${i}`}>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                      <BookOpen className="w-3.5 h-3.5" />
-                      Doctrine-Grounded Insight
-                    </p>
-                    <p className="text-xs text-muted-foreground leading-relaxed italic" data-testid={`text-grounded-insight-${i}`}>
-                      {gi.insight}
-                    </p>
-                    <div className="flex gap-1 flex-wrap">
-                      {gi.sources.map((src) => (
-                        <a key={src.chunkId} href={src.url} target="_blank" rel="noopener noreferrer" data-testid={`link-source-${src.chunkId}`}>
-                          <Badge variant="outline" className="text-[10px] cursor-pointer">
-                            {src.title.length > 30 ? src.title.slice(0, 30) + "..." : src.title}
-                            <ExternalLink className="w-2.5 h-2.5 ml-1" />
-                          </Badge>
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
+              {rec.executionStandard && (
+                <div className="pt-2" data-testid={`execution-standard-${i}`}>
+                  <p className="text-xs text-muted-foreground">
+                    <span className="font-semibold text-foreground">Execution Standard: </span>
+                    {rec.executionStandard}
+                  </p>
+                </div>
+              )}
 
               <ScoreBreakdown rec={rec} />
             </CardContent>

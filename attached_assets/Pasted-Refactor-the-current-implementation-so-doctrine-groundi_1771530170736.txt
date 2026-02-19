@@ -1,0 +1,86 @@
+Refactor the current implementation so doctrine grounding is fully integrated into existing recommendation cards WITHOUT adding new UI features/pages and WITHOUT showing citations or source chips to the user.
+
+Non-negotiables
+
+Do NOT create or display a separate “Knowledge Pack” feature, route, sidebar item, or admin page. If one already exists, remove it from navigation and hide it behind an internal-only dev flag (or delete it if safe).
+
+Do NOT show citations, source links, source chips, article titles, or “based on…” references in the UI. The strategic report must look clean and operator-grade.
+
+Do NOT add new sections that feel bolted-on. Doctrine should improve the existing copy and checklist language, not become an extra block under the checklist.
+
+What to implement instead (internal subsystem)
+
+Create an internal “Doctrine Library” subsystem that:
+
+stores ingested content (transcripts/notes) as chunks
+
+supports retrieval by query + tags
+
+returns short “doctrine guidance” objects to the recommender
+This subsystem must NOT be a user-facing feature.
+
+How doctrine should appear in the recommendation card
+
+Doctrine must be woven into existing parts of the card:
+
+A) The main recommendation paragraph becomes more specific (1–2 sentences max added).
+B) Add ONE short line (optional) labeled: “Execution Standard:” with 2–4 short clauses.
+C) Checklist stays the same structure; wording may be slightly improved for specificity.
+D) No “Doctrine-grounded insight” header. No sources displayed.
+
+Internal traceability (debug only)
+
+Even though the UI cannot show sources, the system must log internally:
+
+which chunks were retrieved
+
+which were used
+
+confidence score
+Store this in an internal table/log field and expose only in dev mode.
+
+Retrieval behavior
+
+When generating recommendation text:
+
+build a retrieval query from: recommendation title/type, gym archetype, current problem (e.g., flat growth/drifters), and business phase (if available)
+
+retrieve top 6–12 chunks
+
+summarize into short guidance bullets for the generator
+
+generator uses those bullets to improve clarity and specificity
+
+Output quality rules (operator-grade)
+
+No academic tone, no citations, no “According to…”
+
+No vague claims or fake precision
+
+Any numeric claims must come from Iron Metrics internal computed data, otherwise phrase qualitatively (“often,” “typically,” “in many affiliates”)
+
+Keep CrossFit-native language but not cringe
+
+Acceptance criteria
+
+The strategic recommendation cards look the same layout as before (no new sections besides optional “Execution Standard:” line).
+
+There are no visible citations or source chips anywhere in the UI.
+
+Recommendation copy becomes more specific and varied across similar scenarios.
+
+A dev-only debug view/log exists that records which content chunks informed the recommendation.
+
+Proceed by editing existing components/services. Do not introduce new user-visible pages.
+
+What I’d do with the “Knowledge Pack” you already have
+
+If it’s easy: delete it.
+
+If deleting risks breaking ingestion: keep the ingestion backend, but remove UI navigation and re-label it internally as “Doctrine Library ingestion.”
+
+Basically: keep the engine, hide the dashboard.
+
+If you want to send the tier screenshots
+
+Yes — send them. But don’t “display them” in-app. Use them to tune tagging rules internally (phase/tier filters) so doctrine retrieval is more accurate.
