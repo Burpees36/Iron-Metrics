@@ -167,16 +167,25 @@ function autoTag(content: string): string[] {
   return matched.length > 0 ? matched.slice(0, 5) : ["general"];
 }
 
+let embeddingCircuitOpen = false;
+let embeddingCircuitResetAt = 0;
+
 async function generateEmbedding(text: string): Promise<number[] | null> {
   if (!process.env.OPENAI_API_KEY) return null;
+  if (embeddingCircuitOpen && Date.now() < embeddingCircuitResetAt) return null;
+  if (embeddingCircuitOpen) embeddingCircuitOpen = false;
   try {
     const response = await openai.embeddings.create({
       model: "text-embedding-3-small",
       input: text.slice(0, 8000),
     });
     return response.data[0].embedding;
-  } catch (err) {
-    console.error("Embedding generation failed:", err);
+  } catch (err: any) {
+    if (err?.status === 429 || err?.code === "insufficient_quota") {
+      embeddingCircuitOpen = true;
+      embeddingCircuitResetAt = Date.now() + 5 * 60 * 1000;
+    }
+    console.error("Embedding generation failed:", err?.message || err);
     return null;
   }
 }

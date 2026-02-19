@@ -8,19 +8,19 @@ import crypto from "crypto";
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const INTERVENTION_TO_SEARCH: Record<string, { query: string; tags: string[] }> = {
-  "new_member_onboarding": { query: "new member onboarding first 90 days retention touchpoints", tags: ["onboarding", "retention"] },
-  "established_member_reengagement": { query: "re-engage drifting established members accountability", tags: ["retention", "accountability", "member-experience"] },
-  "ghost_member_recovery": { query: "recover ghost members who stopped attending win back", tags: ["churn", "retention", "accountability"] },
-  "high_value_member_retention": { query: "retain high value premium members exclusive experience", tags: ["retention", "member-experience", "pricing"] },
-  "milestone_recognition": { query: "celebrate member milestones anniversaries recognition culture", tags: ["culture", "member-experience", "retention"] },
-  "community_event_program": { query: "community events social programming member connection", tags: ["community", "culture", "retention"] },
-  "coaching_development": { query: "coach development training skill instruction quality", tags: ["coaching", "leadership", "staffing"] },
-  "referral_system": { query: "member referral program word of mouth growth bring a friend", tags: ["referral", "growth", "marketing"] },
-  "lead_conversion": { query: "convert leads sales no sweat intro consultation close rate", tags: ["sales", "growth", "marketing"] },
-  "pricing_structure": { query: "pricing structure rate increase revenue per member value proposition", tags: ["pricing", "financial", "growth"] },
-  "seasonal_retention": { query: "seasonal retention summer winter new year campaign", tags: ["retention", "marketing"] },
-  "operational_efficiency": { query: "gym operations systems processes scheduling efficiency", tags: ["operations", "leadership"] },
-  "goal_review_system": { query: "member goal setting review progress accountability check-in", tags: ["goal-setting", "accountability", "coaching"] },
+  "New Member Onboarding Touchpoints": { query: "new member onboarding first 90 days retention touchpoints coach check-in", tags: ["onboarding", "retention"] },
+  "Member Engagement Check-In System": { query: "re-engage drifting established members quarterly goal review accountability", tags: ["retention", "coaching"] },
+  "90-Day Skill Milestone Program": { query: "member milestones skill progression first pull-up Rx WOD emotional investment", tags: ["onboarding", "retention", "coaching"] },
+  "Attendance Recovery Sprint": { query: "recover drifting members personal outreach attendance reactivation", tags: ["retention", "coaching"] },
+  "Referral Activation Sprint": { query: "member referral program sprint incentives word of mouth growth", tags: ["marketing", "community", "sales"] },
+  "Bring-A-Friend System": { query: "bring a friend day guest conversion community workout", tags: ["community", "marketing", "sales"] },
+  "Social Proof Engine": { query: "social proof testimonials member stories transformation content marketing", tags: ["marketing", "community"] },
+  "Local Partnership Activation": { query: "local business partnerships community outreach corporate rate", tags: ["marketing", "community", "sales"] },
+  "Event Activation System": { query: "CrossFit Open Friday Night Lights competition events in-house throwdown", tags: ["community", "retention"] },
+  "Monthly Community Event Cadence": { query: "community events social belonging potluck partner workout retention", tags: ["community", "retention"] },
+  "Nutrition Challenge Cycle": { query: "nutrition challenge coaching revenue expansion ARM upsell accountability", tags: ["pricing", "coaching", "retention"] },
+  "Coaching Consistency Audit": { query: "coaching quality consistency class experience shadow audit trust positive", tags: ["coaching", "leadership"] },
+  "Programming & Experience Audit": { query: "programming strength cycle scaling consistency facility standards", tags: ["coaching", "programming", "operations"] },
 };
 
 export interface GroundedInsight {
@@ -42,19 +42,31 @@ function buildDeterministicSeed(gymId: string, monthStart: string, interventionT
 }
 
 const TEMPLATE_VARIANTS: Record<string, string[]> = {
-  "new_member_onboarding": [
+  "New Member Onboarding Touchpoints": [
     "Affiliate doctrine emphasizes: {insight}. Consider adapting this to your onboarding flow.",
     "Proven affiliate playbook: {insight}. This aligns with building early habits in new members.",
     "Source-grounded practice: {insight}. Early touchpoints like these drive 90-day retention.",
   ],
-  "established_member_reengagement": [
+  "Member Engagement Check-In System": [
     "Affiliate best practice: {insight}. Re-engage drifting members before they become ghosts.",
     "Doctrine-grounded approach: {insight}. Personal outreach to established members preserves your core.",
     "Proven strategy: {insight}. Consistent check-ins with your veteran members build lasting loyalty.",
   ],
-  "ghost_member_recovery": [
-    "Recovery doctrine: {insight}. A structured winback approach can recover lost revenue.",
-    "Affiliate playbook: {insight}. Even a few recovered members significantly impact your monthly revenue.",
+  "Attendance Recovery Sprint": [
+    "Recovery doctrine: {insight}. A structured recovery sprint can reactivate drifting members.",
+    "Affiliate playbook: {insight}. Personal outreach within the first 7-14 days of absence is critical.",
+  ],
+  "Coaching Consistency Audit": [
+    "Coaching doctrine: {insight}. Consistency across coaches is a direct retention lever.",
+    "Affiliate best practice: {insight}. Great coaching is the product — everything else is infrastructure.",
+  ],
+  "Referral Activation Sprint": [
+    "Growth doctrine: {insight}. Your best members are your best marketing channel.",
+    "Affiliate playbook: {insight}. Structured referral sprints outperform open-ended referral programs.",
+  ],
+  "Nutrition Challenge Cycle": [
+    "Revenue expansion doctrine: {insight}. Nutrition coaching bridges the gap between fitness and results.",
+    "Affiliate playbook: {insight}. Challenges re-engage plateauing members and create natural upsell paths.",
   ],
   "_default": [
     "Affiliate doctrine: {insight}.",

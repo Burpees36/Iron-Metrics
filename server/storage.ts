@@ -530,8 +530,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async searchChunksByText(query: string, taxonomyFilter: string[], limit: number): Promise<Array<KnowledgeChunk & { docTitle: string; docUrl: string }>> {
-    const tsQuery = query.split(/\s+/).filter(Boolean).map(w => w.replace(/[^\w]/g, "")).filter(Boolean).join(" & ");
-    if (!tsQuery) return [];
+    const words = query.split(/\s+/).filter(Boolean).map(w => w.replace(/[^\w]/g, "")).filter(Boolean);
+    if (words.length === 0) return [];
+    const tsQuery = words.join(" | ");
 
     let taxonomyClause = "";
     const params: any[] = [tsQuery, limit];
