@@ -290,7 +290,7 @@ export default function LandingPage() {
             <FadeInCard delay={0}>
               <div className="space-y-3">
                 <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
-                  <span className="text-sm font-bold text-[#ffffff]">1</span>
+                  <span className="text-sm font-bold text-[#297a5f]">1</span>
                 </div>
                 <h3 className="font-semibold text-sm">Connect Your Data</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">Upload a CSV from any gym management system. Columns are auto-detected.</p>
