@@ -132,7 +132,6 @@ export default function LandingPage() {
           </div>
         </div>
       </nav>
-
       <section className="pt-32 pb-20 sm:pt-40 sm:pb-28 relative overflow-hidden">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
@@ -250,7 +249,6 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
-
       <section className="py-20 sm:py-28 border-t border-border/50" data-testid="section-outcomes">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16 space-y-4">
@@ -285,7 +283,6 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
-
       <section className="py-20 sm:py-28 border-t border-border/50" data-testid="section-how-it-works">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-12">
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">How it works</h2>
@@ -293,7 +290,7 @@ export default function LandingPage() {
             <FadeInCard delay={0}>
               <div className="space-y-3">
                 <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
-                  <span className="text-sm font-bold text-primary">1</span>
+                  <span className="text-sm font-bold text-[#ffffff]">1</span>
                 </div>
                 <h3 className="font-semibold text-sm">Connect Your Data</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">Upload a CSV from any gym management system. Columns are auto-detected.</p>
@@ -321,7 +318,6 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
-
       <section className="py-16 sm:py-20 border-t border-border/50" data-testid="section-trust">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl mx-auto text-center space-y-6">
@@ -331,7 +327,6 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
-
       <section className="py-20 sm:py-28 relative overflow-hidden">
         <div className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(180deg, transparent 0%, hsl(var(--primary) / 0.06) 50%, hsl(var(--primary) / 0.10) 100%)" }} />
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-8 relative">
@@ -351,7 +346,6 @@ export default function LandingPage() {
           </a>
         </div>
       </section>
-
       <footer className="border-t border-border/50 py-10">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-wrap items-center justify-between gap-4 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
