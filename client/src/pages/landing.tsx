@@ -155,6 +155,7 @@ export default function LandingPage() {
                 <a href="/api/login">
                   <Button
                     size="lg"
+                    className="pl-[32px] pr-[32px] pt-[16px] pb-[16px]"
                     data-testid="button-get-started"
                   >
                     Get Started
