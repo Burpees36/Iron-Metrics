@@ -169,8 +169,9 @@ export default function LandingPage() {
               </div>
             </div>
 
-            <div className="relative hidden lg:block" data-testid="section-hero-cards">
-              <div className="flex items-center justify-between mb-3">
+            <Card className="relative hidden lg:block" data-testid="section-hero-cards">
+              <CardContent className="p-5 space-y-3">
+              <div className="flex items-center justify-between mb-1">
                 <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-widest">
                   Live Intelligence Preview
                 </p>
@@ -245,7 +246,8 @@ export default function LandingPage() {
                   </div>
                 </div>
               </div>
-            </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </section>
