@@ -342,6 +342,7 @@ export default function LandingPage() {
           <a href="/api/login">
             <Button
               size="lg"
+              className="pt-[12px] pb-[12px] mt-[6px] mb-[6px]"
               data-testid="button-cta-bottom"
             >
               Get Started
