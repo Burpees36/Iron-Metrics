@@ -1,0 +1,71 @@
+Non-Repetition
+Recommendations should not always say the same thing.
+
+Implement deterministic template rotation using a seed derived from (gym_id + month_start + recommendation_type + reason_code).
+
+Ensure templates vary when reason_code changes even if recommendation_type stays the same.
+
+Safety + Copyright
+
+Do NOT display large verbatim transcript excerpts to end users.
+
+If any quotes are used, keep them extremely short and rare; otherwise paraphrase.
+
+Store retrieved chunk references internally for audit/debug.
+
+Admin Controls
+Add an internal/admin page or endpoint(s) to:
+
+list sources ingested (playlists and videos)
+
+show ingestion status, counts, last refresh
+
+re-run ingestion for a source
+
+disable a source (excluded from retrieval)
+
+view “what informed this recommendation” (internal debug: list of chunk_ids + titles + urls)
+
+Acceptance Criteria (must pass)
+
+System can ingest all videos from the provided playlists and store transcripts/chunks.
+
+A recommendation generated for a gym includes grounded doctrine text that changes depending on retrieved content.
+
+Debug logging shows which chunks informed each recommendation.
+
+If no transcript is available, the system gracefully skips or marks as “no transcript” without breaking.
+
+The system avoids long quotes and does not claim false precision.
+
+Sources can be refreshed and disabled without code changes.
+
+Optional: Tier System Screenshot Integration
+
+If screenshots are provided later (Affiliate Blueprint phases + priority tier matrix), support adding a “reference artifact” type:
+
+store screenshot(s) as internal artifacts with manual tags (phase/tier definitions)
+
+allow taxonomy rules to reference these artifacts (e.g., “phase_1 gyms prioritize retention/sales fundamentals”)
+
+Do not block implementation on screenshots; proceed with the taxonomy as described.
+
+Implementation Notes
+
+Design this so it works with the existing recommendation system even if recommendation types evolve over time.
+
+Use flexible labels: recommendation_type is a string; mapping to domains/tags can be derived dynamically.
+
+Store everything tenant-safe: gym_id and tenant_id enforced everywhere.
+
+Deliverables:
+
+ingestion jobs + storage schema
+
+embedding + vector search
+
+retrieval + grounded generation integration
+
+admin tooling
+
+tests for ingestion and retrieval and a sample grounded recommendation output

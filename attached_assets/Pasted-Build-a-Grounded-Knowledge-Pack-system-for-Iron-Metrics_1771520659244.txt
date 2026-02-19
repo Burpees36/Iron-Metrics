@@ -1,0 +1,80 @@
+Build a “Grounded Knowledge Pack” system for Iron Metrics so strategic recommendations are rooted in real affiliate-operator doctrine, not generic AI patterns. Use retrieval (RAG), not training. The system must ingest specific YouTube resources (including entire playlists), store searchable chunks, and use them to generate deeper, more accurate recommendations while staying safe and non-repetitive.
+
+Seed Sources (YouTube)
+
+Ingest ALL videos from these sources:
+
+Single video:
+
+https://www.youtube.com/watch?v=uBMSeyfqr9w
+
+Playlists (ingest all videos in each playlist):
+
+https://youtube.com/playlist?list=PLYbz3RnONQgLPoChZB-Ts8WwdF9FygLDn&si=8UCXqYdDnuQSOnva
+
+https://youtube.com/playlist?list=PLYbz3RnONQgJzzzD24-oW7eHdBv8amXki&si=wGwyj3mTfRZmDZ_y
+
+https://youtube.com/playlist?list=PLYbz3RnONQgIMHydHZhR76H8Dep8QtbId&si=kfCGLU2ZkurztFK3
+
+https://youtube.com/playlist?list=PLYbz3RnONQgKPojqcwNUt1Ucnh2qs5biH&si=q0ewoTsMKxoqLgok
+
+Core Requirements
+
+Ingestion Pipeline
+
+Accept a list of YouTube video URLs and playlist URLs.
+
+For playlists: discover all video IDs and ingest each video.
+
+Fetch and store: video title, channel, publish date, URL, playlist_id (if applicable).
+
+Pull transcripts (captions) if available.
+
+Normalize transcripts:
+
+remove timestamps
+
+remove obvious sponsor segments if detectable
+
+keep speaker changes if present
+
+Chunk transcripts into ~200–500 token chunks with overlap so retrieval is accurate.
+
+Store each chunk with metadata:
+
+source_type: “video” or “playlist”
+
+video_id, playlist_id
+
+chunk_id
+
+title, channel, url
+
+created_at, updated_at
+
+Tagging / Taxonomy
+Auto-tag each chunk into a small stable taxonomy that matches affiliate operations:
+
+domains: retention, acquisition, sales, marketing, pricing, coaching, staff_development, programming, operations, community, finance
+
+audience: owner, gm, head_coach, coach
+
+maturity/phase: phase_1…phase_7 (or “unknown” if not inferable)
+
+priority_tier: S/A/B/C/D (or “unknown”)
+
+IMPORTANT: tagging can be heuristic and imperfect; store confidence scores per tag and allow “unknown.”
+
+Vector Search + Retrieval
+
+Embed each chunk and store in a vector index.
+
+At recommendation generation time, retrieve top N chunks relevant to:
+
+the current gym context (archetype, roster size, risk signals)
+
+the recommendation category (retention/acquisition/etc.)
+
+the “reason” (e.g., flat growth, drifters rising, early churn window)
+
+Retrieval must return chunks with metadata so we can log what informed the output.
