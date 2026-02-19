@@ -1,0 +1,239 @@
+@@ -1543,111 +1543,157 @@ function computeInterventionScore(
+
+function derivePriority(score: number, allScores: number[]): "critical" | "high" | "medium" | "low" {
+  if (allScores.length === 0) return "medium";
+  const sorted = [...allScores].sort((a, b) => b - a);
+  const p75 = sorted[Math.floor(sorted.length * 0.25)] ?? 0;
+  const p50 = sorted[Math.floor(sorted.length * 0.5)] ?? 0;
+  if (score >= p75 && score > 0) return "critical";
+  if (score >= p50 && score > 0) return "high";
+  if (score > 0) return "medium";
+  return "low";
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SCOPE DISCIPLINE LAYER
+// Enforces: single-lever focus, checklist 4-6 items, detail <120 words,
+// executionStandard 1 sentence, no cross-pillar drift
+// ═══════════════════════════════════════════════════════════════
+
+const SCOPE_BANNED_KEYWORDS: Record<string, string[]> = {
+  "Retention": ["pricing", "upsell", "add-on", "corporate rate", "ARM increase", "subscription upgrade"],
+  "Acquisition": ["onboarding touchpoint", "coaching audit", "scaling consistency", "whiteboard brief", "nutrition coaching"],
+  "Community Depth": ["referral sprint", "corporate rate", "lead flow", "inbound inquiries", "coaching audit"],
+  "Coaching Quality": ["referral", "bring-a-friend", "upsell", "pricing", "ARM increase", "nutrition challenge", "social proof"],
+};
+
+const CROSS_LEVER_BLOCKED_TOPICS = ["onboarding", "coaching development", "upsell", "upsells", "pricing"];
+const TITLE_STOP_WORDS = new Set([
+  "the", "and", "for", "with", "from", "into", "this", "that", "your", "month", "members", "member", "plan", "program", "build", "improve", "increase", "reduce", "retention", "acquisition",
+]);
+
+function getLeverKeywords(rec: BriefRecommendation): string[] {
+  const source = `${rec.headline} ${rec.interventionType}`.toLowerCase();
+  const keywords = source
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length >= 4 && !TITLE_STOP_WORDS.has(token));
+  return Array.from(new Set(keywords));
+}
+
+function isSameLeverItem(item: string, leverKeywords: string[]): boolean {
+  if (leverKeywords.length === 0) return true;
+  const clean = item.toLowerCase();
+  return leverKeywords.some((keyword) => clean.includes(keyword));
+}
+
+function allowsBlockedTopic(rec: BriefRecommendation, topic: string): boolean {
+  const haystack = `${rec.headline} ${rec.interventionType} ${rec.category}`.toLowerCase();
+  return haystack.includes(topic);
+}
+
+function removeBlockedTopicContent(text: string, rec: BriefRecommendation): string {
+  const sentences = text.split(/(?<=[.!?])\s+/).filter(Boolean);
+  const filtered = sentences.filter((sentence) => {
+    const lower = sentence.toLowerCase();
+    return !CROSS_LEVER_BLOCKED_TOPICS.some((topic) => lower.includes(topic) && !allowsBlockedTopic(rec, topic));
+  });
+  return filtered.join(" ").trim();
+}
+
+function trimToWordLimit(text: string, wordLimit: number): string {
+  const words = text.trim().split(/\s+/);
+  if (words.length <= wordLimit) return text.trim();
+  return words.slice(0, wordLimit).join(" ").trim();
+}
+
+function buildFallbackChecklist(rec: BriefRecommendation, leverKeywords: string[]): string[] {
+  const lever = leverKeywords[0] ?? rec.interventionType.toLowerCase();
+  return [
+    `Define this month's ${lever} target and owner in writing.`,
+    `Execute one ${lever} action block each week and log completion.`,
+    `Track one weekly ${lever} KPI and review it every Friday.`,
+    `Adjust next week's ${lever} action based on KPI movement.`,
+  ];
+}
+
+function scopeAuditRecommendations(recommendations: BriefRecommendation[]): void {
+  for (const rec of recommendations) {
+    const bannedTerms = SCOPE_BANNED_KEYWORDS[rec.category] || [];
+    const leverKeywords = getLeverKeywords(rec);
+
+    rec.executionChecklist = rec.executionChecklist.filter(item => {
+    rec.executionChecklist = rec.executionChecklist.filter((item) => {
+      const lower = item.toLowerCase();
+      return !bannedTerms.some(term => lower.includes(term.toLowerCase()));
+      const violatesCategoryScope = bannedTerms.some((term) => lower.includes(term.toLowerCase()));
+      const violatesTopicScope = CROSS_LEVER_BLOCKED_TOPICS.some((topic) => lower.includes(topic) && !allowsBlockedTopic(rec, topic));
+      const offLever = !isSameLeverItem(item, leverKeywords);
+      return !violatesCategoryScope && !violatesTopicScope && !offLever;
+    });
+
+    if (rec.executionChecklist.length < 4) {
+      const fallback = buildFallbackChecklist(rec, leverKeywords);
+      rec.executionChecklist = [...rec.executionChecklist, ...fallback.filter((item) => !rec.executionChecklist.includes(item))];
+    }
+
+    if (rec.executionChecklist.length > 6) {
+      rec.executionChecklist = rec.executionChecklist.slice(0, 6);
+    }
+
+    const wordCount = rec.detail.split(/\s+/).length;
+    if (wordCount > 120) {
+      const sentences = rec.detail.split(/(?<=[.!?])\s+/);
+      let trimmed = "";
+      for (const sentence of sentences) {
+        const next = trimmed ? trimmed + " " + sentence : sentence;
+        if (next.split(/\s+/).length > 120) break;
+        trimmed = next;
+      }
+      rec.detail = trimmed || sentences[0];
+    while (rec.executionChecklist.length < 4) {
+      rec.executionChecklist.push(`Run one additional ${rec.interventionType.toLowerCase()} step this week and log the result.`);
+    }
+
+    rec.detail = trimToWordLimit(removeBlockedTopicContent(rec.detail, rec), 119);
+
+    if (rec.executionStandard) {
+      const sentences = rec.executionStandard.split(/(?<=[.!?])\s+/);
+      rec.executionStandard = sentences[0];
+      rec.executionStandard = removeBlockedTopicContent(sentences[0], rec);
+    }
+  }
+}
+
+function selectDistinctCategoryTop3(sortedRecommendations: BriefRecommendation[]): BriefRecommendation[] {
+function selectDistinctCategoryTop3(sortedRecommendations: BriefRecommendation[], allowCategoryReuse: boolean): BriefRecommendation[] {
+  if (sortedRecommendations.length <= 3) return [...sortedRecommendations];
+
+  const selected: BriefRecommendation[] = [];
+  const usedCategories = new Set<string>();
+  const criticalThreshold = sortedRecommendations[0]?.interventionScore * 0.8;
+
+  for (const rec of sortedRecommendations) {
+    if (selected.length >= 3) break;
+
+    if (!usedCategories.has(rec.category)) {
+      selected.push(rec);
+      usedCategories.add(rec.category);
+    } else if (rec.priority === "critical" && rec.interventionScore >= criticalThreshold) {
+    if (selected.length === 3) break;
+    if (!usedCategories.has(rec.category) || allowCategoryReuse) {
+      selected.push(rec);
+      usedCategories.add(rec.category);
+    }
+  }
+
+  if (selected.length < 3) {
+    for (const rec of sortedRecommendations) {
+      if (selected.length >= 3) break;
+      if (selected.length === 3) break;
+      if (!selected.includes(rec)) {
+        selected.push(rec);
+      }
+    }
+  }
+
+  return selected;
+  return selected.slice(0, 3);
+}
+
+function generateStrategicBrief(
+  memberPredictions: MemberPredictionSummary,
+  cohortIntelligence: CohortIntelligence,
+  revenueScenario: RevenueScenario,
+  sortedMetrics: { monthStart: string; activeMembers: number; churnRate: string | number; mrr: string | number; arm: string | number; newMembers: number; cancels: number; rsi: number }[],
+  gymChurnRate: number,
+  gymArm: number,
+  activeMemberCount: number
+): StrategicBrief {
+  const now = new Date();
+  const latest = sortedMetrics[sortedMetrics.length - 1];
+  const latestRsi = latest?.rsi ?? 0;
+  const latestMrr = latest ? Number(latest.mrr) : 0;
+
+  // Key metrics
+  const keyMetrics: StrategicBrief["keyMetrics"] = [
+    { label: "Active Members", value: String(activeMemberCount), status: activeMemberCount > 50 ? "good" : activeMemberCount > 20 ? "warning" : "critical" },
+    { label: "Monthly Churn", value: `${gymChurnRate.toFixed(1)}%`, status: gymChurnRate <= 5 ? "good" : gymChurnRate <= 7 ? "warning" : "critical" },
+    { label: "Revenue/Member", value: `$${gymArm.toFixed(0)}`, status: gymArm >= 150 ? "good" : gymArm >= 100 ? "warning" : "critical" },
+    { label: "RSI", value: `${latestRsi}/100`, status: latestRsi >= 80 ? "good" : latestRsi >= 60 ? "warning" : "critical" },
+    { label: "At-Risk Members", value: String(memberPredictions.summary.totalAtRisk), status: memberPredictions.summary.totalAtRisk === 0 ? "good" : memberPredictions.summary.totalAtRisk <= 3 ? "warning" : "critical" },
+    { label: "Revenue at Risk", value: `$${memberPredictions.summary.totalRevenueAtRisk.toLocaleString()}/mo`, status: memberPredictions.summary.totalRevenueAtRisk === 0 ? "good" : memberPredictions.summary.totalRevenueAtRisk < latestMrr * 0.1 ? "warning" : "critical" },
+  ];
+@@ -2133,51 +2179,55 @@ function generateStrategicBrief(
+      timeframe,
+      executionChecklist: [
+        "Review programming: clear strength cycle? Visible skill progression for members?",
+        "Audit scaling consistency across all coaches and time slots",
+        "Survey 5-10 members: 'What's one thing we could improve about class?'",
+        "Create a monthly programming review meeting with coaching staff",
+      ],
+      interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: gymArm * monthsRemaining,
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // SCOPE AUDIT — enforce single-lever discipline before ranking
+  // ═══════════════════════════════════════════════════════════════
+  scopeAuditRecommendations(recommendations);
+
+  // ═══════════════════════════════════════════════════════════════
+  // RANK, DERIVE PRIORITY, SELECT TOP 3 (DISTINCT CATEGORIES) + FOCUS
+  // ═══════════════════════════════════════════════════════════════
+  const allScores = recommendations.map(r => r.interventionScore);
+  recommendations.forEach(r => {
+    r.priority = derivePriority(r.interventionScore, allScores);
+  });
+  recommendations.sort((a, b) => b.interventionScore - a.interventionScore);
+  const focusRecommendation = recommendations.length > 0 ? recommendations[0] : null;
+  const top3 = selectDistinctCategoryTop3(recommendations);
+  const allowCategoryReuse =
+    revenueScenario.cashFlowRiskLevel === "critical" ||
+    revenueScenario.breakEvenRisk >= 0.5 ||
+    memberPredictions.summary.urgentInterventions >= 8;
+  const top3 = selectDistinctCategoryTop3(recommendations, allowCategoryReuse);
+
+  // Cohort alert
+  let cohortAlert: string | null = null;
+  const recentCohorts = cohortIntelligence.cohorts.slice(-3);
+  const lowSurvival = recentCohorts.filter(c => c.survivalRate < 60 && c.totalJoined >= 3);
+  if (lowSurvival.length > 0) {
+    const worst = lowSurvival.sort((a, b) => a.survivalRate - b.survivalRate)[0];
+    cohortAlert = `The ${worst.cohortLabel} cohort is underperforming: only ${worst.survivalRate}% of ${worst.totalJoined} members are still active. This cohort represents $${worst.revenueLost.toLocaleString()}/month in lost revenue. Investigate what was different about onboarding during that period.`;
+  }
+
+  // Revenue outlook
+  const expectedDelta = ((revenueScenario.expectedMrr - latestMrr) / latestMrr * 100);
+  let revenueOutlook: string;
+  if (expectedDelta > 5) {
+    revenueOutlook = `Revenue is on track to grow ${expectedDelta.toFixed(1)}% over the next 6 months to $${revenueScenario.expectedMrr.toLocaleString()}/mo. Momentum is in your favor — if you keep retention steady, you have upside to $${revenueScenario.upsideMrr.toLocaleString()}/mo.`;
+  } else if (expectedDelta > -3) {
+    revenueOutlook = `Revenue should hold near $${revenueScenario.expectedMrr.toLocaleString()}/mo — stable but not growing. The gap between where you are and where you could be ($${revenueScenario.upsideMrr.toLocaleString()}/mo) shows the revenue you're leaving on the table.`;
+  } else {
+    revenueOutlook = `Revenue is headed down — projected to drop ${Math.abs(expectedDelta).toFixed(1)}% to $${revenueScenario.expectedMrr.toLocaleString()}/mo. If things get worse, it could hit $${revenueScenario.worstCaseMrr.toLocaleString()}/mo. Acting now gives you the best chance to turn this around.`;
+  }
+
+  const topAlerts: MemberAlertEnriched[] = memberPredictions.members
+    .filter(m => m.churnProbability > 0.25)
+    .slice(0, 5)
+    .map(m => {

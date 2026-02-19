@@ -1565,52 +1565,102 @@ const SCOPE_BANNED_KEYWORDS: Record<string, string[]> = {
   "Coaching Quality": ["referral", "bring-a-friend", "upsell", "pricing", "ARM increase", "nutrition challenge", "social proof"],
 };
 
+const CROSS_LEVER_BLOCKED_TOPICS = ["onboarding", "coaching development", "upsell", "upsells", "pricing"];
+const TITLE_STOP_WORDS = new Set([
+  "the", "and", "for", "with", "from", "into", "this", "that", "your", "month", "members", "member", "plan", "program", "build", "improve", "increase", "reduce", "retention", "acquisition",
+]);
+
+function getLeverKeywords(rec: BriefRecommendation): string[] {
+  const source = `${rec.headline} ${rec.interventionType}`.toLowerCase();
+  const keywords = source
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length >= 4 && !TITLE_STOP_WORDS.has(token));
+  return Array.from(new Set(keywords));
+}
+
+function isSameLeverItem(item: string, leverKeywords: string[]): boolean {
+  if (leverKeywords.length === 0) return true;
+  const clean = item.toLowerCase();
+  return leverKeywords.some((keyword) => clean.includes(keyword));
+}
+
+function allowsBlockedTopic(rec: BriefRecommendation, topic: string): boolean {
+  const haystack = `${rec.headline} ${rec.interventionType} ${rec.category}`.toLowerCase();
+  return haystack.includes(topic);
+}
+
+function removeBlockedTopicContent(text: string, rec: BriefRecommendation): string {
+  const sentences = text.split(/(?<=[.!?])\s+/).filter(Boolean);
+  const filtered = sentences.filter((sentence) => {
+    const lower = sentence.toLowerCase();
+    return !CROSS_LEVER_BLOCKED_TOPICS.some((topic) => lower.includes(topic) && !allowsBlockedTopic(rec, topic));
+  });
+  return filtered.join(" ").trim();
+}
+
+function trimToWordLimit(text: string, wordLimit: number): string {
+  const words = text.trim().split(/\s+/);
+  if (words.length <= wordLimit) return text.trim();
+  return words.slice(0, wordLimit).join(" ").trim();
+}
+
+function buildFallbackChecklist(rec: BriefRecommendation, leverKeywords: string[]): string[] {
+  const lever = leverKeywords[0] ?? rec.interventionType.toLowerCase();
+  return [
+    `Define this month's ${lever} target and owner in writing.`,
+    `Execute one ${lever} action block each week and log completion.`,
+    `Track one weekly ${lever} KPI and review it every Friday.`,
+    `Adjust next week's ${lever} action based on KPI movement.`,
+  ];
+}
+
 function scopeAuditRecommendations(recommendations: BriefRecommendation[]): void {
   for (const rec of recommendations) {
     const bannedTerms = SCOPE_BANNED_KEYWORDS[rec.category] || [];
+    const leverKeywords = getLeverKeywords(rec);
 
-    rec.executionChecklist = rec.executionChecklist.filter(item => {
+    rec.executionChecklist = rec.executionChecklist.filter((item) => {
       const lower = item.toLowerCase();
-      return !bannedTerms.some(term => lower.includes(term.toLowerCase()));
+      const violatesCategoryScope = bannedTerms.some((term) => lower.includes(term.toLowerCase()));
+      const violatesTopicScope = CROSS_LEVER_BLOCKED_TOPICS.some((topic) => lower.includes(topic) && !allowsBlockedTopic(rec, topic));
+      const offLever = !isSameLeverItem(item, leverKeywords);
+      return !violatesCategoryScope && !violatesTopicScope && !offLever;
     });
+
+    if (rec.executionChecklist.length < 4) {
+      const fallback = buildFallbackChecklist(rec, leverKeywords);
+      rec.executionChecklist = [...rec.executionChecklist, ...fallback.filter((item) => !rec.executionChecklist.includes(item))];
+    }
 
     if (rec.executionChecklist.length > 6) {
       rec.executionChecklist = rec.executionChecklist.slice(0, 6);
     }
 
-    const wordCount = rec.detail.split(/\s+/).length;
-    if (wordCount > 120) {
-      const sentences = rec.detail.split(/(?<=[.!?])\s+/);
-      let trimmed = "";
-      for (const sentence of sentences) {
-        const next = trimmed ? trimmed + " " + sentence : sentence;
-        if (next.split(/\s+/).length > 120) break;
-        trimmed = next;
-      }
-      rec.detail = trimmed || sentences[0];
+    while (rec.executionChecklist.length < 4) {
+      rec.executionChecklist.push(`Run one additional ${rec.interventionType.toLowerCase()} step this week and log the result.`);
+    }
+
+    rec.detail = trimToWordLimit(removeBlockedTopicContent(rec.detail, rec), 119);
+    if (!rec.detail || rec.detail.trim().length === 0) {
+      rec.detail = `Focus on ${rec.interventionType.toLowerCase()} this month. Track progress weekly and adjust based on results.`;
     }
 
     if (rec.executionStandard) {
       const sentences = rec.executionStandard.split(/(?<=[.!?])\s+/);
-      rec.executionStandard = sentences[0];
+      rec.executionStandard = removeBlockedTopicContent(sentences[0], rec);
     }
   }
 }
 
-function selectDistinctCategoryTop3(sortedRecommendations: BriefRecommendation[]): BriefRecommendation[] {
+function selectDistinctCategoryTop3(sortedRecommendations: BriefRecommendation[], allowCategoryReuse: boolean): BriefRecommendation[] {
   if (sortedRecommendations.length <= 3) return [...sortedRecommendations];
 
   const selected: BriefRecommendation[] = [];
   const usedCategories = new Set<string>();
-  const criticalThreshold = sortedRecommendations[0]?.interventionScore * 0.8;
 
   for (const rec of sortedRecommendations) {
-    if (selected.length >= 3) break;
-
-    if (!usedCategories.has(rec.category)) {
-      selected.push(rec);
-      usedCategories.add(rec.category);
-    } else if (rec.priority === "critical" && rec.interventionScore >= criticalThreshold) {
+    if (selected.length === 3) break;
+    if (!usedCategories.has(rec.category) || allowCategoryReuse) {
       selected.push(rec);
       usedCategories.add(rec.category);
     }
@@ -1618,14 +1668,14 @@ function selectDistinctCategoryTop3(sortedRecommendations: BriefRecommendation[]
 
   if (selected.length < 3) {
     for (const rec of sortedRecommendations) {
-      if (selected.length >= 3) break;
+      if (selected.length === 3) break;
       if (!selected.includes(rec)) {
         selected.push(rec);
       }
     }
   }
 
-  return selected;
+  return selected.slice(0, 3);
 }
 
 function generateStrategicBrief(
@@ -2155,7 +2205,11 @@ function generateStrategicBrief(
   });
   recommendations.sort((a, b) => b.interventionScore - a.interventionScore);
   const focusRecommendation = recommendations.length > 0 ? recommendations[0] : null;
-  const top3 = selectDistinctCategoryTop3(recommendations);
+  const allowCategoryReuse =
+    revenueScenario.cashFlowRiskLevel === "critical" ||
+    revenueScenario.breakEvenRisk >= 0.5 ||
+    memberPredictions.summary.urgentInterventions >= 8;
+  const top3 = selectDistinctCategoryTop3(recommendations, allowCategoryReuse);
 
   // Cohort alert
   let cohortAlert: string | null = null;
