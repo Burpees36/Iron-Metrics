@@ -9,6 +9,9 @@ The Stability Command Center for CrossFit gyms. A financial resilience operating
 
 **Tone**: Declarative. Calm. Minimal. Authoritative. Precise. Intentional.
 
+## TODO (Next Session)
+- Update churn metrics
+
 ## Architecture
 - **Frontend**: React + Vite + Tailwind CSS + shadcn/ui + Recharts
 - **Backend**: Express.js + Drizzle ORM + PostgreSQL
