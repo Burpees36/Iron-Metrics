@@ -1,0 +1,229 @@
+Absolutely. Here’s the **Wodify integration architecture** that matches Iron Metrics standards: **multi-tenant safe, idempotent, observable, cache-driven, and low-friction for gym owners**.
+
+Everything below assumes Wodify’s REST API with **`x-api-key` auth** and base URL **`https://api.wodify.com/v1`**. ([Wodify API][1])
+
+---
+
+## Integration goal
+
+**Gym owner experience:** Connect once → Iron Metrics stays up to date automatically (nightly sync + recompute).
+**System requirement:** Every downstream metric is **reproducible**, **auditable**, and **tenant-isolated**.
+
+Wodify customers obtain the API key in **Wodify Core → Digital Presence → Web Integrations → API Keys** (often named “Wodify API”). ([Wodify API][1])
+
+---
+
+## 1) The contract: what we store and why
+
+### A. Connection record (per gym / tenant)
+
+**Table: `integrations_wodify_connection`**
+
+* `tenant_id` (FK, required)
+* `gym_id` (FK, required)
+* `status` (disconnected / connected / error / paused)
+* `api_key_ciphertext` (encrypted at rest)
+* `api_key_fingerprint` (hash prefix for safe logging/debug)
+* `connected_at`, `last_success_at`, `last_error_at`
+* `last_cursor_at` (timestamp watermark for incremental pulls)
+* `sync_window_days` (default e.g. 30–90 for lookback reconciliation)
+
+**Why:** keeps connection state explicit, auditable, and supports incremental sync.
+
+### B. Raw landing zone (immutable-ish)
+
+**Tables: `wodify_raw_*`** (e.g., `wodify_raw_clients`, `wodify_raw_memberships`, `wodify_raw_invoices`, `wodify_raw_class_signins`)
+
+* `tenant_id`, `gym_id`
+* `wodify_id` (or composite keys per entity)
+* `payload_json`
+* `source_updated_at` (if present in payload)
+* `ingested_at`
+* `ingest_run_id`
+* **UNIQUE**: `(tenant_id, gym_id, entity, wodify_id, source_updated_at)` or equivalent
+
+**Why:** You get **replayability** (recompute metrics without re-pulling Wodify), and you can prove “what the vendor said” vs “what we derived”.
+
+### C. Canonical core tables (your normalized business truth)
+
+You already have a stable internal schema directionally like:
+
+* `members`, `memberships`, `attendance_events`, `invoices/transactions`, etc.
+
+These are built from raw via deterministic transforms.
+
+---
+
+## 2) Data we need for Iron Metrics (minimum viable set)
+
+From the Wodify API categories shown in their docs, the “minimum viable” pull for retention + revenue intelligence is: Clients, Memberships, Financials (Invoices/Transactions), Attendance (Class Sign-ins), plus Locations/Programs for segmentation. ([Wodify API][2])
+
+**MVP Entities**
+
+1. **Clients** (member roster, status) ([Wodify API][3])
+2. **Memberships** (active/hold/cancel, billing day, plan, etc.) ([Wodify API][3])
+3. **Invoices + Transactions** (revenue, MRR, payment timing) ([Wodify API][3])
+4. **Class Sign-ins** (attendance behavior → churn risk signals) ([Wodify API][3])
+5. **Locations / Programs** (multi-location gyms + program breakdowns) ([Wodify API][3])
+
+---
+
+## 3) Sync strategy: backfill + incremental + reconciliation
+
+### Phase 1 — Initial backfill (one-time)
+
+* Pull all required entities in **bounded time windows** (e.g., last 24 months for financials/attendance; full roster for clients/memberships).
+* Write to `wodify_raw_*` with idempotent upsert.
+* Transform into canonical tables.
+* Trigger cache recompute jobs (your Sprint 3 pattern: **job computes cache; endpoints read cache only**).
+
+### Phase 2 — Nightly incremental (default)
+
+Wodify provides **search endpoints** and a structured query syntax (`field|operator|value`) using `q` plus URL encoding, with operators like `gte`, `between`, etc. ([Wodify API][4])
+
+**Pattern**
+
+* Use `last_cursor_at` as a watermark.
+* Pull “changed since watermark” if the entity exposes an updated/modified timestamp field.
+* Always include a **lookback window** (e.g., pull from `watermark - 3 days`) to catch vendor delays/edits.
+* Upsert raw + canonical deterministically.
+* Advance watermark only after the run completes cleanly.
+
+### Phase 3 — Reconciliation (weekly)
+
+Because finance systems get backfilled/adjusted, schedule a weekly job:
+
+* Re-pull last 30–90 days (configurable).
+* Rebuild derived aggregates for that range.
+
+This protects accuracy without hammering the API daily.
+
+---
+
+## 4) Rate limits, retries, and “don’t break Wodify”
+
+**Connector rules**
+
+* Token bucket rate limiter per gym connection (safe default; tune when Wodify rate limit guidance is known).
+* Retries with exponential backoff on 429/5xx.
+* Circuit breaker: if a gym fails N times, mark connection `error` and stop until next scheduled retry window.
+* Hard timeouts and pagination support.
+
+Even if Wodify doesn’t publish strict limits publicly, this posture prevents you from becoming a noisy neighbor.
+
+---
+
+## 5) Multi-tenant enforcement (non-negotiable)
+
+Every connector call and every DB write must include:
+
+* `tenant_id` and `gym_id` derived from your tenancy dependency
+* Connection lookup must enforce `(tenant_id, gym_id)` match
+* No “global connector” processes without a tenant/gym scope
+
+**Invariant:** a Wodify API key is *never* usable outside its `(tenant_id, gym_id)` envelope.
+
+---
+
+## 6) Security model (the “sleep at night” checklist)
+
+Wodify auth is via `x-api-key`. ([Wodify API][1])
+Treat it like a password.
+
+**Requirements**
+
+* Encrypt API keys at rest (KMS-managed envelope encryption)
+* Never log headers; redact by default
+* Store fingerprint for support (“ending in …abcd” equivalent via hash)
+* Rotate keys: allow user to update without downtime
+* Least privilege in your own stack: only the worker needs decrypt capability
+
+---
+
+## 7) Observability + supportability
+
+### Per sync run, persist:
+
+* `ingest_run_id`, `started_at`, `finished_at`
+* counts per entity pulled / upserted / transformed
+* cursor start/end
+* last error (sanitized)
+* API latency histograms (per endpoint)
+
+### Dashboards/alerts:
+
+* “No successful sync in 24h” per gym
+* Spike in cancellations / drop in attendance (product alert)
+* API error rate > threshold (connector alert)
+
+This becomes part of your “stability command center” story—calm, protective, reliable.
+
+---
+
+## 8) The internal architecture: components
+
+### A. `wodify-connector` module (pure integration boundary)
+
+Responsibilities:
+
+* Build requests, auth header, pagination
+* Normalize responses to raw records
+* Apply rate limiting / retries
+* Emit structured events: `wodify.sync.started`, `wodify.sync.entity.completed`, `wodify.sync.failed`
+
+### B. `ingestion-orchestrator` (your job runner)
+
+Responsibilities:
+
+* Schedules nightly + reconciliation runs
+* Maintains cursor
+* Coordinates entity ordering:
+
+  1. Locations/Programs (dimensions)
+  2. Clients
+  3. Memberships
+  4. Attendance
+  5. Financials
+
+### C. `transformer` (deterministic ETL)
+
+Responsibilities:
+
+* Raw → canonical (idempotent)
+* Produces “facts” tables used by metrics compute
+
+### D. `metrics-compute` (your cache writer)
+
+Responsibilities:
+
+* Writes `gym_monthly_metrics_cache` (and other caches)
+* Endpoints are **cache-only reads**
+
+---
+
+## 9) Sprint-ready acceptance criteria (Wodify Integration v1)
+
+**Definition of Done**
+
+1. Gym can connect by pasting API key; system validates with a lightweight call (e.g., Locations or Programs). ([Wodify API][1])
+2. Initial backfill runs to completion (or partial with resumability) and writes raw + canonical rows.
+3. Nightly incremental sync advances watermark and produces consistent aggregates.
+4. Idempotency: re-running the same window does not duplicate canonical facts.
+5. Tenant safety: a gym cannot read/trigger another gym’s Wodify connection or data.
+6. Observability: per-run metrics and error states visible in admin tooling.
+7. Cache-only dashboards remain fast and stable.
+
+---
+
+## What I’d do next (to make it “perfect”)
+
+**Deliverable 1:** Exact Wodify entity-to-canonical mapping (field-level) for MVP metrics (MRR, churn, cancels, attendance frequency, LTV/ARM inputs).
+**Deliverable 2:** Connector runbook + failure modes (“API key revoked”, “partial outage”, “schema drift”).
+**Deliverable 3:** A strict job graph: `sync → transform → compute cache → verify cache → mark healthy`.
+
+If you want, I’ll start with **Deliverable 1 (mapping + required fields)** and make it match your locked metrics vocabulary (mrr/arm/ltv/churn rolling).
+
+[1]: https://docs.wodify.com/docs/authentication "Authentication"
+[2]: https://docs.wodify.com/docs "Getting Started with Wodify APIs"
+[3]: https://docs.wodify.com/ "Create Lead"
+[4]: https://docs.wodify.com/docs/search "Using Search Functionality"

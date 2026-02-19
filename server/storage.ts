@@ -1,11 +1,16 @@
 import {
   gyms, members, gymMonthlyMetrics, memberContacts, importJobs,
   recommendationLearningStats,
+  wodifyConnections, wodifySyncRuns, wodifyRawClients, wodifyRawMemberships,
   type Gym, type InsertGym,
   type Member, type InsertMember,
   type GymMonthlyMetrics, type InsertGymMonthlyMetrics,
   type MemberContact, type InsertMemberContact,
   type ImportJob, type InsertImportJob,
+  type WodifyConnection, type InsertWodifyConnection,
+  type WodifySyncRun, type InsertWodifySyncRun,
+  type WodifyRawClient, type InsertWodifyRawClient,
+  type WodifyRawMembership, type InsertWodifyRawMembership,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, sql, gte, lte, desc, inArray } from "drizzle-orm";
@@ -42,6 +47,20 @@ export interface IStorage {
     expectedImpact: number;
     sampleSize: number;
   }>>;
+
+  getWodifyConnection(gymId: string): Promise<WodifyConnection | undefined>;
+  upsertWodifyConnection(connection: InsertWodifyConnection): Promise<WodifyConnection>;
+  updateWodifyConnection(id: string, updates: Partial<WodifyConnection>): Promise<WodifyConnection>;
+  deleteWodifyConnection(gymId: string): Promise<void>;
+
+  createWodifySyncRun(run: InsertWodifySyncRun): Promise<WodifySyncRun>;
+  updateWodifySyncRun(id: string, updates: Partial<WodifySyncRun>): Promise<WodifySyncRun>;
+  getWodifySyncRuns(gymId: string, limit?: number): Promise<WodifySyncRun[]>;
+
+  upsertWodifyRawClient(client: InsertWodifyRawClient): Promise<void>;
+  upsertWodifyRawMembership(membership: InsertWodifyRawMembership): Promise<void>;
+  getWodifyRawClients(gymId: string): Promise<WodifyRawClient[]>;
+  getWodifyRawMemberships(gymId: string): Promise<WodifyRawMembership[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -258,6 +277,100 @@ export class DatabaseStorage implements IStorage {
       expectedImpact: Number(row.expectedImpact),
       sampleSize: row.sampleSize,
     }));
+  }
+
+  async getWodifyConnection(gymId: string): Promise<WodifyConnection | undefined> {
+    const [conn] = await db.select().from(wodifyConnections).where(eq(wodifyConnections.gymId, gymId));
+    return conn;
+  }
+
+  async upsertWodifyConnection(connection: InsertWodifyConnection): Promise<WodifyConnection> {
+    const existing = await this.getWodifyConnection(connection.gymId);
+    if (existing) {
+      const [updated] = await db
+        .update(wodifyConnections)
+        .set({ ...connection, connectedAt: new Date() })
+        .where(eq(wodifyConnections.id, existing.id))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(wodifyConnections).values(connection).returning();
+    return created;
+  }
+
+  async updateWodifyConnection(id: string, updates: Partial<WodifyConnection>): Promise<WodifyConnection> {
+    const [updated] = await db
+      .update(wodifyConnections)
+      .set(updates)
+      .where(eq(wodifyConnections.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteWodifyConnection(gymId: string): Promise<void> {
+    await db.delete(wodifyConnections).where(eq(wodifyConnections.gymId, gymId));
+  }
+
+  async createWodifySyncRun(run: InsertWodifySyncRun): Promise<WodifySyncRun> {
+    const [created] = await db.insert(wodifySyncRuns).values(run).returning();
+    return created;
+  }
+
+  async updateWodifySyncRun(id: string, updates: Partial<WodifySyncRun>): Promise<WodifySyncRun> {
+    const [updated] = await db
+      .update(wodifySyncRuns)
+      .set(updates)
+      .where(eq(wodifySyncRuns.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getWodifySyncRuns(gymId: string, limit = 20): Promise<WodifySyncRun[]> {
+    return db
+      .select()
+      .from(wodifySyncRuns)
+      .where(eq(wodifySyncRuns.gymId, gymId))
+      .orderBy(desc(wodifySyncRuns.startedAt))
+      .limit(limit);
+  }
+
+  async upsertWodifyRawClient(client: InsertWodifyRawClient): Promise<void> {
+    await db
+      .insert(wodifyRawClients)
+      .values(client)
+      .onConflictDoUpdate({
+        target: [wodifyRawClients.gymId, wodifyRawClients.wodifyClientId],
+        set: {
+          payload: client.payload,
+          sourceUpdatedAt: client.sourceUpdatedAt,
+          ingestedAt: new Date(),
+          syncRunId: client.syncRunId,
+        },
+      });
+  }
+
+  async upsertWodifyRawMembership(membership: InsertWodifyRawMembership): Promise<void> {
+    await db
+      .insert(wodifyRawMemberships)
+      .values(membership)
+      .onConflictDoUpdate({
+        target: [wodifyRawMemberships.gymId, wodifyRawMemberships.wodifyMembershipId],
+        set: {
+          payload: membership.payload,
+          wodifyClientId: membership.wodifyClientId,
+          sourceUpdatedAt: membership.sourceUpdatedAt,
+          ingestedAt: new Date(),
+          syncRunId: membership.syncRunId,
+        },
+      });
+  }
+
+  async getWodifyRawClients(gymId: string): Promise<WodifyRawClient[]> {
+    return db.select().from(wodifyRawClients).where(eq(wodifyRawClients.gymId, gymId));
+  }
+
+  async getWodifyRawMemberships(gymId: string): Promise<WodifyRawMembership[]> {
+    return db.select().from(wodifyRawMemberships).where(eq(wodifyRawMemberships.gymId, gymId));
   }
 }
 

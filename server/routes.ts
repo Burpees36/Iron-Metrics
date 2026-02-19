@@ -8,6 +8,8 @@ import { generatePredictiveIntelligence } from "./predictive";
 import { ensureRecommendationCards, getOwnerActions, getPeriodStart, getRecommendationExecutionState, logOwnerAction, runLearningUpdate, toggleChecklistItem } from "./recommendation-learning";
 import { insertGymSchema } from "@shared/schema";
 import multer from "multer";
+import { encryptApiKey, generateFingerprint, testWodifyConnection } from "./wodify-connector";
+import { runWodifySync } from "./wodify-sync";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -712,6 +714,148 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error recomputing metrics:", error);
       res.status(500).json({ message: "Failed to recompute metrics" });
+    }
+  });
+
+  app.post("/api/gyms/:id/wodify/test", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      const { apiKey } = req.body;
+      if (!apiKey || typeof apiKey !== "string") {
+        return res.status(400).json({ message: "API key is required" });
+      }
+
+      const result = await testWodifyConnection(apiKey);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Error testing Wodify connection:", error);
+      res.status(500).json({ message: "Failed to test connection" });
+    }
+  });
+
+  app.post("/api/gyms/:id/wodify/connect", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      const { apiKey, locationName, programName } = req.body;
+      if (!apiKey || typeof apiKey !== "string") {
+        return res.status(400).json({ message: "API key is required" });
+      }
+
+      const testResult = await testWodifyConnection(apiKey);
+      if (!testResult.success) {
+        return res.status(400).json({ message: `Connection failed: ${testResult.message}` });
+      }
+
+      const encrypted = encryptApiKey(apiKey);
+      const fingerprint = generateFingerprint(apiKey);
+
+      const connection = await storage.upsertWodifyConnection({
+        gymId: req.params.id,
+        status: "connected",
+        apiKeyEncrypted: encrypted,
+        apiKeyFingerprint: fingerprint,
+        wodifyLocationName: locationName || null,
+        wodifyProgramName: programName || null,
+        syncWindowDays: 90,
+      });
+
+      res.json({
+        id: connection.id,
+        status: connection.status,
+        apiKeyFingerprint: connection.apiKeyFingerprint,
+        wodifyLocationName: connection.wodifyLocationName,
+        connectedAt: connection.connectedAt,
+        message: testResult.message,
+      });
+    } catch (error: any) {
+      console.error("Error connecting Wodify:", error);
+      res.status(500).json({ message: "Failed to connect Wodify" });
+    }
+  });
+
+  app.delete("/api/gyms/:id/wodify/disconnect", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      await storage.deleteWodifyConnection(req.params.id);
+      res.json({ message: "Wodify disconnected successfully" });
+    } catch (error: any) {
+      console.error("Error disconnecting Wodify:", error);
+      res.status(500).json({ message: "Failed to disconnect Wodify" });
+    }
+  });
+
+  app.get("/api/gyms/:id/wodify/status", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      const connection = await storage.getWodifyConnection(req.params.id);
+      if (!connection) {
+        return res.json({ connected: false, status: "disconnected" });
+      }
+
+      const recentSyncRuns = await storage.getWodifySyncRuns(req.params.id, 5);
+
+      res.json({
+        connected: connection.status === "connected",
+        status: connection.status,
+        apiKeyFingerprint: connection.apiKeyFingerprint,
+        wodifyLocationName: connection.wodifyLocationName,
+        wodifyProgramName: connection.wodifyProgramName,
+        connectedAt: connection.connectedAt,
+        lastSuccessAt: connection.lastSuccessAt,
+        lastErrorAt: connection.lastErrorAt,
+        lastErrorMessage: connection.lastErrorMessage,
+        lastCursorAt: connection.lastCursorAt,
+        recentSyncRuns,
+      });
+    } catch (error: any) {
+      console.error("Error fetching Wodify status:", error);
+      res.status(500).json({ message: "Failed to fetch Wodify status" });
+    }
+  });
+
+  app.post("/api/gyms/:id/wodify/sync", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      const runType = req.body?.runType === "backfill" ? "backfill" : "incremental";
+
+      res.json({ message: "Sync started", status: "running" });
+
+      runWodifySync(req.params.id, runType).catch((err) =>
+        console.error(`[Wodify] Background sync error for gym ${req.params.id}:`, err)
+      );
+    } catch (error: any) {
+      console.error("Error triggering Wodify sync:", error);
+      res.status(500).json({ message: "Failed to trigger sync" });
+    }
+  });
+
+  app.get("/api/gyms/:id/wodify/sync-history", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      const limit = Math.min(Number(req.query.limit) || 20, 100);
+      const syncRuns = await storage.getWodifySyncRuns(req.params.id, limit);
+      res.json(syncRuns);
+    } catch (error: any) {
+      console.error("Error fetching sync history:", error);
+      res.status(500).json({ message: "Failed to fetch sync history" });
     }
   });
 

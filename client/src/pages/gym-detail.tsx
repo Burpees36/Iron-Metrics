@@ -57,6 +57,7 @@ import {
   Clock,
   MessageSquare,
   X,
+  Plug,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import PredictiveIntelligenceView from "./predictive-intelligence";
@@ -248,6 +249,12 @@ export default function GymDetail() {
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Link href={`/gyms/${gym.id}/wodify`}>
+            <Button variant="outline" data-testid="button-wodify-integration">
+              <Plug className="w-4 h-4 mr-1" />
+              Wodify
+            </Button>
+          </Link>
           <Link href={`/gyms/${gym.id}/import`}>
             <Button variant="outline" data-testid="button-import-csv">
               <Upload className="w-4 h-4 mr-1" />

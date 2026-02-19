@@ -65,26 +65,40 @@ If it does not drive action, it is not shown.
 - Risk tier classification (Low/Moderate/High)
 - Trend charts: RSI, MRR, Active Members, Churn, Revenue/Member, Net Growth
 - Dark steel / charcoal visual identity
+- **Wodify Integration**:
+  - Direct API connection to Wodify gym management platform
+  - API key encrypted at rest (AES-256-GCM), never stored in plaintext
+  - Raw data landing zone (wodify_raw_clients, wodify_raw_memberships) preserves source data
+  - Automatic transformation from Wodify clients/memberships to canonical members table
+  - Backfill (full historical pull) and incremental sync support
+  - Rate limiting with exponential backoff retries (3 attempts max)
+  - Paginated data fetching for large gym rosters
+  - Sync run history with error tracking and status reporting
+  - Automatic metrics recompute after sync completes
+  - Frontend: connection form, test connection, sync trigger, sync history display
+  - Navigation: Wodify button on gym detail page header, route at /gyms/:id/wodify
 
 ## Project Structure
 ```
 client/src/
-  pages/         - Landing, Dashboard (Command Center), GymDetail, GymNew, CsvImport
+  pages/         - Landing, Dashboard (Command Center), GymDetail, GymNew, CsvImport, WodifyIntegration
   components/    - AppSidebar, ThemeProvider, ThemeToggle, shadcn ui
   hooks/         - use-auth, use-toast
   lib/           - queryClient, auth-utils, utils
 
 server/
-  routes.ts      - All API endpoints
-  storage.ts     - DatabaseStorage (IStorage interface)
-  metrics.ts     - Metrics computation + report generation + 90-day trends
-  predictive.ts  - Predictive intelligence engine (member churn prediction, cohort analysis, revenue scenarios, strategic briefs)
-  csv-parser.ts  - CSV parsing for member imports
-  db.ts          - Drizzle + pg pool
+  routes.ts          - All API endpoints
+  storage.ts         - DatabaseStorage (IStorage interface)
+  metrics.ts         - Metrics computation + report generation + 90-day trends
+  predictive.ts      - Predictive intelligence engine (member churn prediction, cohort analysis, revenue scenarios, strategic briefs)
+  csv-parser.ts      - CSV parsing for member imports
+  wodify-connector.ts - Wodify API client (auth, pagination, rate limiting, retries, data extraction/transform)
+  wodify-sync.ts     - Sync engine (backfill/incremental orchestrator, raw data landing, transform to canonical members, metrics recompute trigger)
+  db.ts              - Drizzle + pg pool
   replit_integrations/auth/ - Replit Auth module
 
 shared/
-  schema.ts      - Drizzle schemas (gyms, members, import_jobs, gym_monthly_metrics)
+  schema.ts      - Drizzle schemas (gyms, members, import_jobs, gym_monthly_metrics, wodify_connections, wodify_sync_runs, wodify_raw_clients, wodify_raw_memberships)
   models/auth.ts - Auth schemas (users, sessions)
 ```
 
@@ -107,6 +121,12 @@ shared/
 - `GET /api/gyms/:id/trends/intelligence` - Trend intelligence with insights, projections, correlations, stability verdict
 - `GET /api/gyms/:id/predictive` - Full predictive intelligence (member predictions, cohort intelligence, revenue scenarios, strategic brief)
 - `POST /api/gyms/:id/recompute` - Recompute all metrics
+- `POST /api/gyms/:id/wodify/test` - Test Wodify API key connectivity
+- `POST /api/gyms/:id/wodify/connect` - Connect Wodify with encrypted API key
+- `DELETE /api/gyms/:id/wodify/disconnect` - Remove Wodify connection
+- `GET /api/gyms/:id/wodify/status` - Connection status + recent sync runs
+- `POST /api/gyms/:id/wodify/sync` - Trigger sync (incremental or backfill)
+- `GET /api/gyms/:id/wodify/sync-history` - Full sync run history
 
 ## Design Tokens
 - Font: Inter (sans), Libre Baskerville (serif), JetBrains Mono (mono)

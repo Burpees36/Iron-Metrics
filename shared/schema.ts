@@ -199,6 +199,97 @@ export const recommendationLearningEvents = pgTable("recommendation_learning_eve
   uniqueIndex("idx_recommendation_learning_event_unique").on(table.recommendationId, table.evaluationWindowDays),
 ]);
 
+export const wodifyConnections = pgTable("wodify_connections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gymId: varchar("gym_id").notNull().references(() => gyms.id),
+  status: text("status").notNull().default("disconnected"),
+  apiKeyEncrypted: text("api_key_encrypted").notNull(),
+  apiKeyFingerprint: text("api_key_fingerprint").notNull(),
+  wodifyLocationName: text("wodify_location_name"),
+  wodifyProgramName: text("wodify_program_name"),
+  connectedAt: timestamp("connected_at").defaultNow(),
+  lastSuccessAt: timestamp("last_success_at"),
+  lastErrorAt: timestamp("last_error_at"),
+  lastErrorMessage: text("last_error_message"),
+  lastCursorAt: timestamp("last_cursor_at"),
+  syncWindowDays: integer("sync_window_days").notNull().default(90),
+}, (table) => [
+  uniqueIndex("idx_wodify_connection_gym").on(table.gymId),
+]);
+
+export const wodifyConnectionsRelations = relations(wodifyConnections, ({ one }) => ({
+  gym: one(gyms, { fields: [wodifyConnections.gymId], references: [gyms.id] }),
+}));
+
+export const insertWodifyConnectionSchema = createInsertSchema(wodifyConnections).omit({ id: true, connectedAt: true, lastSuccessAt: true, lastErrorAt: true, lastErrorMessage: true, lastCursorAt: true });
+export type InsertWodifyConnection = z.infer<typeof insertWodifyConnectionSchema>;
+export type WodifyConnection = typeof wodifyConnections.$inferSelect;
+
+export const wodifySyncRuns = pgTable("wodify_sync_runs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gymId: varchar("gym_id").notNull().references(() => gyms.id),
+  connectionId: varchar("connection_id").notNull().references(() => wodifyConnections.id),
+  runType: text("run_type").notNull().default("incremental"),
+  status: text("status").notNull().default("running"),
+  startedAt: timestamp("started_at").defaultNow(),
+  finishedAt: timestamp("finished_at"),
+  cursorStart: timestamp("cursor_start"),
+  cursorEnd: timestamp("cursor_end"),
+  clientsPulled: integer("clients_pulled").notNull().default(0),
+  clientsUpserted: integer("clients_upserted").notNull().default(0),
+  membershipsPulled: integer("memberships_pulled").notNull().default(0),
+  membershipsUpserted: integer("memberships_upserted").notNull().default(0),
+  errorCount: integer("error_count").notNull().default(0),
+  errorDetails: text("error_details"),
+}, (table) => [
+  index("idx_wodify_sync_runs_gym").on(table.gymId),
+  index("idx_wodify_sync_runs_connection").on(table.connectionId),
+]);
+
+export const wodifySyncRunsRelations = relations(wodifySyncRuns, ({ one }) => ({
+  gym: one(gyms, { fields: [wodifySyncRuns.gymId], references: [gyms.id] }),
+  connection: one(wodifyConnections, { fields: [wodifySyncRuns.connectionId], references: [wodifyConnections.id] }),
+}));
+
+export const insertWodifySyncRunSchema = createInsertSchema(wodifySyncRuns).omit({ id: true, startedAt: true, finishedAt: true });
+export type InsertWodifySyncRun = z.infer<typeof insertWodifySyncRunSchema>;
+export type WodifySyncRun = typeof wodifySyncRuns.$inferSelect;
+
+export const wodifyRawClients = pgTable("wodify_raw_clients", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gymId: varchar("gym_id").notNull().references(() => gyms.id),
+  wodifyClientId: text("wodify_client_id").notNull(),
+  payload: jsonb("payload").notNull(),
+  sourceUpdatedAt: timestamp("source_updated_at"),
+  ingestedAt: timestamp("ingested_at").defaultNow(),
+  syncRunId: varchar("sync_run_id").references(() => wodifySyncRuns.id),
+}, (table) => [
+  uniqueIndex("idx_wodify_raw_client_unique").on(table.gymId, table.wodifyClientId),
+  index("idx_wodify_raw_clients_gym").on(table.gymId),
+]);
+
+export const insertWodifyRawClientSchema = createInsertSchema(wodifyRawClients).omit({ id: true, ingestedAt: true });
+export type InsertWodifyRawClient = z.infer<typeof insertWodifyRawClientSchema>;
+export type WodifyRawClient = typeof wodifyRawClients.$inferSelect;
+
+export const wodifyRawMemberships = pgTable("wodify_raw_memberships", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gymId: varchar("gym_id").notNull().references(() => gyms.id),
+  wodifyMembershipId: text("wodify_membership_id").notNull(),
+  wodifyClientId: text("wodify_client_id").notNull(),
+  payload: jsonb("payload").notNull(),
+  sourceUpdatedAt: timestamp("source_updated_at"),
+  ingestedAt: timestamp("ingested_at").defaultNow(),
+  syncRunId: varchar("sync_run_id").references(() => wodifySyncRuns.id),
+}, (table) => [
+  uniqueIndex("idx_wodify_raw_membership_unique").on(table.gymId, table.wodifyMembershipId),
+  index("idx_wodify_raw_memberships_gym").on(table.gymId),
+]);
+
+export const insertWodifyRawMembershipSchema = createInsertSchema(wodifyRawMemberships).omit({ id: true, ingestedAt: true });
+export type InsertWodifyRawMembership = z.infer<typeof insertWodifyRawMembershipSchema>;
+export type WodifyRawMembership = typeof wodifyRawMemberships.$inferSelect;
+
 export const outcomeSnapshots = pgTable("outcome_snapshots", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   gymId: varchar("gym_id").notNull().references(() => gyms.id),
