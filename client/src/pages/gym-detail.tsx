@@ -471,7 +471,7 @@ function RSIDial({ value, testId }: { value: number; testId: string }) {
   const dashOffset = arcLength - filledLength;
 
   const color = value >= 80
-    ? { stroke: "#10b981", glow: "rgba(16, 185, 129, 0.25)", label: "Stable" }
+    ? { stroke: "hsl(var(--primary))", glow: "hsl(var(--primary) / 0.25)", label: "Stable" }
     : value >= 60
       ? { stroke: "#f59e0b", glow: "rgba(245, 158, 11, 0.25)", label: "Moderate" }
       : { stroke: "#ef4444", glow: "rgba(239, 68, 68, 0.25)", label: "Unstable" };
@@ -568,13 +568,13 @@ function ScoreCard({
   testId: string;
 }) {
   const statusColor = status === "good"
-    ? "text-emerald-600 dark:text-emerald-400"
+    ? "text-primary"
     : status === "risk"
       ? "text-red-600 dark:text-red-400"
       : "";
 
   const indicatorColor = status === "good"
-    ? "bg-emerald-500"
+    ? "bg-primary"
     : status === "risk"
       ? "bg-red-500"
       : status === "moderate"
@@ -636,7 +636,7 @@ function TrendIndicator({ direction, value }: { direction: MetricReport["trendDi
   }
   const isPositive = direction === "up";
   return (
-    <span className={`flex items-center gap-1 text-xs font-mono ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+    <span className={`flex items-center gap-1 text-xs font-mono ${isPositive ? "text-primary" : "text-red-600 dark:text-red-400"}`}>
       {isPositive ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
       {value}
     </span>
@@ -743,7 +743,7 @@ function FlaggedMemberCard({ member: m, gymId, monthDate }: { member: AtRiskMemb
         <p className="text-[11px] text-muted-foreground">
           {new Date(m.joinDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
           {m.lastContacted && (
-            <span className="ml-1 text-emerald-600 dark:text-emerald-400">
+            <span className="ml-1 text-primary">
               {" "}· Contacted {new Date(m.lastContacted).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
             </span>
           )}
@@ -824,7 +824,7 @@ function ForecastSection({ forecast }: { forecast: Forecast }) {
             <p className="text-lg font-bold font-mono" data-testid="text-forecast-mrr">
               ${forecast.nextMonthMrr.toLocaleString()}
             </p>
-            <p className={`text-xs font-mono ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"}`}>
+            <p className={`text-xs font-mono ${isPositive ? "text-primary" : "text-red-500 dark:text-red-400"}`}>
               {isPositive ? "+" : ""}{mrrDelta.toLocaleString()} vs. current
             </p>
           </div>
@@ -835,7 +835,7 @@ function ForecastSection({ forecast }: { forecast: Forecast }) {
           </div>
           <div className="space-y-1">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">90-Day Revenue at Risk</p>
-            <p className={`text-lg font-bold font-mono ${revenueAtRisk > 0 ? "text-red-500 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`} data-testid="text-forecast-risk">
+            <p className={`text-lg font-bold font-mono ${revenueAtRisk > 0 ? "text-red-500 dark:text-red-400" : "text-primary"}`} data-testid="text-forecast-risk">
               ${revenueAtRisk.toLocaleString()}
             </p>
           </div>
@@ -1063,7 +1063,7 @@ function RiskDot({ risk }: { risk: "low" | "medium" | "high" }) {
   const colors = {
     high: "bg-red-500 dark:bg-red-400",
     medium: "bg-amber-500 dark:bg-amber-400",
-    low: "bg-emerald-500 dark:bg-emerald-400",
+    low: "bg-primary",
   };
   return <div className={`w-2 h-2 rounded-full flex-shrink-0 ${colors[risk]}`} />;
 }
@@ -1088,7 +1088,7 @@ function ContactRecency({ daysSinceContact, lastContacted }: { daysSinceContact:
     return <span className="text-xs text-muted-foreground">No contact</span>;
   }
   const color = daysSinceContact <= 3
-    ? "text-emerald-600 dark:text-emerald-400"
+    ? "text-primary"
     : daysSinceContact <= 7
       ? "text-amber-600 dark:text-amber-400"
       : "text-red-500 dark:text-red-400";
@@ -1329,7 +1329,7 @@ function TrendsView({ gymId }: { gymId: string }) {
   }
 
   const tierColors = {
-    "stable": { bg: "bg-emerald-500/10 dark:bg-emerald-500/15", border: "border-emerald-500/30", text: "text-emerald-700 dark:text-emerald-400", dot: "bg-emerald-500", barColor: "#10b981" },
+    "stable": { bg: "bg-primary/10 dark:bg-primary/15", border: "border-primary/30", text: "text-primary", dot: "bg-primary", barColor: "hsl(var(--primary))" },
     "plateau-risk": { bg: "bg-amber-500/10 dark:bg-amber-500/15", border: "border-amber-500/30", text: "text-amber-700 dark:text-amber-400", dot: "bg-amber-500", barColor: "#f59e0b" },
     "early-drift": { bg: "bg-orange-500/10 dark:bg-orange-500/15", border: "border-orange-500/30", text: "text-orange-700 dark:text-orange-400", dot: "bg-orange-500", barColor: "#f97316" },
     "instability-risk": { bg: "bg-red-500/10 dark:bg-red-500/15", border: "border-red-500/30", text: "text-red-700 dark:text-red-400", dot: "bg-red-500", barColor: "#ef4444" },
@@ -1350,21 +1350,21 @@ function TrendsView({ gymId }: { gymId: string }) {
   }));
 
   const outlookStatusColor = (status: string) => {
-    if (status === "growing" || status === "within-tolerance") return "text-emerald-600 dark:text-emerald-400";
+    if (status === "growing" || status === "within-tolerance") return "text-primary";
     if (status === "stable") return "text-muted-foreground";
     if (status === "at-risk" || status === "elevated") return "text-amber-600 dark:text-amber-400";
     return "text-red-600 dark:text-red-400";
   };
 
   const interventionColors = {
-    none: { text: "text-emerald-600 dark:text-emerald-400", label: "None" },
+    none: { text: "text-primary", label: "None" },
     low: { text: "text-muted-foreground", label: "Low" },
     moderate: { text: "text-amber-600 dark:text-amber-400", label: "Moderate" },
     high: { text: "text-red-600 dark:text-red-400", label: "High" },
   };
 
   const dynamicBg = stabilityScore.score >= 85
-    ? "bg-gradient-to-br from-background via-background to-emerald-500/[0.03] dark:to-emerald-500/[0.04]"
+    ? "bg-gradient-to-br from-background via-background to-primary/[0.03] dark:to-primary/[0.04]"
     : stabilityScore.score < 60
       ? "bg-gradient-to-br from-background via-background to-red-500/[0.03] dark:to-red-500/[0.06]"
       : "";
@@ -1411,7 +1411,7 @@ function TrendsView({ gymId }: { gymId: string }) {
             </div>
             <div className="lg:w-80 space-y-3">
               <div className={`rounded-md p-4 space-y-3 border-l-[3px] ${
-                ninetyDayOutlook.interventionRequired === "none" ? "bg-emerald-500/5 border-l-emerald-500/50" :
+                ninetyDayOutlook.interventionRequired === "none" ? "bg-primary/5 border-l-primary/50" :
                 ninetyDayOutlook.interventionRequired === "low" ? "bg-muted/50 border-l-muted-foreground/30" :
                 ninetyDayOutlook.interventionRequired === "moderate" ? "bg-amber-500/5 border-l-amber-500/50" :
                 "bg-red-500/5 border-l-red-500/50"
@@ -1424,7 +1424,7 @@ function TrendsView({ gymId }: { gymId: string }) {
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <div className={`w-1.5 h-1.5 rounded-full ${
-                        ninetyDayOutlook.revenue.status === "growing" || ninetyDayOutlook.revenue.status === "within-tolerance" ? "bg-emerald-500" :
+                        ninetyDayOutlook.revenue.status === "growing" || ninetyDayOutlook.revenue.status === "within-tolerance" ? "bg-primary" :
                         ninetyDayOutlook.revenue.status === "stable" ? "bg-muted-foreground/50" :
                         ninetyDayOutlook.revenue.status === "at-risk" || ninetyDayOutlook.revenue.status === "elevated" ? "bg-amber-500" : "bg-red-500"
                       }`} />
@@ -1435,7 +1435,7 @@ function TrendsView({ gymId }: { gymId: string }) {
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <div className={`w-1.5 h-1.5 rounded-full ${
-                        ninetyDayOutlook.memberCount.status === "growing" || ninetyDayOutlook.memberCount.status === "within-tolerance" ? "bg-emerald-500" :
+                        ninetyDayOutlook.memberCount.status === "growing" || ninetyDayOutlook.memberCount.status === "within-tolerance" ? "bg-primary" :
                         ninetyDayOutlook.memberCount.status === "stable" ? "bg-muted-foreground/50" :
                         ninetyDayOutlook.memberCount.status === "at-risk" || ninetyDayOutlook.memberCount.status === "elevated" ? "bg-amber-500" : "bg-red-500"
                       }`} />
@@ -1446,7 +1446,7 @@ function TrendsView({ gymId }: { gymId: string }) {
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <div className={`w-1.5 h-1.5 rounded-full ${
-                        ninetyDayOutlook.churn.status === "growing" || ninetyDayOutlook.churn.status === "within-tolerance" ? "bg-emerald-500" :
+                        ninetyDayOutlook.churn.status === "growing" || ninetyDayOutlook.churn.status === "within-tolerance" ? "bg-primary" :
                         ninetyDayOutlook.churn.status === "stable" ? "bg-muted-foreground/50" :
                         ninetyDayOutlook.churn.status === "at-risk" || ninetyDayOutlook.churn.status === "elevated" ? "bg-amber-500" : "bg-red-500"
                       }`} />
@@ -1505,7 +1505,7 @@ function TrendsView({ gymId }: { gymId: string }) {
                       <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
                       <RechartsTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12 }} formatter={(v: number) => [`$${v.toLocaleString()}`, ""]} />
                       <Line type="monotone" dataKey="current" stroke="hsl(var(--chart-2))" strokeWidth={2} name="Current Trajectory" dot={{ r: 3 }} animationDuration={1200} animationBegin={200} />
-                      <Line type="monotone" dataKey="target" stroke="#10b981" strokeWidth={2} strokeDasharray="6 4" name="Target Path" dot={false} animationDuration={1200} animationBegin={600} />
+                      <Line type="monotone" dataKey="target" stroke="hsl(var(--primary))" strokeWidth={2} strokeDasharray="6 4" name="Target Path" dot={false} animationDuration={1200} animationBegin={600} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
                     </LineChart>
                   </ResponsiveContainer>
@@ -1585,7 +1585,7 @@ function TrendsView({ gymId }: { gymId: string }) {
                     <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12 }} formatter={(v: number, name: string) => [name === "cancels" ? `${Math.abs(v)}` : `${v}`, name === "cancels" ? "Cancellations" : "New Joins"]} />
                     <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeOpacity={0.3} />
-                    <Bar dataKey="joins" fill="#10b981" radius={[3, 3, 0, 0]} name="joins" animationDuration={800} animationBegin={200} />
+                    <Bar dataKey="joins" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} name="joins" animationDuration={800} animationBegin={200} />
                     <Bar dataKey="cancels" fill="#ef4444" radius={[0, 0, 3, 3]} name="cancels" animationDuration={800} animationBegin={400} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -1611,7 +1611,7 @@ function TrendsView({ gymId }: { gymId: string }) {
                 </div>
                 <div className="space-y-3">
                   {correlations.map((c, i) => {
-                    const cColors = { positive: { dot: "bg-emerald-500", text: "text-emerald-700 dark:text-emerald-400" }, warning: { dot: "bg-amber-500", text: "text-amber-700 dark:text-amber-400" }, neutral: { dot: "bg-muted-foreground", text: "" } };
+                    const cColors = { positive: { dot: "bg-primary", text: "text-primary" }, warning: { dot: "bg-amber-500", text: "text-amber-700 dark:text-amber-400" }, neutral: { dot: "bg-muted-foreground", text: "" } };
                     const cc = cColors[c.status];
                     return (
                       <div key={i} className="rounded-md border p-3 space-y-1" data-testid={`correlation-${i}`}>
@@ -1635,7 +1635,7 @@ function TrendsView({ gymId }: { gymId: string }) {
 }
 
 function SlopeIcon({ direction }: { direction: "up" | "down" | "flat" }) {
-  if (direction === "up") return <ArrowUp className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />;
+  if (direction === "up") return <ArrowUp className="w-3 h-3 text-primary" />;
   if (direction === "down") return <ArrowDown className="w-3 h-3 text-red-600 dark:text-red-400" />;
   return <Minus className="w-3 h-3 text-muted-foreground" />;
 }
@@ -1643,7 +1643,7 @@ function SlopeIcon({ direction }: { direction: "up" | "down" | "flat" }) {
 function KpiBadge({ kpi }: { kpi?: MicroKpi }) {
   if (!kpi) return null;
   const trendLabel = kpi.trend === "accelerating" ? "Accelerating" : kpi.trend === "decelerating" ? "Decelerating" : "Stable";
-  const trendColor = kpi.trend === "accelerating" ? "text-emerald-600 dark:text-emerald-400" : kpi.trend === "decelerating" ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground";
+  const trendColor = kpi.trend === "accelerating" ? "text-primary" : kpi.trend === "decelerating" ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground";
   return (
     <div className="flex items-center gap-3 flex-wrap" data-testid="kpi-badge">
       {kpi.mom && (
@@ -1670,7 +1670,7 @@ function KpiBadge({ kpi }: { kpi?: MicroKpi }) {
 function InsightHeader({ insight }: { insight?: TrendInsight }) {
   if (!insight) return null;
   const statusConfig = {
-    positive: { dot: "bg-emerald-500", text: "text-emerald-700 dark:text-emerald-400" },
+    positive: { dot: "bg-primary", text: "text-primary" },
     warning: { dot: "bg-amber-500", text: "text-amber-700 dark:text-amber-400" },
     critical: { dot: "bg-red-500", text: "text-red-700 dark:text-red-400" },
     neutral: { dot: "bg-muted-foreground", text: "text-muted-foreground" },
@@ -1716,7 +1716,7 @@ function IntelligentChart({ title, insight, kpi, data, dataKey, projectedKey, gr
               <XAxis dataKey="month" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
               <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" domain={domain} tickFormatter={yFormatter} />
               <RechartsTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12 }} formatter={formatter} />
-              {referenceArea && <ReferenceArea y1={referenceArea.y1} y2={referenceArea.y2} fill="#10b981" fillOpacity={0.06} stroke="#10b981" strokeOpacity={0.15} strokeDasharray="3 3" />}
+              {referenceArea && <ReferenceArea y1={referenceArea.y1} y2={referenceArea.y2} fill="hsl(var(--primary))" fillOpacity={0.06} stroke="hsl(var(--primary))" strokeOpacity={0.15} strokeDasharray="3 3" />}
               {referenceLine && <ReferenceLine y={referenceLine.y} stroke="hsl(var(--muted-foreground))" strokeDasharray="6 4" strokeOpacity={0.5} label={{ value: referenceLine.label, position: "right", fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />}
               <Area type="monotone" dataKey={dataKey} stroke={color} fill={`url(#${gradientId})`} strokeWidth={2} connectNulls={false} animationDuration={1200} animationBegin={200} />
               <Area type="monotone" dataKey={projectedKey} stroke={color} fill="none" strokeWidth={2} strokeDasharray="6 4" strokeOpacity={0.5} connectNulls={false} animationDuration={1200} animationBegin={600} />

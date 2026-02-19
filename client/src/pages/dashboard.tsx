@@ -162,7 +162,7 @@ function MiniMetric({
   status?: "good" | "moderate" | "risk";
 }) {
   const statusColor = status === "good"
-    ? "text-emerald-600 dark:text-emerald-400"
+    ? "text-primary"
     : status === "risk"
       ? "text-red-600 dark:text-red-400"
       : "";

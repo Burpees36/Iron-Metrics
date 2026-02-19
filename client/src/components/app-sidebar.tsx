@@ -41,7 +41,7 @@ export function AppSidebar() {
       <SidebarHeader className="p-4">
         <Link href="/">
           <div className="flex items-center gap-2 hover-elevate rounded-md px-2 py-1.5 cursor-pointer" data-testid="link-home">
-            <Activity className="w-5 h-5 text-sidebar-primary flex-shrink-0" />
+            <Activity className="w-5 h-5 text-primary flex-shrink-0" />
             <span className="text-base font-bold tracking-tight">Iron Metrics</span>
           </div>
         </Link>

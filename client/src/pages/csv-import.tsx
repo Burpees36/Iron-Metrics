@@ -279,7 +279,7 @@ export default function CsvImport() {
 
   const confidenceBadge = (level: "high" | "medium" | "low" | "unmapped") => {
     const variants: Record<string, string> = {
-      high: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400",
+      high: "bg-primary/10 text-primary",
       medium: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
       low: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
       unmapped: "bg-muted text-muted-foreground",
@@ -392,7 +392,7 @@ function StepIndicator({ currentStep }: { currentStep: WizardStep }) {
                 isActive
                   ? "bg-primary text-primary-foreground"
                   : isComplete
-                  ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400"
+                  ? "bg-primary/10 text-primary"
                   : "bg-muted text-muted-foreground"
               }`}
               data-testid={`step-${s.key}`}
@@ -667,8 +667,8 @@ function PreviewStep({
               <p className="text-2xl font-bold font-mono">{previewData.totalRows}</p>
               <p className="text-[11px] text-muted-foreground">Total Rows</p>
             </div>
-            <div className="p-3 rounded-md bg-emerald-50 dark:bg-emerald-900/20 text-center" data-testid="stat-valid-rows">
-              <p className="text-2xl font-bold font-mono text-emerald-700 dark:text-emerald-400">{validationSummary.validRows}</p>
+            <div className="p-3 rounded-md bg-primary/5 text-center" data-testid="stat-valid-rows">
+              <p className="text-2xl font-bold font-mono text-primary">{validationSummary.validRows}</p>
               <p className="text-[11px] text-muted-foreground">Valid</p>
             </div>
             <div className={`p-3 rounded-md text-center ${hasErrors ? "bg-red-50 dark:bg-red-900/20" : "bg-muted/50"}`} data-testid="stat-error-rows">
@@ -779,8 +779,8 @@ function ResultStep({
     <Card>
       <CardContent className="p-6 space-y-5">
         <div className="flex items-center gap-3" data-testid="import-result-header">
-          <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-            <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+            <CheckCircle2 className="w-6 h-6 text-primary" />
           </div>
           <div>
             <h3 className="font-semibold" data-testid="text-import-complete">Import Complete</h3>
@@ -791,8 +791,8 @@ function ResultStep({
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="p-3 rounded-md bg-emerald-50 dark:bg-emerald-900/20 text-center" data-testid="result-imported">
-            <p className="text-2xl font-bold font-mono text-emerald-700 dark:text-emerald-400">{result.imported}</p>
+          <div className="p-3 rounded-md bg-primary/5 text-center" data-testid="result-imported">
+            <p className="text-2xl font-bold font-mono text-primary">{result.imported}</p>
             <p className="text-[11px] text-muted-foreground">New Members</p>
           </div>
           <div className="p-3 rounded-md bg-blue-50 dark:bg-blue-900/20 text-center" data-testid="result-updated">

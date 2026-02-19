@@ -252,11 +252,11 @@ export default function PredictiveIntelligenceView({ gymId, gymName }: { gymId: 
 const stabilityConfig: Record<string, { label: string; color: string; bgColor: string; borderColor: string; barWidth: string; dotColor: string }> = {
   strong: {
     label: "Strong",
-    color: "text-emerald-700 dark:text-emerald-300",
-    bgColor: "bg-emerald-500/10",
-    borderColor: "border-emerald-500/30",
+    color: "text-primary",
+    bgColor: "bg-primary/10",
+    borderColor: "border-primary/30",
     barWidth: "w-full",
-    dotColor: "bg-emerald-500",
+    dotColor: "bg-primary",
   },
   moderate: {
     label: "Moderate",
@@ -284,7 +284,7 @@ function StabilityVerdictBar({ level, verdict }: { level: string; verdict: strin
       <CardContent className="pt-5 pb-4 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className={`w-3 h-3 rounded-full ${config.dotColor} ring-4 ring-opacity-20 ${level === "strong" ? "ring-emerald-500" : level === "moderate" ? "ring-amber-500" : "ring-red-500"}`} />
+            <div className={`w-3 h-3 rounded-full ${config.dotColor} ring-4 ring-opacity-20 ${level === "strong" ? "ring-primary" : level === "moderate" ? "ring-amber-500" : "ring-red-500"}`} />
             <div>
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Stability Status</p>
               <p className={`text-lg font-semibold tracking-tight ${config.color}`} data-testid="text-stability-level">{config.label}</p>
@@ -504,8 +504,8 @@ function RevenueOutlookVisual({ comparison, outlook }: {
       value: comparison.upsideMrr,
       pct: (comparison.upsideMrr / maxVal) * 100,
       delta: comparison.upsideDeltaPct,
-      color: "bg-emerald-500 dark:bg-emerald-400",
-      textColor: "text-emerald-700 dark:text-emerald-300",
+      color: "bg-primary",
+      textColor: "text-primary",
     },
     {
       label: "Downside",
@@ -523,7 +523,7 @@ function RevenueOutlookVisual({ comparison, outlook }: {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Revenue Outlook</p>
           {comparison.upsideDeltaPct > 0 && (
-            <Badge variant="outline" className="text-xs text-emerald-700 dark:text-emerald-300 border-emerald-500/30" data-testid="badge-upside-delta">
+            <Badge variant="outline" className="text-xs text-primary border-primary/30" data-testid="badge-upside-delta">
               <ArrowUp className="w-3 h-3 mr-1" />
               +{comparison.upsideDeltaPct}% upside potential
             </Badge>
@@ -540,7 +540,7 @@ function RevenueOutlookVisual({ comparison, outlook }: {
                     ${bar.value.toLocaleString()}
                   </span>
                   {bar.delta !== null && (
-                    <span className={`text-[10px] font-medium ${bar.delta >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                    <span className={`text-[10px] font-medium ${bar.delta >= 0 ? "text-primary" : "text-red-600 dark:text-red-400"}`}>
                       {bar.delta >= 0 ? "+" : ""}{bar.delta}%
                     </span>
                   )}
@@ -595,7 +595,7 @@ function FocusRecommendationHero({ rec }: { rec: BriefRecommendation }) {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t">
           <div>
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Revenue Impact</p>
-            <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400" data-testid="text-focus-revenue-impact">${rec.expectedRevenueImpact.toLocaleString()}</p>
+            <p className="text-sm font-bold text-primary" data-testid="text-focus-revenue-impact">${rec.expectedRevenueImpact.toLocaleString()}</p>
           </div>
           <div>
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Members Affected</p>
@@ -612,7 +612,7 @@ function FocusRecommendationHero({ rec }: { rec: BriefRecommendation }) {
         </div>
 
         <div className="pt-2">
-          <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400">{rec.revenueImpact}</p>
+          <p className="text-xs font-medium text-primary">{rec.revenueImpact}</p>
         </div>
       </CardContent>
     </Card>
@@ -632,7 +632,7 @@ function ScoreBreakdown({ rec }: { rec: BriefRecommendation }) {
       </div>
       <div>
         <p className="text-[10px] text-muted-foreground">Rev. Impact</p>
-        <p className="text-xs font-bold font-mono text-emerald-600 dark:text-emerald-400">${rec.expectedRevenueImpact.toLocaleString()}</p>
+        <p className="text-xs font-bold font-mono text-primary">${rec.expectedRevenueImpact.toLocaleString()}</p>
       </div>
       <div>
         <p className="text-[10px] text-muted-foreground">Members</p>
@@ -710,7 +710,7 @@ function StrategicBriefView({ gymId, periodStart, brief, recommendationExecution
           <Card key={km.label} className="hover-elevate transition-all duration-300">
             <CardContent className="pt-4 pb-3 px-3 text-center">
               <p className="text-xs text-muted-foreground mb-1">{km.label}</p>
-              <p className={`text-lg font-bold ${km.status === "good" ? "text-emerald-600 dark:text-emerald-400" : km.status === "warning" ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"}`}>
+              <p className={`text-lg font-bold ${km.status === "good" ? "text-primary" : km.status === "warning" ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"}`}>
                 {km.value}
               </p>
             </CardContent>
@@ -784,7 +784,7 @@ function StrategicBriefView({ gymId, periodStart, brief, recommendationExecution
                             toggleChecklistMutation.mutate({ recommendationId: card.id, itemId: checklistItem.itemId, checked: !checked });
                           }}
                         >
-                          {checked ? <Check className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-emerald-500" /> : <Circle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-muted-foreground/50" />}
+                          {checked ? <Check className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-primary" /> : <Circle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-muted-foreground/50" />}
                           <span className={`text-xs leading-relaxed ${checked ? "text-foreground" : "text-muted-foreground"}`}>{item}</span>
                         </button>
                       );
@@ -795,7 +795,7 @@ function StrategicBriefView({ gymId, periodStart, brief, recommendationExecution
 
               <div className="grid sm:grid-cols-2 gap-3 pt-2 border-t">
                 <div>
-                  <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400 mb-1">Revenue Impact</p>
+                  <p className="text-xs font-medium text-primary mb-1">Revenue Impact</p>
                   <p className="text-xs text-muted-foreground">{rec.revenueImpact}</p>
                 </div>
                 <div>
@@ -824,7 +824,7 @@ function StrategicBriefView({ gymId, periodStart, brief, recommendationExecution
 
 function MemberAlertCard({ alert, index }: { alert: MemberAlertEnriched; index: number }) {
   const classColors: Record<string, string> = {
-    core: "text-emerald-600 dark:text-emerald-400",
+    core: "text-primary",
     drifter: "text-amber-600 dark:text-amber-400",
     "at-risk": "text-orange-600 dark:text-orange-400",
     ghost: "text-red-600 dark:text-red-400",
@@ -869,13 +869,13 @@ function MemberAlertCard({ alert, index }: { alert: MemberAlertEnriched; index: 
           </div>
           <div className="flex items-center gap-2" data-testid={`stat-outreach-${index}`}>
             {alert.outreachLogged ? (
-              <UserCheck className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+              <UserCheck className="w-3.5 h-3.5 text-primary flex-shrink-0" />
             ) : (
               <MessageSquare className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
             )}
             <div>
               <p className="text-[10px] text-muted-foreground uppercase">Outreach</p>
-              <p className={`text-xs font-medium ${alert.outreachLogged ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+              <p className={`text-xs font-medium ${alert.outreachLogged ? "text-primary" : "text-red-600 dark:text-red-400"}`}>
                 {alert.outreachLogged ? "Yes" : "No"}
               </p>
             </div>
@@ -921,7 +921,7 @@ function MemberRiskView({ predictions, gymId }: { predictions: PredictiveIntelli
   const totalMembers = Object.values(summary.classBreakdown).reduce((a, b) => a + b, 0);
 
   const classColors: Record<string, string> = {
-    core: "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
+    core: "text-primary bg-primary/10 border-primary/20",
     drifter: "text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20",
     "at-risk": "text-orange-600 dark:text-orange-400 bg-orange-500/10 border-orange-500/20",
     ghost: "text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/20",
@@ -986,7 +986,7 @@ function MemberRiskView({ predictions, gymId }: { predictions: PredictiveIntelli
                     </div>
                     <p className="text-2xl font-bold">{count}</p>
                     {cls === "core" && totalMembers > 0 && (
-                      <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-1" data-testid="text-core-density">
+                      <p className="text-[10px] text-primary mt-1" data-testid="text-core-density">
                         {Math.round((count / totalMembers) * 100)}% of roster
                       </p>
                     )}
@@ -1177,7 +1177,7 @@ function FuturePlanningView({ cohorts, scenario, gymName, recommendations, membe
   memberPredictions: PredictiveIntelligence["memberPredictions"];
 }) {
   const riskColors: Record<string, string> = {
-    low: "text-emerald-600 dark:text-emerald-400",
+    low: "text-primary",
     moderate: "text-amber-600 dark:text-amber-400",
     high: "text-orange-600 dark:text-orange-400",
     critical: "text-red-600 dark:text-red-400",
@@ -1194,7 +1194,7 @@ function FuturePlanningView({ cohorts, scenario, gymName, recommendations, membe
           <Card>
             <CardContent className="pt-4 pb-3 text-center">
               <p className="text-xs text-muted-foreground mb-1">Best Case</p>
-              <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">${scenario.upsideMrr.toLocaleString()}/mo</p>
+              <p className="text-lg font-bold text-primary">${scenario.upsideMrr.toLocaleString()}/mo</p>
             </CardContent>
           </Card>
           <Card>
@@ -1380,7 +1380,7 @@ function GymSpecificInsights({ gymName, recommendations, memberPredictions }: {
   const priorityIcon = (priority: string) => {
     if (priority === "critical" || priority === "high") return <AlertTriangle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />;
     if (priority === "medium") return <TrendingUp className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />;
-    return <Target className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />;
+    return <Target className="w-3.5 h-3.5 text-primary flex-shrink-0" />;
   };
 
   return (
@@ -1414,7 +1414,7 @@ function GymSpecificInsights({ gymName, recommendations, memberPredictions }: {
                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">{rec.category}</Badge>
                       <span className="text-[10px] text-muted-foreground">{rec.timeframe}</span>
                       {rec.expectedRevenueImpact > 0 && (
-                        <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                        <span className="text-[10px] font-medium text-primary">
                           +${rec.expectedRevenueImpact.toLocaleString()}/mo potential
                         </span>
                       )}
@@ -1444,7 +1444,7 @@ function GymSpecificInsights({ gymName, recommendations, memberPredictions }: {
 
 function ScenarioView({ scenario }: { scenario: PredictiveIntelligence["revenueScenario"] }) {
   const riskColors: Record<string, string> = {
-    low: "text-emerald-600 dark:text-emerald-400",
+    low: "text-primary",
     moderate: "text-amber-600 dark:text-amber-400",
     high: "text-orange-600 dark:text-orange-400",
     critical: "text-red-600 dark:text-red-400",
@@ -1456,7 +1456,7 @@ function ScenarioView({ scenario }: { scenario: PredictiveIntelligence["revenueS
         <Card className="hover-elevate transition-all duration-300">
           <CardContent className="pt-4 pb-3 text-center">
             <p className="text-xs text-muted-foreground mb-1">Upside</p>
-            <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">${scenario.upsideMrr.toLocaleString()}</p>
+            <p className="text-lg font-bold text-primary">${scenario.upsideMrr.toLocaleString()}</p>
           </CardContent>
         </Card>
         <Card className="hover-elevate transition-all duration-300">
@@ -1556,7 +1556,7 @@ function PredictiveRiskDot({ risk }: { risk: "low" | "medium" | "high" }) {
   const colors = {
     high: "bg-red-500 dark:bg-red-400",
     medium: "bg-amber-500 dark:bg-amber-400",
-    low: "bg-emerald-500 dark:bg-emerald-400",
+    low: "bg-primary",
   };
   return <div className={`w-2 h-2 rounded-full flex-shrink-0 ${colors[risk]}`} />;
 }

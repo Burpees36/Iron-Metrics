@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { LuxuryThemeShell } from "@/components/luxury-theme-shell";
 import { useAuth } from "@/hooks/use-auth";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -28,7 +29,7 @@ function AuthenticatedApp() {
       <div className="flex h-screen w-full">
         <AppSidebar />
         <div className="flex flex-col flex-1 min-w-0">
-          <header className="flex items-center justify-between gap-4 p-2 border-b sticky top-0 z-40 bg-background/80 backdrop-blur-md">
+          <header className="flex items-center justify-between gap-4 p-2 border-b border-border/50 sticky top-0 z-40 bg-background/70 backdrop-blur-md">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
             <ThemeToggle />
           </header>
@@ -74,7 +75,9 @@ function App() {
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
-          <AppContent />
+          <LuxuryThemeShell>
+            <AppContent />
+          </LuxuryThemeShell>
           <Toaster />
         </TooltipProvider>
       </QueryClientProvider>
