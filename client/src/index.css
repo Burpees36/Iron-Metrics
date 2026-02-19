@@ -2,24 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-@keyframes luxury-particle-drift {
-  0% { transform: translate(0, 0); }
-  25% { transform: translate(var(--drift-x), calc(var(--drift-y) * -1)); }
-  50% { transform: translate(calc(var(--drift-x) * -0.5), var(--drift-y)); }
-  75% { transform: translate(calc(var(--drift-x) * 0.7), calc(var(--drift-y) * -0.3)); }
-  100% { transform: translate(0, 0); }
-}
-
-.luxury-particle-drift {
-  animation: luxury-particle-drift var(--drift-duration, 40s) ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .luxury-particle-drift {
-    animation: none;
-  }
-}
-
 @keyframes rsi-pulse {
   0%, 100% { opacity: 1; transform: translate(-50%, 0) scale(1); }
   50% { opacity: 0.5; transform: translate(-50%, 0) scale(1.8); }
