@@ -28,12 +28,15 @@ The Stability Command Center for CrossFit gyms. A financial resilience operating
 - All insights presented as Iron Metrics intelligence — no external coach attributions
 - Coaching concepts (onboarding structure, awareness, trust-building, identity transformation) are embedded natively
 - Strategic brief limited to TOP 3 ranked recommendations sorted by interventionScore descending; priority labels derived from score percentiles
+- **Scope Discipline Layer**: Each recommendation = ONE lever only; checklists 4-6 items max; detail paragraph under 120 words; execution standard 1 sentence max
+- **Distinct Category Selection**: Top 3 recommendations prefer distinct execution categories (Retention, Acquisition, Community Depth, Coaching Quality); duplicate categories only allowed when critical risk conditions override
+- **Scope Audit**: Before final render, every checklist is validated against the recommendation's pillar — off-topic items (onboarding in coaching recs, upsells in retention recs, etc.) are removed automatically
 - Language is direct, human, gym-owner-friendly — no MBA jargon
 - Core member interventions include: quarterly goal-setting, skill progression tracking, competition participation, movement quality reinforcement
 - CrossFit event recommendations rotate seasonally (Open, Hero WODs, seminars, nutrition challenges, holiday events, yoga/mobility clinics, bring-a-friend days)
 - Stability verdicts are clear and actionable (strong/moderate/fragile)
 - Doctrine Library content (Two-Brain, BHOTD, CrossFit HQ) is woven invisibly into recommendation copy — no citations, source chips, or "based on" references shown to users
-- Optional "Execution Standard:" line on recommendation cards with 2-4 short actionable clauses derived from doctrine
+- Optional "Execution Standard:" line on recommendation cards with 1 sentence derived from doctrine
 - Internal audit trail logs which doctrine chunks informed each recommendation (recommendation_chunk_audit table)
 
 ## Report Format

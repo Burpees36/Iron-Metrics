@@ -305,10 +305,24 @@ export async function generatePredictiveIntelligence(gymId: string): Promise<Pre
       const rec = strategicBrief.recommendations.find(r => r.interventionType === guidance.interventionType);
       if (!rec) continue;
       if (guidance.detailAugmentation) {
-        rec.detail = rec.detail.replace(/\s*$/, " " + guidance.detailAugmentation);
+        const combined = rec.detail.replace(/\s*$/, " " + guidance.detailAugmentation);
+        const words = combined.split(/\s+/);
+        if (words.length <= 120) {
+          rec.detail = combined;
+        } else {
+          const sentences = combined.split(/(?<=[.!?])\s+/);
+          let trimmed = "";
+          for (const s of sentences) {
+            const next = trimmed ? trimmed + " " + s : s;
+            if (next.split(/\s+/).length > 120) break;
+            trimmed = next;
+          }
+          rec.detail = trimmed || sentences[0];
+        }
       }
       if (guidance.executionStandard) {
-        rec.executionStandard = guidance.executionStandard;
+        const firstSentence = guidance.executionStandard.split(/(?<=[.!?])\s+/)[0];
+        rec.executionStandard = firstSentence;
       }
     }
   } catch (err) {
@@ -1538,6 +1552,82 @@ function derivePriority(score: number, allScores: number[]): "critical" | "high"
   return "low";
 }
 
+// ═══════════════════════════════════════════════════════════════
+// SCOPE DISCIPLINE LAYER
+// Enforces: single-lever focus, checklist 4-6 items, detail <120 words,
+// executionStandard 1 sentence, no cross-pillar drift
+// ═══════════════════════════════════════════════════════════════
+
+const SCOPE_BANNED_KEYWORDS: Record<string, string[]> = {
+  "Retention": ["pricing", "upsell", "add-on", "corporate rate", "ARM increase", "subscription upgrade"],
+  "Acquisition": ["onboarding touchpoint", "coaching audit", "scaling consistency", "whiteboard brief", "nutrition coaching"],
+  "Community Depth": ["referral sprint", "corporate rate", "lead flow", "inbound inquiries", "coaching audit"],
+  "Coaching Quality": ["referral", "bring-a-friend", "upsell", "pricing", "ARM increase", "nutrition challenge", "social proof"],
+};
+
+function scopeAuditRecommendations(recommendations: BriefRecommendation[]): void {
+  for (const rec of recommendations) {
+    const bannedTerms = SCOPE_BANNED_KEYWORDS[rec.category] || [];
+
+    rec.executionChecklist = rec.executionChecklist.filter(item => {
+      const lower = item.toLowerCase();
+      return !bannedTerms.some(term => lower.includes(term.toLowerCase()));
+    });
+
+    if (rec.executionChecklist.length > 6) {
+      rec.executionChecklist = rec.executionChecklist.slice(0, 6);
+    }
+
+    const wordCount = rec.detail.split(/\s+/).length;
+    if (wordCount > 120) {
+      const sentences = rec.detail.split(/(?<=[.!?])\s+/);
+      let trimmed = "";
+      for (const sentence of sentences) {
+        const next = trimmed ? trimmed + " " + sentence : sentence;
+        if (next.split(/\s+/).length > 120) break;
+        trimmed = next;
+      }
+      rec.detail = trimmed || sentences[0];
+    }
+
+    if (rec.executionStandard) {
+      const sentences = rec.executionStandard.split(/(?<=[.!?])\s+/);
+      rec.executionStandard = sentences[0];
+    }
+  }
+}
+
+function selectDistinctCategoryTop3(sortedRecommendations: BriefRecommendation[]): BriefRecommendation[] {
+  if (sortedRecommendations.length <= 3) return [...sortedRecommendations];
+
+  const selected: BriefRecommendation[] = [];
+  const usedCategories = new Set<string>();
+  const criticalThreshold = sortedRecommendations[0]?.interventionScore * 0.8;
+
+  for (const rec of sortedRecommendations) {
+    if (selected.length >= 3) break;
+
+    if (!usedCategories.has(rec.category)) {
+      selected.push(rec);
+      usedCategories.add(rec.category);
+    } else if (rec.priority === "critical" && rec.interventionScore >= criticalThreshold) {
+      selected.push(rec);
+      usedCategories.add(rec.category);
+    }
+  }
+
+  if (selected.length < 3) {
+    for (const rec of sortedRecommendations) {
+      if (selected.length >= 3) break;
+      if (!selected.includes(rec)) {
+        selected.push(rec);
+      }
+    }
+  }
+
+  return selected;
+}
+
 function generateStrategicBrief(
   memberPredictions: MemberPredictionSummary,
   cohortIntelligence: CohortIntelligence,
@@ -1647,18 +1737,17 @@ function generateStrategicBrief(
       category: "Retention",
       priority: "critical",
       headline: `${membersAff} members in their first 90 days need structured onboarding touchpoints`,
-      detail: `${newMembersAtRisk090.length > 0 ? `${newMembersAtRisk090.length} of your newest members are already showing drift signals. ` : ""}Early relationship formation is universally powerful — members who feel seen in their first month stay dramatically longer. Structure: Week 2 coach check-in (in person or quick message), Day 30 goal confirmation, Day 60 progress conversation, Day 90 milestone conversation. Important: "assigning a coach" means telling the coach who already sees them in class — "Make sure you connect with ${newMembers090.length > 0 ? newMembers090[0].name.split(" ")[0] : "them"} this week." No corporate CRM feeling. This preserves CrossFit culture.`,
+      detail: `${newMembersAtRisk090.length > 0 ? `${newMembersAtRisk090.length} of your newest members are already showing drift signals. ` : ""}Members who feel seen in their first month stay dramatically longer. Structure four touchpoints: Week 2 coach check-in, Day 30 goal confirmation, Day 60 progress conversation, Day 90 milestone celebration. "Assigning a coach" means telling the coach who already sees them in class to connect personally this week.`,
       revenueImpact: `Retaining ${baselineLift * 100}% more new members preserves ~$${expectedRevenueImpact.toLocaleString()} over 6 months`,
       interventionType: "New Member Onboarding Touchpoints",
       crossfitContext: "Pillar 1: Retention",
       timeframe,
       executionChecklist: [
-        "Identify every member under 90 days tenure — this is your onboarding cohort",
-        "Tell each coach: 'Connect with [name] this week' — not a reassignment, a nudge",
-        "Week 2: Coach check-in (in person or quick message after class)",
-        "Day 30: Goal confirmation conversation — 'What do you want to achieve here?'",
-        "Day 60: Progress conversation — 'Here's what I've noticed you're improving at'",
-        "Day 90: Milestone conversation — celebrate their first quarter and set next goals",
+        "Identify every member under 90 days — this is your onboarding cohort",
+        "Week 2: Coach check-in after class — personal, not automated",
+        "Day 30: Goal confirmation — 'What do you want to achieve here?'",
+        "Day 60: Progress conversation — 'Here's what I've noticed you improving at'",
+        "Day 90: Milestone celebration — acknowledge their first quarter",
       ],
       interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: gymArm * monthsRemaining,
     });
@@ -1680,18 +1769,17 @@ function generateStrategicBrief(
       category: "Retention",
       priority: "high",
       headline: `${membersAff} established members are showing engagement drift — reactivate before they leave`,
-      detail: `These aren't new members — they've been with you, but their attendance or engagement is slipping. The fix isn't onboarding structure, it's re-engagement. Quarterly goal refresh conversations, annual vision check-ins, and immediate reactivation touchpoints when attendance drops. For long-tenured members, the question isn't "Are you hitting PRs?" — it's "What's keeping you coming back, and how can we make that stronger?"`,
+      detail: `These aren't new members — they've been with you, but their engagement is slipping. The fix is re-engagement: quarterly goal refresh conversations and immediate personal outreach when attendance drops. For long-tenured members, the question isn't "Are you hitting PRs?" — it's "What's keeping you coming back, and how can we make that stronger?"`,
       revenueImpact: `Reactivating ${baselineLift * 100}% of drifting established members preserves ~$${expectedRevenueImpact.toLocaleString()}`,
       interventionType: "Member Engagement Check-In System",
       crossfitContext: "Pillar 1: Retention",
       timeframe,
       executionChecklist: [
         "Pull the list of members with tenure > 90 days showing attendance decline",
-        "Schedule a quarterly goal refresh conversation with each — even a 5-minute chat after class",
-        "For members with declining attendance: personal text from head coach within 48 hours",
+        "Personal text from head coach within 48 hours of attendance drop",
+        "Schedule a quarterly goal refresh — even a 5-minute chat after class",
         "Ask: 'Hey [name], haven't seen you as much lately — everything good?'",
-        "For annual members: schedule a vision conversation — 'What does the next year look like for you here?'",
-        "Log every touchpoint in Iron Metrics to track coverage",
+        "Log every touchpoint in Iron Metrics to track outreach coverage",
       ],
       interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: gymArm * monthsRemaining,
     });
@@ -1713,18 +1801,16 @@ function generateStrategicBrief(
       category: "Retention",
       priority: "high",
       headline: `${membersAff} newer members need visible skill milestones to build emotional investment`,
-      detail: `Members under 120 days who are drifting need concrete goals — not just "show up more." Define 3 milestones: first pull-up (or progression), first Rx WOD, first partner/team workout. This does NOT apply to masters athletes, long-tenured members, or experienced competitors with stable attendance — for them, a PR drought is normal, not a risk signal. The milestone program targets members who haven't yet built the identity connection to CrossFit.`,
+      detail: `Members under 120 days who are drifting need concrete goals — not just "show up more." Define 3 milestones per member: a movement skill, a benchmark WOD, and a community moment. Coach sets these in the first week and tracks progress. This targets members who haven't yet built an identity connection to CrossFit — not long-tenured athletes with stable attendance.`,
       revenueImpact: `Improving 3-month retention by ${(baselineLift * 100).toFixed(0)}% preserves ~$${expectedRevenueImpact.toLocaleString()}`,
       interventionType: "90-Day Skill Milestone Program",
       crossfitContext: "Pillar 1: Retention",
       timeframe,
       executionChecklist: [
         "Identify members under 120 days showing drift — these are milestone candidates",
-        "DO NOT apply this to long-tenured members with stable attendance (they don't need milestone pressure)",
         "Define 3 milestones per member: movement skill, benchmark WOD, community moment",
-        "Coach sets milestones in first week: 'By day 90, let's get your first [pull-up/Rx workout/team comp]'",
+        "Coach sets milestones in first week: 'By day 90, let's get your first [goal]'",
         "Track milestone completion — celebrate publicly when achieved",
-        "If tenure > 120 days AND attendance declining: use Engagement Check-In instead, not milestone pressure",
       ],
       interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: gymArm * monthsRemaining,
     });
@@ -1746,18 +1832,17 @@ function generateStrategicBrief(
       category: "Retention",
       priority: "critical",
       headline: `${drifterCount} members are drifting — a recovery sprint can reactivate 20-30% of them`,
-      detail: `Drifters are members who haven't fully disengaged but are losing momentum. A 7-14 day absence is the trigger window — after that, reactivation rates drop sharply. Personal outreach (not automated emails), a specific reintegration plan ("Come to Thursday's partner workout — I'll pair you with someone"), and coach follow-up within 48 hours of their return. This is a high short-term impact lever with 80% confidence.`,
+      detail: `Drifters haven't fully disengaged but are losing momentum. A 7-14 day absence is the trigger window — after that, reactivation rates drop sharply. Personal outreach with a specific return plan ("Come to Thursday's partner workout — I'll pair you with someone") and coach follow-up within 48 hours of their return.`,
       revenueImpact: `Reactivating 25% of ${drifterCount} drifting members preserves ~$${expectedRevenueImpact.toLocaleString()}`,
       interventionType: "Attendance Recovery Sprint",
       crossfitContext: "Pillar 1: Retention",
       timeframe,
       executionChecklist: [
-        "Pull every member classified as 'drifter' or 'at-risk' from the Member Risk tab",
-        "Personal text from their coach (not a mass message): 'Hey [name], missed you this week — everything OK?'",
-        "Offer a specific reintegration plan: 'Come to [day]'s class, I'll pair you with [buddy]'",
+        "Pull every 'drifter' or 'at-risk' member from the Member Risk tab",
+        "Personal text from their coach: 'Hey [name], missed you — everything OK?'",
+        "Offer a specific return plan: 'Come to [day]'s class, I'll pair you with [buddy]'",
         "Follow up within 48 hours of their return — acknowledge they came back",
-        "If no response after 3 days: phone call from head coach or owner",
-        "Track reactivation rate — target 25%+ of outreach converting to attendance",
+        "No response after 3 days: phone call from head coach or owner",
       ],
       interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: gymArm * monthsRemaining,
     });
@@ -1780,18 +1865,17 @@ function generateStrategicBrief(
       category: "Acquisition",
       priority: "high",
       headline: `Growth is flat but your core is strong — launch a referral sprint to add ${membersAff}+ members`,
-      detail: `With ${coreCount} core members and churn at ${gymChurnRate.toFixed(1)}%, new members acquired now are highly likely to stick. A defined referral window (not an open-ended "refer a friend" — a specific 2-week sprint with urgency), clear incentives (free month, gear credit, or community recognition), and tracking every referral source. Your retention is your competitive advantage for acquisition.`,
+      detail: `With ${coreCount} core members and churn at ${gymChurnRate.toFixed(1)}%, new members acquired now are highly likely to stick. Run a defined 2-week referral window with urgency and clear incentives — not an open-ended "refer a friend." Track every referral source. Your retention is your competitive advantage for acquisition.`,
       revenueImpact: `${membersAff} new members at $${gymArm.toFixed(0)}/mo = +$${Math.round(membersAff * gymArm).toLocaleString()}/mo ($${Math.round(membersAff * gymArm * 12).toLocaleString()}/yr)`,
       interventionType: "Referral Activation Sprint",
       crossfitContext: "Pillar 2: Acquisition",
       timeframe,
       executionChecklist: [
         "Define a 2-week referral window — create urgency, not an open-ended ask",
-        "Set clear incentive: free month, gear credit, or public recognition for referrer",
-        "Announce in every class: 'This month, bring someone who needs what we have'",
-        "Give every core member a personal ask: 'Who's one person you'd want to work out with?'",
-        "Track referral source for every new signup — measure which members drive referrals",
+        "Set clear incentive: free month, gear credit, or public recognition",
+        "Personal ask to every core member: 'Who's one person you'd want to work out with?'",
         "Follow up with every referred lead within 24 hours of first visit",
+        "Track referral source for every new signup",
       ],
       interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: 1.0, avgLtvRemaining: gymArm * 6,
     });
@@ -1812,18 +1896,16 @@ function generateStrategicBrief(
       category: "Acquisition",
       priority: "medium",
       headline: `New member flow is low — a recurring Bring-A-Friend system creates steady growth`,
-      detail: `You're averaging ${avgNewMembers.toFixed(1)} new members/month. A structured Bring-A-Friend week (monthly or quarterly) with coach conversion scripts and tracking creates a reliable pipeline. Less explosive than a referral sprint, but more sustainable. Every member invites one person. Coach welcomes the guest by name, pairs them with the member who invited them, and follows up within 24 hours.`,
+      detail: `You're averaging ${avgNewMembers.toFixed(1)} new members/month. A structured monthly Bring-A-Friend week with coach conversion scripts creates a reliable pipeline. Every member invites one person. Coach welcomes the guest by name, pairs them with the inviting member, and follows up within 24 hours.`,
       revenueImpact: `Sustained +1-2 members/month adds $${Math.round(1.5 * gymArm).toLocaleString()}/mo average growth`,
       interventionType: "Bring-A-Friend System",
       crossfitContext: "Pillar 2: Acquisition",
       timeframe,
       executionChecklist: [
-        "Schedule a monthly 'Bring Your Person' week — pick the same week each month",
-        "Coach script: greet guest by name, pair with inviting member, check in after workout",
+        "Schedule a monthly 'Bring Your Person' week — same week each month",
+        "Coach greets guest by name, pairs with inviting member, checks in after workout",
         "Track every guest: name, who invited them, did they return, did they sign up",
         "Follow up within 24 hours: personal text from the coach who met them",
-        "Convert tracking: measure how many guests become members each month",
-        "Celebrate members who successfully bring someone into the community",
       ],
       interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: 1.0, avgLtvRemaining: gymArm * 6,
     });
@@ -1844,18 +1926,16 @@ function generateStrategicBrief(
       category: "Acquisition",
       priority: "medium",
       headline: "Stalled acquisition — build a social proof engine to generate inbound leads",
-      detail: `Member highlights, testimonials, transformation stories, and PR celebration videos create organic lead flow. This is a slower burn (60-120 days to see results) but compounds over time. The key is consistency — weekly posts featuring real members, real results, real community moments. Not polished marketing — authentic stories that show what it's like to be part of your gym.`,
+      detail: `Member highlights, testimonials, and PR celebration videos create organic lead flow. This is a slower burn (60-120 days) but compounds over time. The key is consistency — weekly posts featuring real members and real community moments. Authentic stories, not polished marketing.`,
       revenueImpact: `5-15% increase in inbound inquiries over 60-120 days, converting to ~${membersAff}+ members`,
       interventionType: "Social Proof Engine",
       crossfitContext: "Pillar 2: Acquisition",
       timeframe,
       executionChecklist: [
-        "Post one member spotlight per week — transformation story, PR video, or testimonial",
-        "Ask 3 long-tenured members to write a short 'Why I stay' testimonial",
+        "Post one member spotlight per week — transformation, PR video, or testimonial",
+        "Ask 3 long-tenured members for a short 'Why I stay' testimonial",
         "Film PR celebrations and post with member permission",
-        "Share before/after stories (with permission) that show real results",
         "Track which content types generate the most inbound inquiries",
-        "Ensure every piece of content shows community, not just fitness",
       ],
       interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: 1.0, avgLtvRemaining: gymArm * 6,
     });
@@ -1876,18 +1956,16 @@ function generateStrategicBrief(
       category: "Acquisition",
       priority: "medium",
       headline: `Small roster — local partnerships are your highest-conversion growth lever`,
-      detail: `Church partnerships, local business collaborations, school athletics tie-ins, police/fire department events. This differentiates you from generic gym marketing. At ${activeMemberCount} members, every community connection matters more. The approach: offer a free class for the partner's team, host a joint event, or create a corporate rate. Community-rooted acquisition has 80% confidence in smaller settings because word-of-mouth carries further.`,
+      detail: `At ${activeMemberCount} members, community connections are your best growth channel. Local businesses, first responders, schools, and churches are natural partners. Offer a free team class, host a joint event, or create a corporate rate. Word-of-mouth carries further in smaller communities — this is high-confidence acquisition.`,
       revenueImpact: `+${membersAff}-5 members over 90 days at $${gymArm.toFixed(0)}/mo = $${Math.round(membersAff * gymArm).toLocaleString()}-$${Math.round(5 * gymArm).toLocaleString()}/mo`,
       interventionType: "Local Partnership Activation",
       crossfitContext: "Pillar 2: Acquisition",
       timeframe,
       executionChecklist: [
-        "List 5 local organizations you could partner with (churches, businesses, schools, first responders)",
-        "Offer a free team class or community workout for each partner organization",
-        "Create a simple corporate/group rate for partner organizations",
+        "List 5 local organizations to partner with (businesses, schools, first responders)",
+        "Offer a free team class or community workout for each partner",
         "Host one joint event per quarter with a local partner",
         "Track which partnerships generate actual signups",
-        "Build relationships with 2-3 key community leaders who can champion your gym",
       ],
       interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: 1.0, avgLtvRemaining: gymArm * 6,
     });
@@ -1914,26 +1992,23 @@ function generateStrategicBrief(
         ? "The CrossFit Open is your biggest retention and growth event — activate it now"
         : "Event activation prevents the 3-6 month dropout cliff",
       detail: isOpenSeason
-        ? `The Open transforms 'I do CrossFit' into 'I AM a CrossFitter.' Run Friday Night Lights, set up intramural teams, make it the event of the year. Every member registers regardless of level. The shared experience of cheering each other through workouts prevents cancellations months later. Invite non-members to watch — it's your best marketing.`
-        : `Members who participate in gym events retain 3-7% better than those who don't. In-house competitions, Hero WOD events, Friday Night Lights, and holiday throwdowns create shared identity. ${cohort3to6Drop && cohort3to6Drop.lostPct > 10 ? `Your 3-6 month cohort is losing ${cohort3to6Drop.lostPct.toFixed(0)}% of members — events bridge the gap between 'new member' and 'community member.'` : ""}`,
+        ? `The Open transforms "I do CrossFit" into "I AM a CrossFitter." Run Friday Night Lights, set up intramural teams, and make it the event of the year. Every member registers regardless of level. The shared experience prevents cancellations months later.`
+        : `Members who participate in gym events retain 3-7% better than those who don't. In-house competitions, Hero WODs, and holiday throwdowns create shared identity.${cohort3to6Drop && cohort3to6Drop.lostPct > 10 ? ` Your 3-6 month cohort is losing ${cohort3to6Drop.lostPct.toFixed(0)}% — events bridge the gap between "new member" and "community member."` : ""}`,
       revenueImpact: `${(baselineLift * 100).toFixed(0)}% retention lift among ${membersAff} participants preserves ~$${expectedRevenueImpact.toLocaleString()}`,
       interventionType: "Event Activation System",
       crossfitContext: "Pillar 3: Community Depth",
       timeframe,
       executionChecklist: isOpenSeason ? [
-        "Encourage every member to register for the Open — make it a gym-wide goal",
-        "Set up Friday Night Lights: heats, judges, scorecards, music, energy",
+        "Encourage every member to register for the Open — gym-wide goal",
+        "Set up Friday Night Lights: heats, judges, scorecards, energy",
         "Create intramural teams for friendly competition within the gym",
-        "Invite non-members to watch or try a scaled version of the Open workout",
-        "Post member Open stories and results — celebrate effort, not just scores",
+        "Post member Open stories — celebrate effort, not just scores",
         "Plan a post-Open celebration for everyone who participated",
       ] : [
-        "Schedule one major event per quarter: in-house competition, Hero WOD, holiday throwdown",
+        "Schedule one major event per quarter: in-house comp, Hero WOD, holiday throwdown",
         "Make events inclusive — scaled divisions so every member can participate",
-        "Create teams/heats that mix newer and experienced members",
-        "Post results and highlights — celebrate participation and personal bests",
-        "Track which members participate vs. which don't — follow up with non-participants",
-        "Use events as natural bring-a-friend opportunities",
+        "Mix newer and experienced members in teams and heats",
+        "Track which members participate vs. don't — follow up with non-participants",
       ],
       interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: gymArm * monthsRemaining,
     });
@@ -1955,7 +2030,7 @@ function generateStrategicBrief(
       category: "Community Depth",
       priority: "medium",
       headline: "Monthly community events build the belonging that prevents mid-tenure dropout",
-      detail: `Potlucks, BBQs, partner workouts, community nights — these aren't extras, they're retention infrastructure. Members who have 3+ gym friendships retain at dramatically higher rates. ${drifterCount > coreCount * 0.3 ? `With ${drifterCount} members showing inconsistent attendance, community events re-establish the social connections that keep people coming back.` : "Community events also create natural referral opportunities — every guest is a warm lead."}`,
+      detail: `Potlucks, partner workouts, and community nights aren't extras — they're retention infrastructure. Members with 3+ gym friendships retain at dramatically higher rates.${drifterCount > coreCount * 0.3 ? ` With ${drifterCount} members showing inconsistent attendance, community events re-establish the social connections that keep people coming back.` : ""}`,
       revenueImpact: `${(baselineLift * 100).toFixed(0)}% retention improvement across ${membersAff} members preserves ~$${expectedRevenueImpact.toLocaleString()}`,
       interventionType: "Monthly Community Event Cadence",
       crossfitContext: "Pillar 3: Community Depth",
@@ -1964,9 +2039,7 @@ function generateStrategicBrief(
         "Schedule one non-workout community event per month (potluck, BBQ, game night)",
         "Alternate between social events and partner/team workouts",
         "Create a recurring 'Community Night' on the same day each month",
-        "Encourage members to bring family or friends to social events",
         "Track attendance at community events vs. regular class attendance",
-        "Follow up with members who attend events but have low class attendance",
       ],
       interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: gymArm * monthsRemaining,
     });
@@ -1988,19 +2061,17 @@ function generateStrategicBrief(
     recommendations.push({
       category: "Community Depth",
       priority: "medium",
-      headline: "A nutrition challenge re-engages plateauing members and expands ARM",
-      detail: `Nutrition challenges sit between retention and revenue expansion. Members at the 3-6 month mark often plateau — they've adapted to the workouts but haven't seen the body composition changes they expected. A structured challenge (macro tracking, accountability pods, weekly check-ins) reignites engagement and creates a natural upsell to ongoing nutrition coaching ($20-60/mo ARM increase). ${gymArm < 150 ? `With ARM at $${gymArm.toFixed(0)}, nutrition coaching is the easiest path to premium revenue.` : ""}`,
+      headline: "A nutrition challenge re-engages plateauing members and deepens community bonds",
+      detail: `Members at the 3-6 month mark often plateau — workouts feel routine but body composition hasn't changed. A structured challenge (macro tracking, accountability pods, weekly check-ins) reignites engagement through shared goals and peer support. Challenges create some of the strongest community bonds in a gym.`,
       revenueImpact: `${(retentionLift * 100).toFixed(0)}% retention lift + $${armLift}/mo ARM increase for participants = ~$${expectedRevenueImpact.toLocaleString()} impact`,
       interventionType: "Nutrition Challenge Cycle",
       crossfitContext: "Pillar 3: Community Depth",
       timeframe,
       executionChecklist: [
-        "Design a 4-6 week nutrition challenge (macro tracking, accountability pods, weekly weigh-ins)",
-        "Price it as a standalone ($99-149) or bundle with membership upgrade",
-        "Create accountability pods of 4-6 members for peer support",
-        "Weekly group check-in (can be 10 min before/after class)",
-        "At challenge end, offer ongoing nutrition coaching as a subscription add-on",
-        "Track ARM change for participants vs. non-participants",
+        "Design a 4-6 week nutrition challenge with accountability pods of 4-6 members",
+        "Weekly group check-in (10 min before/after class)",
+        "Create shared progress tracking visible to the whole gym",
+        "Celebrate completion and transformation stories publicly",
       ],
       interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: retentionLift, avgLtvRemaining: gymArm * 6,
     });
@@ -2023,19 +2094,17 @@ function generateStrategicBrief(
     recommendations.push({
       category: "Coaching Quality",
       priority: "medium",
-      headline: "Coaching consistency directly drives retention — audit and improve the member experience",
-      detail: `Retention variance often traces back to coaching quality differences. Shadow each coach, audit whiteboard briefs, review class experience consistency. Are all coaches connecting individually with athletes? Is the experience the same quality regardless of which coach runs the class? ${gymChurnRate > 7 ? `With churn at ${gymChurnRate.toFixed(1)}%, coaching inconsistency is a likely contributing factor.` : "Even with stable churn, coaching development prevents future drift."} Great coaches don't just see movement faults — they read each athlete's needs, build trust by listening, and coach the positive.`,
+      headline: "Coaching consistency directly drives retention — audit and standardize the class experience",
+      detail: `Retention variance often traces back to coaching quality differences. Shadow each coach, audit whiteboard briefs, and review class experience consistency.${gymChurnRate > 7 ? ` With churn at ${gymChurnRate.toFixed(1)}%, coaching inconsistency is a likely contributing factor.` : ""} The standard: every coach connects individually with athletes, explains scaling proactively, and maintains the same quality regardless of time slot.`,
       revenueImpact: `${(baselineLift * 100).toFixed(1)}% 6-12 month retention improvement across ${membersAff} members preserves ~$${expectedRevenueImpact.toLocaleString()}`,
       interventionType: "Coaching Consistency Audit",
       crossfitContext: "Pillar 4: Coaching Quality",
       timeframe,
       executionChecklist: [
         "Shadow each coach once per month — observe class flow, athlete interaction, energy",
-        "Audit whiteboard briefs: is the workout explained clearly? Is scaling offered proactively?",
-        "Review: does every coach connect individually with at least 3 members per class?",
-        "Create a coaching dos and don'ts list specific to your gym",
-        "Hold monthly coaching meetings focused on one skill (awareness, trust, positive language)",
-        "Practice coaching the positive: 'Big set!' not 'Don't put it down!' — in every class",
+        "Audit whiteboard briefs: clear explanation? Scaling offered proactively?",
+        "Verify every coach connects individually with at least 3 members per class",
+        "Hold monthly coaching meetings focused on one improvement area",
       ],
       interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: gymArm * monthsRemaining,
     });
@@ -2057,17 +2126,15 @@ function generateStrategicBrief(
       category: "Coaching Quality",
       priority: "medium",
       headline: "Programming and experience audit — ensure your product matches your standards",
-      detail: `Strength cycle balance, skill progression clarity, scaling consistency, equipment and cleanliness baseline. ${cohort3to6Drop && cohort3to6Drop.lostPct > 12 ? `Your 3-6 month cohort is losing ${cohort3to6Drop.lostPct.toFixed(0)}% — this often signals programming plateau where members stop seeing progress.` : ""} This is a slower but stabilizing intervention. Review: is there a clear strength cycle? Are members progressing in skills? Is scaling consistent across coaches? Is the facility clean and equipment maintained? These hygiene factors compound into retention over time.`,
+      detail: `Review strength cycle balance, skill progression clarity, and scaling consistency.${cohort3to6Drop && cohort3to6Drop.lostPct > 12 ? ` Your 3-6 month cohort is losing ${cohort3to6Drop.lostPct.toFixed(0)}% — this often signals programming plateau where members stop seeing progress.` : ""} Is there a clear strength cycle? Are members progressing in skills? These fundamentals compound into retention over time.`,
       revenueImpact: `${(baselineLift * 100).toFixed(0)}% long-term retention improvement preserves ~$${expectedRevenueImpact.toLocaleString()}`,
       interventionType: "Programming & Experience Audit",
       crossfitContext: "Pillar 4: Coaching Quality",
       timeframe,
       executionChecklist: [
-        "Review programming: is there a clear strength cycle? Do members see skill progression?",
-        "Audit scaling: are coaches scaling consistently, or does it vary by who's coaching?",
-        "Check equipment: is everything maintained, organized, and clean?",
-        "Review facility cleanliness: bathrooms, floors, equipment — the basics matter",
-        "Survey 5-10 members: 'What's one thing we could improve about the class experience?'",
+        "Review programming: clear strength cycle? Visible skill progression for members?",
+        "Audit scaling consistency across all coaches and time slots",
+        "Survey 5-10 members: 'What's one thing we could improve about class?'",
         "Create a monthly programming review meeting with coaching staff",
       ],
       interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: gymArm * monthsRemaining,
@@ -2075,7 +2142,12 @@ function generateStrategicBrief(
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // RANK, DERIVE PRIORITY, SELECT TOP 3 + FOCUS
+  // SCOPE AUDIT — enforce single-lever discipline before ranking
+  // ═══════════════════════════════════════════════════════════════
+  scopeAuditRecommendations(recommendations);
+
+  // ═══════════════════════════════════════════════════════════════
+  // RANK, DERIVE PRIORITY, SELECT TOP 3 (DISTINCT CATEGORIES) + FOCUS
   // ═══════════════════════════════════════════════════════════════
   const allScores = recommendations.map(r => r.interventionScore);
   recommendations.forEach(r => {
@@ -2083,7 +2155,7 @@ function generateStrategicBrief(
   });
   recommendations.sort((a, b) => b.interventionScore - a.interventionScore);
   const focusRecommendation = recommendations.length > 0 ? recommendations[0] : null;
-  const top3 = recommendations.slice(0, 3);
+  const top3 = selectDistinctCategoryTop3(recommendations);
 
   // Cohort alert
   let cohortAlert: string | null = null;
