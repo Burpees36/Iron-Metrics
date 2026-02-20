@@ -266,6 +266,107 @@ export async function fetchAllWodifyMemberships(apiKey: string): Promise<WodifyM
   return allMemberships;
 }
 
+export interface WodifyAttendanceRecord {
+  id?: string;
+  client_id?: string;
+  clientId?: string;
+  user_id?: string;
+  class_date?: string;
+  date?: string;
+  attended_date?: string;
+  check_in_date?: string;
+  reservation_date?: string;
+  status?: string;
+  attendance_status?: string;
+  [key: string]: any;
+}
+
+export async function fetchWodifyAttendance(
+  apiKey: string,
+  options?: { page?: number; pageSize?: number; startDate?: string; endDate?: string },
+): Promise<{ records: WodifyAttendanceRecord[]; hasMore: boolean } | null> {
+  const params: Record<string, string> = {};
+  if (options?.page) params.page = String(options.page);
+  if (options?.pageSize) params.page_size = String(options.pageSize);
+  if (options?.startDate) params.start_date = options.startDate;
+  if (options?.endDate) params.end_date = options.endDate;
+
+  const endpoints = ["/attendance", "/reservations", "/class-reservations", "/visits"];
+
+  for (const endpoint of endpoints) {
+    try {
+      const data = await wodifyFetch(endpoint, apiKey, params);
+      if (Array.isArray(data)) {
+        return { records: data, hasMore: data.length >= (options?.pageSize || 50) };
+      }
+      const records = data?.data || data?.results || data?.items || [];
+      if (Array.isArray(records)) {
+        return { records, hasMore: records.length >= (options?.pageSize || 50) };
+      }
+    } catch (error: any) {
+      if (error.message?.includes("404") || error.message?.includes("403") || error.message?.includes("401")) {
+        continue;
+      }
+      continue;
+    }
+  }
+
+  return null;
+}
+
+export async function fetchAllWodifyAttendance(
+  apiKey: string,
+  lookbackDays: number = 30,
+): Promise<WodifyAttendanceRecord[] | null> {
+  const endDate = new Date().toISOString().slice(0, 10);
+  const startDate = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  const firstPage = await fetchWodifyAttendance(apiKey, { page: 1, pageSize: 100, startDate, endDate });
+  if (!firstPage) return null;
+
+  const allRecords: WodifyAttendanceRecord[] = [...firstPage.records];
+  let page = 2;
+  let hasMore = firstPage.hasMore;
+
+  while (hasMore && page <= 100) {
+    const result = await fetchWodifyAttendance(apiKey, { page, pageSize: 100, startDate, endDate });
+    if (!result) break;
+    allRecords.push(...result.records);
+    hasMore = result.hasMore;
+    page++;
+  }
+
+  return allRecords;
+}
+
+export function buildLastAttendedMap(
+  attendanceRecords: WodifyAttendanceRecord[],
+): Map<string, string> {
+  const map = new Map<string, string>();
+
+  for (const rec of attendanceRecords) {
+    const clientId = String(rec.client_id || rec.clientId || rec.user_id || "");
+    if (!clientId) continue;
+
+    const status = (rec.status || rec.attendance_status || "").toLowerCase();
+    if (status === "cancelled" || status === "canceled" || status === "no_show" || status === "no-show") continue;
+
+    const dateStr = rec.class_date || rec.date || rec.attended_date || rec.check_in_date || rec.reservation_date;
+    if (!dateStr) continue;
+
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) continue;
+
+    const dateFormatted = d.toISOString().slice(0, 10);
+    const existing = map.get(clientId);
+    if (!existing || dateFormatted > existing) {
+      map.set(clientId, dateFormatted);
+    }
+  }
+
+  return map;
+}
+
 function extractClientId(client: WodifyClientRecord): string {
   return String(client.id || client.client_id || client.user_id || "");
 }

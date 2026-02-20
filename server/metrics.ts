@@ -164,6 +164,8 @@ export function computeRiskCountWithContacts(
   let newCount = 0;
   let disengagingCount = 0;
 
+  const hasAttendanceData = activeMembers.some(m => m.lastAttendedDate != null);
+
   for (const member of activeMembers) {
     const joinDate = new Date(member.joinDate + "T00:00:00");
     const tenureDays = Math.max(0, Math.floor((monthDate.getTime() - joinDate.getTime()) / (1000 * 60 * 60 * 24)));
@@ -171,15 +173,27 @@ export function computeRiskCountWithContacts(
     if (tenureDays <= 60) {
       newCount++;
     } else {
-      const lastContact = contactMap.get(member.id);
-      const daysSinceContact = lastContact
-        ? Math.floor((monthDate.getTime() - lastContact.getTime()) / (1000 * 60 * 60 * 24))
-        : null;
+      if (hasAttendanceData) {
+        if (member.lastAttendedDate) {
+          const lastAttended = new Date(member.lastAttendedDate + "T00:00:00");
+          const daysSinceAttendance = Math.floor((monthDate.getTime() - lastAttended.getTime()) / (1000 * 60 * 60 * 24));
+          if (daysSinceAttendance >= 14) {
+            disengagingCount++;
+          }
+        } else {
+          disengagingCount++;
+        }
+      } else {
+        const lastContact = contactMap.get(member.id);
+        const daysSinceContact = lastContact
+          ? Math.floor((monthDate.getTime() - lastContact.getTime()) / (1000 * 60 * 60 * 24))
+          : null;
 
-      if (daysSinceContact === null && tenureDays > 90) {
-        disengagingCount++;
-      } else if (daysSinceContact !== null && daysSinceContact > 30) {
-        disengagingCount++;
+        if (daysSinceContact === null && tenureDays > 90) {
+          disengagingCount++;
+        } else if (daysSinceContact !== null && daysSinceContact > 30) {
+          disengagingCount++;
+        }
       }
     }
   }

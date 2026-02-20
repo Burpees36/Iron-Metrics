@@ -94,6 +94,8 @@ export async function registerRoutes(
         .sort((a, b) => b - a);
       const top20Threshold = rates.length > 0 ? rates[Math.floor(rates.length * 0.2)] : 0;
 
+      const hasAttendanceData = members.some(m => m.status === "active" && m.lastAttendedDate != null);
+
       const enriched = members.map((m) => {
         const joinDate = new Date(m.joinDate + "T00:00:00");
         const tenureDays = Math.max(0, Math.floor((now.getTime() - joinDate.getTime()) / (1000 * 60 * 60 * 24)));
@@ -104,6 +106,10 @@ export async function registerRoutes(
           : null;
         const rate = Number(m.monthlyRate);
         const isHighValue = rate >= top20Threshold && top20Threshold > 0;
+
+        const daysSinceAttendance = m.lastAttendedDate
+          ? Math.floor((now.getTime() - new Date(m.lastAttendedDate + "T00:00:00").getTime()) / (1000 * 60 * 60 * 24))
+          : null;
 
         let risk: "low" | "medium" | "high" = "low";
         let riskReasons: string[] = [];
@@ -124,15 +130,28 @@ export async function registerRoutes(
           }
 
           if (tenureDays > 60) {
-            if (daysSinceContact === null && tenureDays > 90) {
-              risk = "high";
-              riskReasons.push("Never contacted — disengaging");
-            } else if (daysSinceContact !== null && daysSinceContact > 60) {
-              risk = "high";
-              riskReasons.push("Silent 60+ days — disengaging");
-            } else if (daysSinceContact !== null && daysSinceContact > 30) {
-              risk = "medium";
-              riskReasons.push("Drifting 30+ days");
+            if (hasAttendanceData) {
+              if (daysSinceAttendance !== null && daysSinceAttendance >= 30) {
+                risk = "high";
+                riskReasons.push("No class 30+ days — disengaging");
+              } else if (daysSinceAttendance !== null && daysSinceAttendance >= 14) {
+                risk = "medium";
+                riskReasons.push("No class 14+ days — disengaging");
+              } else if (daysSinceAttendance === null) {
+                risk = "high";
+                riskReasons.push("No attendance recorded — disengaging");
+              }
+            } else {
+              if (daysSinceContact === null && tenureDays > 90) {
+                risk = "high";
+                riskReasons.push("Never contacted — disengaging");
+              } else if (daysSinceContact !== null && daysSinceContact > 60) {
+                risk = "high";
+                riskReasons.push("Silent 60+ days — disengaging");
+              } else if (daysSinceContact !== null && daysSinceContact > 30) {
+                risk = "medium";
+                riskReasons.push("Drifting 30+ days");
+              }
             }
           } else {
             if (daysSinceContact !== null && daysSinceContact > 14) {
@@ -300,6 +319,7 @@ export async function registerRoutes(
             status: member.status,
             joinDate: member.joinDate,
             cancelDate: member.cancelDate,
+            lastAttendedDate: member.lastAttendedDate,
             monthlyRate: member.monthlyRate,
           });
           if (r.action === "inserted") imported++;
@@ -558,6 +578,8 @@ export async function registerRoutes(
         prev3: toTrend(prev3),
       });
 
+      const hasAttendanceData = activeMembers.some(m => m.lastAttendedDate != null);
+
       const atRiskMembers: Array<{
         id: string;
         name: string;
@@ -566,6 +588,7 @@ export async function registerRoutes(
         monthlyRate: string;
         tenureDays: number;
         lastContacted: string | null;
+        lastAttended: string | null;
         riskCategory: "new" | "disengaging";
         riskLabel: string;
       }> = [];
@@ -587,12 +610,27 @@ export async function registerRoutes(
           else if (tenureDays <= 30) riskLabel = "First month";
           else riskLabel = "Pre-habit window";
         } else {
-          if (daysSinceContact === null && tenureDays > 90) {
-            riskCategory = "disengaging";
-            riskLabel = "Never contacted";
-          } else if (daysSinceContact !== null && daysSinceContact > 30) {
-            riskCategory = "disengaging";
-            riskLabel = daysSinceContact > 60 ? "Silent 60+ days" : "Drifting 30+ days";
+          if (hasAttendanceData) {
+            if (m.lastAttendedDate) {
+              const lastAttended = new Date(m.lastAttendedDate + "T00:00:00");
+              const daysSinceAttendance = Math.floor((asOfDate.getTime() - lastAttended.getTime()) / (1000 * 60 * 60 * 24));
+              if (daysSinceAttendance >= 14) {
+                riskCategory = "disengaging";
+                if (daysSinceAttendance >= 30) riskLabel = "No class 30+ days";
+                else riskLabel = "No class 14+ days";
+              }
+            } else {
+              riskCategory = "disengaging";
+              riskLabel = "No attendance recorded";
+            }
+          } else {
+            if (daysSinceContact === null && tenureDays > 90) {
+              riskCategory = "disengaging";
+              riskLabel = "Never contacted";
+            } else if (daysSinceContact !== null && daysSinceContact > 30) {
+              riskCategory = "disengaging";
+              riskLabel = daysSinceContact > 60 ? "Silent 60+ days" : "Drifting 30+ days";
+            }
           }
         }
 
@@ -605,6 +643,7 @@ export async function registerRoutes(
             monthlyRate: m.monthlyRate,
             tenureDays,
             lastContacted: lastContact?.toISOString() || null,
+            lastAttended: m.lastAttendedDate || null,
             riskCategory,
             riskLabel,
           });

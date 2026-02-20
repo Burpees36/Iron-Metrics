@@ -3,6 +3,8 @@ import {
   decryptApiKey,
   fetchAllWodifyClients,
   fetchAllWodifyMemberships,
+  fetchAllWodifyAttendance,
+  buildLastAttendedMap,
   transformWodifyClientToMember,
   type WodifyClientRecord,
   type WodifyMembershipRecord,
@@ -141,6 +143,19 @@ export async function runWodifySync(
       }
     }
 
+    let lastAttendedMap = new Map<string, string>();
+    try {
+      const attendanceRecords = await fetchAllWodifyAttendance(apiKey, 60);
+      if (attendanceRecords) {
+        lastAttendedMap = buildLastAttendedMap(attendanceRecords);
+        console.log(`[Wodify Sync] Pulled attendance data: ${attendanceRecords.length} records, ${lastAttendedMap.size} unique clients`);
+      } else {
+        console.log(`[Wodify Sync] Attendance endpoints not available — skipping attendance data`);
+      }
+    } catch (error: any) {
+      console.log(`[Wodify Sync] Attendance fetch failed (non-critical): ${error.message}`);
+    }
+
     for (const client of clients) {
       try {
         const clientId = String(client.id || client.client_id || client.user_id || "");
@@ -150,6 +165,8 @@ export async function runWodifySync(
 
         if (!memberData.name || memberData.name === "Unknown") continue;
 
+        const lastAttended = lastAttendedMap.get(clientId) || null;
+
         await storage.upsertMember({
           gymId: memberData.gymId,
           name: memberData.name,
@@ -158,6 +175,7 @@ export async function runWodifySync(
           joinDate: memberData.joinDate,
           cancelDate: memberData.cancelDate,
           monthlyRate: memberData.monthlyRate,
+          lastAttendedDate: lastAttended,
         });
         clientsUpserted++;
       } catch (error: any) {

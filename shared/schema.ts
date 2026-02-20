@@ -47,6 +47,7 @@ export const members = pgTable("members", {
   status: text("status").notNull().default("active"),
   joinDate: date("join_date").notNull(),
   cancelDate: date("cancel_date"),
+  lastAttendedDate: date("last_attended_date"),
   monthlyRate: numeric("monthly_rate", { precision: 10, scale: 2 }).notNull().default("0"),
 }, (table) => [
   index("idx_members_gym_id").on(table.gymId),

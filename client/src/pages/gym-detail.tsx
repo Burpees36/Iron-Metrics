@@ -101,6 +101,7 @@ interface AtRiskMember {
   riskLabel: string;
   tenureDays: number;
   lastContacted: string | null;
+  lastAttended: string | null;
 }
 
 interface EnrichedMember {
@@ -836,6 +837,12 @@ function FlaggedMemberCard({ member: m, gymId, monthDate }: { member: AtRiskMemb
 
 function getRiskReason(member: AtRiskMember): { label: string; description: string } {
   if (member.riskCategory === "disengaging") {
+    if (member.riskLabel === "No class 30+ days")
+      return { label: "No class 30+ days", description: "This member hasn't attended a class in over a month. The routine is broken. A personal text or call from a coach can re-engage them before they decide to cancel." };
+    if (member.riskLabel === "No class 14+ days")
+      return { label: "No class 14+ days", description: "Two weeks without a class. The habit is slipping. A quick check-in now — asking how they're doing, suggesting a class — can pull them back in." };
+    if (member.riskLabel === "No attendance recorded")
+      return { label: "No attendance recorded", description: "No class attendance on record for this member. They may be paying but not showing up — the most silent form of disengagement." };
     if (member.riskLabel === "Never contacted")
       return { label: "Never contacted", description: "This member has been around a while but has never received a personal outreach. They may feel invisible. A single check-in can change the trajectory." };
     if (member.riskLabel === "Silent 60+ days")

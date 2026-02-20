@@ -11,6 +11,7 @@ The Stability Command Center for CrossFit gyms. A financial resilience operating
 
 ## TODO (Next Session)
 - Update churn metrics
+- Consider adding attendance trend charts (weekly attendance frequency per member)
 
 ## Architecture
 - **Frontend**: React + Vite + Tailwind CSS + shadcn/ui + Recharts
@@ -56,6 +57,11 @@ If it does not drive action, it is not shown.
 ## Key Features
 - Replit Auth for authentication
 - Multi-tenant gym management (each gym scoped by owner_id)
+- **Attendance-Based Disengagement Detection**:
+  - Primary signal: `lastAttendedDate` on members table — disengaged = no class in 14+ days
+  - Wodify connector attempts to fetch attendance data via multiple endpoint patterns (graceful 404 fallback)
+  - CSV import supports `lastAttendedDate` with 20+ column name synonyms (last_attended, last_visit, last_class, etc.)
+  - Fallback: if no attendance data exists for a gym, reverts to contact-based disengagement detection
 - **Robust Data Ingestion System** (Import Wizard):
   - Multi-step wizard: Upload → Map Columns → Validate → Import
   - Intelligent column auto-detection with confidence indicators (high/medium/low)

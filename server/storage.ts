@@ -121,15 +121,19 @@ export class DatabaseStorage implements IStorage {
         .where(and(eq(members.gymId, member.gymId), eq(members.email, member.email)));
 
       if (existing) {
+        const updates: Record<string, any> = {
+          name: member.name,
+          status: member.status,
+          joinDate: member.joinDate,
+          cancelDate: member.cancelDate,
+          monthlyRate: member.monthlyRate,
+        };
+        if (member.lastAttendedDate !== undefined) {
+          updates.lastAttendedDate = member.lastAttendedDate;
+        }
         await db
           .update(members)
-          .set({
-            name: member.name,
-            status: member.status,
-            joinDate: member.joinDate,
-            cancelDate: member.cancelDate,
-            monthlyRate: member.monthlyRate,
-          })
+          .set(updates)
           .where(eq(members.id, existing.id));
         return { action: "updated" };
       }
