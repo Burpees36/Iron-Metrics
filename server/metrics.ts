@@ -258,14 +258,16 @@ export function generateMetricReports(metrics: {
       ? `+$${annualImpact.toLocaleString()} annual revenue if reduced to target`
       : "On track",
     meaning: metrics.churnRate > 7
-      ? "You're losing too many members. If this keeps up, revenue will feel it within a few months."
+      ? "You're losing too many members. This is a systemic failure of your product or culture."
       : metrics.churnRate > 5
-        ? "Churn is above where you want it. Members are leaving before they build lasting habits."
-        : "Retention is solid. Members are staying and building routines.",
+        ? "Your members are drifting. You are failing to anchor them to a result or a community."
+        : "Your retention is holding. you have established a culture of consistency.",
     whyItMatters: "Churn is the biggest threat to predictable revenue. If it creeps up, you'll feel it fast — and replacing lost members costs more than keeping the ones you have.",
-    action: metrics.churnRate > 5
-      ? "Reach out to members who seem to be fading. Set up a 30-day check-in for every new member — catch drift early."
-      : "Things are working. Keep an eye out for early warning signs and continue building meaningful relationships.",
+    action: metrics.churnRate > 7
+    ? "You need to get to work. Audit your last 10 cancellations immediately. Was it price, coaching, or neglect? You must implement a mandatory 'Exit Interview' to find the truth. If you don't fix this, your acquisition spend is a total waste of capital. Fix the foundation to build the community your members deserve."
+    : metrics.churnRate > 5
+      ? "A 30-day check in is the bare minimum. You must execute a 'Re-Engagement Blitz' this week. Every member who has attended fewer than 2 classes in the last 14 days gets a personal text or call from their primary coach. If you don't catch the drift now, you are simply waiting for the cancellation email. Stop the slide."
+      : "Things are working, but don't fall into the trap of complacency. Keep an eye out for early warning signs and continue building meaningful relationships. Maintain the standard.",
     trendDirection: churnTrend.direction === "up" ? "down" : churnTrend.direction === "down" ? "up" : churnTrend.direction,
     trendValue: churnTrend.value,
   });
