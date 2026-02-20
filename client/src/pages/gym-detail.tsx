@@ -97,6 +97,8 @@ interface AtRiskMember {
   email: string | null;
   joinDate: string;
   monthlyRate: string;
+  riskCategory: "new" | "disengaging";
+  riskLabel: string;
   tenureDays: number;
   lastContacted: string | null;
 }
@@ -704,16 +706,44 @@ function ReportCard({ report, gymId, atRiskMembers, monthDate }: { report: Metri
           </div>
         </div>
 
-        {isRiskRadar && atRiskMembers && atRiskMembers.length > 0 && (
-          <div className="border-t pt-4 space-y-3" data-testid="section-flagged-members">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Flagged Members</p>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              {atRiskMembers.map((m) => (
-                <FlaggedMemberCard key={m.id} member={m} gymId={gymId} monthDate={monthDate} />
-              ))}
+        {isRiskRadar && atRiskMembers && atRiskMembers.length > 0 && (() => {
+          const newMembers = atRiskMembers.filter(m => m.riskCategory === "new");
+          const disengagingMembers = atRiskMembers.filter(m => m.riskCategory === "disengaging");
+          return (
+            <div className="border-t pt-4 space-y-4" data-testid="section-flagged-members">
+              {disengagingMembers.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-amber-500" />
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Disengaging ({disengagingMembers.length})
+                    </p>
+                  </div>
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {disengagingMembers.map((m) => (
+                      <FlaggedMemberCard key={m.id} member={m} gymId={gymId} monthDate={monthDate} />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {newMembers.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-blue-500" />
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      New Members ({newMembers.length})
+                    </p>
+                  </div>
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {newMembers.map((m) => (
+                      <FlaggedMemberCard key={m.id} member={m} gymId={gymId} monthDate={monthDate} />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
       </CardContent>
     </Card>
   );
@@ -721,7 +751,7 @@ function ReportCard({ report, gymId, atRiskMembers, monthDate }: { report: Metri
 
 function FlaggedMemberCard({ member: m, gymId, monthDate }: { member: AtRiskMember; gymId: string; monthDate: string }) {
   const { toast } = useToast();
-  const { label, description } = getRiskReason(m.tenureDays);
+  const { label, description } = getRiskReason(m);
 
   const contactMutation = useMutation({
     mutationFn: async () => {
@@ -804,11 +834,18 @@ function FlaggedMemberCard({ member: m, gymId, monthDate }: { member: AtRiskMemb
   );
 }
 
-function getRiskReason(tenureDays: number): { label: string; description: string } {
-  if (tenureDays <= 14)
-    return { label: "New member", description: "Joined in the last 2 weeks. Highest cancellation risk — personal outreach now has the greatest impact." };
-  if (tenureDays <= 30)
-    return { label: "Early stage", description: "In their first month. Still deciding if this gym is the right fit. Check-ins and class introductions reduce drop-off." };
+function getRiskReason(member: AtRiskMember): { label: string; description: string } {
+  if (member.riskCategory === "disengaging") {
+    if (member.riskLabel === "Never contacted")
+      return { label: "Never contacted", description: "This member has been around a while but has never received a personal outreach. They may feel invisible. A single check-in can change the trajectory." };
+    if (member.riskLabel === "Silent 60+ days")
+      return { label: "Silent 60+ days", description: "No contact in over 2 months. This member is quietly disengaging. A direct, personal reconnection is urgent before they make the decision to cancel." };
+    return { label: "Drifting", description: "No contact in 30+ days. The connection is fading. A coach check-in or personal text now can prevent a slow slide toward cancellation." };
+  }
+  if (member.tenureDays <= 14)
+    return { label: "First 2 weeks", description: "Joined in the last 2 weeks. Highest cancellation risk — personal outreach now has the greatest impact." };
+  if (member.tenureDays <= 30)
+    return { label: "First month", description: "In their first month. Still deciding if this gym is the right fit. Check-ins and class introductions reduce drop-off." };
   return { label: "Pre-habit window", description: "30-60 days in. Exercise habits haven't solidified yet. Social connections and routine consistency are key to retention." };
 }
 

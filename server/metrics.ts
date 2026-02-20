@@ -147,14 +147,44 @@ function computeRiskCount(activeMembers: Member[], monthDate: Date): number {
   let riskCount = 0;
   for (const member of activeMembers) {
     const joinDate = new Date(member.joinDate + "T00:00:00");
-    const tenureMonths = (monthDate.getFullYear() - joinDate.getFullYear()) * 12 +
-      (monthDate.getMonth() - joinDate.getMonth());
+    const tenureDays = Math.max(0, Math.floor((monthDate.getTime() - joinDate.getTime()) / (1000 * 60 * 60 * 24)));
 
-    if (tenureMonths <= 2) {
+    if (tenureDays <= 60) {
       riskCount++;
     }
   }
   return riskCount;
+}
+
+export function computeRiskCountWithContacts(
+  activeMembers: Member[],
+  monthDate: Date,
+  contactMap: Map<string, Date>
+): { total: number; newCount: number; disengagingCount: number } {
+  let newCount = 0;
+  let disengagingCount = 0;
+
+  for (const member of activeMembers) {
+    const joinDate = new Date(member.joinDate + "T00:00:00");
+    const tenureDays = Math.max(0, Math.floor((monthDate.getTime() - joinDate.getTime()) / (1000 * 60 * 60 * 24)));
+
+    if (tenureDays <= 60) {
+      newCount++;
+    } else {
+      const lastContact = contactMap.get(member.id);
+      const daysSinceContact = lastContact
+        ? Math.floor((monthDate.getTime() - lastContact.getTime()) / (1000 * 60 * 60 * 24))
+        : null;
+
+      if (daysSinceContact === null && tenureDays > 90) {
+        disengagingCount++;
+      } else if (daysSinceContact !== null && daysSinceContact > 30) {
+        disengagingCount++;
+      }
+    }
+  }
+
+  return { total: newCount + disengagingCount, newCount, disengagingCount };
 }
 
 function countConsecutiveAbove(values: number[], threshold: number): number {
@@ -221,6 +251,8 @@ export function generateMetricReports(metrics: {
   rollingChurn3m: number | null;
   newMembers: number;
   cancels: number;
+  riskNewCount?: number;
+  riskDisengagingCount?: number;
 }, trendData?: {
   prev1?: { rsi: number; churnRate: number; mrr: number; arm: number; ltv: number; memberRiskCount: number; activeMembers: number };
   prev2?: { rsi: number; churnRate: number; mrr: number; arm: number; ltv: number; memberRiskCount: number; activeMembers: number };
@@ -261,7 +293,7 @@ export function generateMetricReports(metrics: {
       ? "You're losing too many members. This is a systemic failure of your product or culture."
       : metrics.churnRate > 5
         ? "Your members are drifting. You are failing to anchor them to a result or a community."
-        : "Your retention is holding. you have established a culture of consistency.",
+        : "Your retention is holding. You have established a culture of consistency.",
     whyItMatters: "Churn is the biggest threat to predictable revenue. If it creeps up, you'll feel it fast — and replacing lost members costs more than keeping the ones you have.",
     action: metrics.churnRate > 7
     ? "You need to get to work. Audit your last 10 cancellations immediately. Was it price, coaching, or neglect? You must implement a mandatory 'Exit Interview' to find the truth. If you don't fix this, your acquisition spend is a total waste of capital. Fix the foundation to build the community your members deserve."
@@ -351,37 +383,86 @@ export function generateMetricReports(metrics: {
   });
 
   const riskTrend = get90DayTrend(metrics.memberRiskCount, "memberRiskCount");
+  const newRisk = metrics.riskNewCount ?? 0;
+  const disengagingRisk = metrics.riskDisengagingCount ?? 0;
+  const totalRisk = metrics.memberRiskCount;
   const riskPct = metrics.activeMembers > 0
-    ? ((metrics.memberRiskCount / metrics.activeMembers) * 100).toFixed(1)
+    ? ((totalRisk / metrics.activeMembers) * 100).toFixed(1)
     : "0";
-  const riskTier = metrics.memberRiskCount > metrics.activeMembers * 0.15
+  const riskTier = totalRisk > metrics.activeMembers * 0.15
     ? "High"
-    : metrics.memberRiskCount > metrics.activeMembers * 0.08
+    : totalRisk > metrics.activeMembers * 0.08
       ? "Moderate"
-      : metrics.memberRiskCount > 0
+      : totalRisk > 0
         ? "Low"
         : "Clear";
 
+  const hasNew = newRisk > 0;
+  const hasDisengaging = disengagingRisk > 0;
+  const riskScenario: "mixed" | "new-only" | "disengaging-only" | "clear" =
+    hasNew && hasDisengaging ? "mixed"
+    : hasNew ? "new-only"
+    : hasDisengaging ? "disengaging-only"
+    : "clear";
+
+  const riskCurrentLabel = riskScenario === "clear"
+    ? `0 flagged (0%)`
+    : riskScenario === "new-only"
+      ? `${totalRisk} flagged (${riskPct}%) — ${newRisk} new`
+      : riskScenario === "disengaging-only"
+        ? `${totalRisk} flagged (${riskPct}%) — ${disengagingRisk} disengaging`
+        : `${totalRisk} flagged (${riskPct}%) — ${newRisk} new, ${disengagingRisk} disengaging`;
+
+  let riskMeaning: string;
+  let riskWhyItMatters: string;
+  let riskAction: string;
+
+  if (riskScenario === "clear") {
+    riskMeaning = "No members are showing risk signals right now. Your onboarding is effective and your established members are staying connected.";
+    riskWhyItMatters = "A clear radar is earned, not given. It means your outreach, coaching relationships, and member experience are all working in sync. This is the standard to maintain.";
+    riskAction = "Use this stability to go on offense. Reach out to your most engaged members and document what's working. Build those patterns into your playbook so the next wave of new members inherits a proven system.";
+  } else if (riskScenario === "new-only") {
+    riskMeaning = riskTier === "High"
+      ? `${newRisk} new members are in the danger zone. Every one of them is deciding right now whether your gym is worth keeping. Your onboarding process is under pressure.`
+      : riskTier === "Moderate"
+        ? `${newRisk} newer members haven't locked in yet. They're still in the window where a single missed week can turn into a cancellation.`
+        : `A small group of new members need attention. They're in the critical first 60 days where habits either form or don't.`;
+    riskWhyItMatters = "New members are 3–5x more likely to cancel than members who've been around 6+ months. The first 60 days are where you either build a committed member or lose them to inertia. Every dollar you spent acquiring them is wasted if they leave before forming a routine.";
+    riskAction = riskTier === "High"
+      ? "Execute a direct personal intervention for every flagged new member this week. Not a group email — a 1-on-1 conversation. Assign each one a coach anchor, set a 14-day movement goal, and schedule their next 3 classes. If they don't feel known by Day 14, they're already gone."
+      : "Reach out to every flagged new member within the next 7 days. A personal text or call from their coach cuts early cancellation risk in half. Ask about their goals, acknowledge their effort, and make sure they have a class booked.";
+  } else if (riskScenario === "disengaging-only") {
+    riskMeaning = riskTier === "High"
+      ? `${disengagingRisk} established members have gone quiet. These aren't new faces drifting — these are people who were once committed and are now pulling away. That's a culture signal, not an onboarding problem.`
+      : riskTier === "Moderate"
+        ? `${disengagingRisk} members who've been around a while are showing signs of disengagement. No new members are at risk, but your veterans are starting to drift.`
+        : `A few long-standing members have gone silent. The good news: your new member pipeline is clean. The concern: established members are slipping without anyone noticing.`;
+    riskWhyItMatters = "When established members disengage, it's rarely about the workout. It's about feeling invisible. These members carry institutional knowledge, social connections, and referral potential. Losing a 2-year member costs you more than losing 3 new signups — both in revenue and in community fabric.";
+    riskAction = riskTier === "High"
+      ? "This is a retention emergency hiding in plain sight. Pull your disengaging member list today and personally reach out to every one. Ask what's changed. Re-invite them to a class with a specific coach. If they've been absent 30+ days, offer a free 1-on-1 session to reconnect. Do not wait."
+      : "Schedule a personal check-in with each disengaging member this month. A simple 'We miss you' text from their coach is often enough to restart the habit. Ask about schedule changes, injuries, or life events — then remove the friction.";
+  } else {
+    riskMeaning = riskTier === "High"
+      ? `${newRisk} new members and ${disengagingRisk} established members are flagged. You're losing ground on two fronts: new members aren't sticking and veterans are fading. This combination accelerates churn and erodes your community from both ends.`
+      : riskTier === "Moderate"
+        ? `You have ${newRisk} new members in the risk window and ${disengagingRisk} established members going quiet. Both groups need different interventions — one needs onboarding intensity, the other needs re-engagement.`
+        : `A small mix of ${newRisk} new and ${disengagingRisk} established members need attention. The risk is manageable, but both groups require different approaches.`;
+    riskWhyItMatters = "New members and disengaging veterans leave for completely different reasons. New members haven't formed a habit yet — they need structure, connection, and early wins. Disengaging veterans have lost their reason to show up — they need to be seen, heard, and re-invited. Treating both groups the same wastes your effort and misses the real problem.";
+    riskAction = riskTier === "High"
+      ? "Split your outreach into two tracks immediately. For new members: assign a coach anchor, set a 14-day goal, and schedule their next 3 classes. For disengaging veterans: personal call from their primary coach this week — ask what's changed, acknowledge their history, and offer a specific re-entry point. Both tracks require direct human contact. No mass emails."
+      : "Prioritize personal outreach for both groups this month. New members get a check-in text and a class invitation from their coach. Disengaging members get a genuine 'We noticed you've been away' conversation. Different problems, different solutions — but both require you to reach out first.";
+  }
+
   reports.push({
     metric: "Member Risk Radar",
-    current: `${metrics.memberRiskCount} flagged (${riskPct}%)`,
+    current: riskCurrentLabel,
     target: "< 10% of roster",
-    impact: metrics.memberRiskCount > 0
-      ? `$${Math.round(metrics.memberRiskCount * metrics.arm).toLocaleString()}/mo revenue at risk`
+    impact: totalRisk > 0
+      ? `$${Math.round(totalRisk * metrics.arm).toLocaleString()}/mo revenue at risk`
       : "No members currently flagged",
-    meaning: riskTier === "High"
-      ? "A lot of your members are showing signs they might leave and are disengaging. This is a reflection of your habit-building protocols."
-      : riskTier === "Moderate"
-        ? "Some newer members need attention. 'Moderate' risk is a sign that your onboarding is passive, not proactive."
-        : riskTier === "Low"
-          ? "A small number of members are in the risk window. A little personal outreach can make the difference."
-          : "Nobody is flagged right now. Your onboarding is doing its job.",
-    whyItMatters: "New members are 3-5x more likely to cancel than members who've been around a while. Reaching out early is the single most effective thing you can do to keep them.",
-    action: riskTier === "High"
-      ? "You need to execute a 'Personal Intervention' for every flagged member. Do not delegate this to a mass email. Call them. Re-establish their 'Why'."
-      : metrics.memberRiskCount > 0
-        ? "Reach out to every flagged member within 2 weeks. A personal connection from a coach dramatically reduces the chance they cancel."
-        : "Use this stability to optimize. Reach out to your most engaged new members and document why they are succeeding. Use those insights to further strengthen your protocols Complacency is the enemy of retention.",
+    meaning: riskMeaning,
+    whyItMatters: riskWhyItMatters,
+    action: riskAction,
     trendDirection: riskTrend.direction === "up" ? "down" : riskTrend.direction === "down" ? "up" : riskTrend.direction,
     trendValue: riskTrend.value,
   });

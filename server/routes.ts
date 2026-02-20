@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { parseMembersCsv, previewCsv, parseAllRows, computeFileHash, type ColumnMapping } from "./csv-parser";
-import { recomputeAllMetrics, computeMonthlyMetrics, generateMetricReports, generateForecast, generateTrendIntelligence } from "./metrics";
+import { recomputeAllMetrics, computeMonthlyMetrics, generateMetricReports, generateForecast, generateTrendIntelligence, computeRiskCountWithContacts } from "./metrics";
 import { generatePredictiveIntelligence } from "./predictive";
 import { ensureRecommendationCards, getOwnerActions, getPeriodStart, getRecommendationExecutionState, logOwnerAction, runLearningUpdate, toggleChecklistItem } from "./recommendation-learning";
 import { insertGymSchema, insertKnowledgeSourceSchema } from "@shared/schema";
@@ -123,14 +123,27 @@ export async function registerRoutes(
             riskReasons.push("Pre-habit window (< 60 days)");
           }
 
-          if (daysSinceContact !== null && daysSinceContact > 14) {
-            if (risk === "low") risk = "medium";
-            riskReasons.push("No recent contact");
-          }
+          if (tenureDays > 60) {
+            if (daysSinceContact === null && tenureDays > 90) {
+              risk = "high";
+              riskReasons.push("Never contacted — disengaging");
+            } else if (daysSinceContact !== null && daysSinceContact > 60) {
+              risk = "high";
+              riskReasons.push("Silent 60+ days — disengaging");
+            } else if (daysSinceContact !== null && daysSinceContact > 30) {
+              risk = "medium";
+              riskReasons.push("Drifting 30+ days");
+            }
+          } else {
+            if (daysSinceContact !== null && daysSinceContact > 14) {
+              if (risk === "low") risk = "medium";
+              riskReasons.push("No recent contact");
+            }
 
-          if (daysSinceContact === null && tenureDays <= 60) {
-            if (risk !== "high") risk = "high";
-            riskReasons.push("Never contacted");
+            if (daysSinceContact === null) {
+              if (risk !== "high") risk = "high";
+              riskReasons.push("Never contacted");
+            }
           }
         }
 
@@ -505,25 +518,6 @@ export async function registerRoutes(
         activeMembers: m.activeMembers,
       } : undefined;
 
-      const reports = generateMetricReports({
-        activeMembers: metrics.activeMembers,
-        churnRate: Number(metrics.churnRate),
-        mrr: Number(metrics.mrr),
-        arm: Number(metrics.arm),
-        ltv: Number(metrics.ltv),
-        rsi: metrics.rsi,
-        res: Number(metrics.res),
-        ltveImpact: Number(metrics.ltveImpact),
-        memberRiskCount: metrics.memberRiskCount,
-        rollingChurn3m: metrics.rollingChurn3m ? Number(metrics.rollingChurn3m) : null,
-        newMembers: metrics.newMembers,
-        cancels: metrics.cancels,
-      }, {
-        prev1: toTrend(prev1),
-        prev2: toTrend(prev2),
-        prev3: toTrend(prev3),
-      });
-
       const monthDate = new Date(month + "T00:00:00");
       const nextMonth = new Date(monthDate);
       nextMonth.setMonth(nextMonth.getMonth() + 1);
@@ -541,22 +535,87 @@ export async function registerRoutes(
       }
 
       const asOfDate = monthEnd;
-      const atRiskMembers = activeMembers
-        .filter((m) => {
-          const joinDate = new Date(m.joinDate + "T00:00:00");
-          const tenureMonths = (asOfDate.getFullYear() - joinDate.getFullYear()) * 12 +
-            (asOfDate.getMonth() - joinDate.getMonth());
-          return tenureMonths <= 2;
-        })
-        .map((m) => ({
-          id: m.id,
-          name: m.name,
-          email: m.email,
-          joinDate: m.joinDate,
-          monthlyRate: m.monthlyRate,
-          tenureDays: Math.max(0, Math.floor((asOfDate.getTime() - new Date(m.joinDate + "T00:00:00").getTime()) / (1000 * 60 * 60 * 24))),
-          lastContacted: contactMap.get(m.id)?.toISOString() || null,
-        }));
+      const riskBreakdown = computeRiskCountWithContacts(activeMembers, asOfDate, contactMap);
+
+      const reports = generateMetricReports({
+        activeMembers: metrics.activeMembers,
+        churnRate: Number(metrics.churnRate),
+        mrr: Number(metrics.mrr),
+        arm: Number(metrics.arm),
+        ltv: Number(metrics.ltv),
+        rsi: metrics.rsi,
+        res: Number(metrics.res),
+        ltveImpact: Number(metrics.ltveImpact),
+        memberRiskCount: riskBreakdown.total,
+        rollingChurn3m: metrics.rollingChurn3m ? Number(metrics.rollingChurn3m) : null,
+        newMembers: metrics.newMembers,
+        cancels: metrics.cancels,
+        riskNewCount: riskBreakdown.newCount,
+        riskDisengagingCount: riskBreakdown.disengagingCount,
+      }, {
+        prev1: toTrend(prev1),
+        prev2: toTrend(prev2),
+        prev3: toTrend(prev3),
+      });
+
+      const atRiskMembers: Array<{
+        id: string;
+        name: string;
+        email: string | null;
+        joinDate: string;
+        monthlyRate: string;
+        tenureDays: number;
+        lastContacted: string | null;
+        riskCategory: "new" | "disengaging";
+        riskLabel: string;
+      }> = [];
+
+      for (const m of activeMembers) {
+        const joinDate = new Date(m.joinDate + "T00:00:00");
+        const tenureDays = Math.max(0, Math.floor((asOfDate.getTime() - joinDate.getTime()) / (1000 * 60 * 60 * 24)));
+        const lastContact = contactMap.get(m.id);
+        const daysSinceContact = lastContact
+          ? Math.floor((asOfDate.getTime() - lastContact.getTime()) / (1000 * 60 * 60 * 24))
+          : null;
+
+        let riskCategory: "new" | "disengaging" | null = null;
+        let riskLabel = "";
+
+        if (tenureDays <= 60) {
+          riskCategory = "new";
+          if (tenureDays <= 14) riskLabel = "First 2 weeks";
+          else if (tenureDays <= 30) riskLabel = "First month";
+          else riskLabel = "Pre-habit window";
+        } else {
+          if (daysSinceContact === null && tenureDays > 90) {
+            riskCategory = "disengaging";
+            riskLabel = "Never contacted";
+          } else if (daysSinceContact !== null && daysSinceContact > 30) {
+            riskCategory = "disengaging";
+            riskLabel = daysSinceContact > 60 ? "Silent 60+ days" : "Drifting 30+ days";
+          }
+        }
+
+        if (riskCategory) {
+          atRiskMembers.push({
+            id: m.id,
+            name: m.name,
+            email: m.email,
+            joinDate: m.joinDate,
+            monthlyRate: m.monthlyRate,
+            tenureDays,
+            lastContacted: lastContact?.toISOString() || null,
+            riskCategory,
+            riskLabel,
+          });
+        }
+      }
+
+      atRiskMembers.sort((a, b) => {
+        if (a.riskCategory === "disengaging" && b.riskCategory === "new") return -1;
+        if (a.riskCategory === "new" && b.riskCategory === "disengaging") return 1;
+        return a.tenureDays - b.tenureDays;
+      });
 
       const prevMetrics = [
         metrics,
