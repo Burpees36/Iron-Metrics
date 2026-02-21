@@ -306,23 +306,18 @@ export async function generatePredictiveIntelligence(gymId: string): Promise<Pre
       if (!rec) continue;
       if (guidance.detailAugmentation) {
         const combined = rec.detail.replace(/\s*$/, " " + guidance.detailAugmentation);
-        const words = combined.split(/\s+/);
+        const scopeFiltered = removeBlockedTopicContent(combined, rec);
+        const words = scopeFiltered.split(/\s+/);
         if (words.length <= 120) {
-          rec.detail = combined;
+          rec.detail = scopeFiltered;
         } else {
-          const sentences = combined.split(/(?<=[.!?])\s+/);
-          let trimmed = "";
-          for (const s of sentences) {
-            const next = trimmed ? trimmed + " " + s : s;
-            if (next.split(/\s+/).length > 120) break;
-            trimmed = next;
-          }
-          rec.detail = trimmed || sentences[0];
+          rec.detail = trimToWordLimit(scopeFiltered, 119);
         }
       }
       if (guidance.executionStandard) {
         const firstSentence = guidance.executionStandard.split(/(?<=[.!?])\s+/)[0];
-        rec.executionStandard = firstSentence;
+        const filtered = removeBlockedTopicContent(firstSentence, rec);
+        rec.executionStandard = filtered || undefined;
       }
     }
   } catch (err) {
@@ -576,7 +571,7 @@ function computeMemberPredictions(
     },
   };
 }
-
+// This is a good place to start editing! Wu Tang //
 function selectIntervention(
   churnProb: number,
   tenureDays: number,
@@ -592,7 +587,7 @@ function selectIntervention(
     if (tenureDays <= 30) {
       return {
         type: "onboarding-acceleration",
-        detail: "This member is at high risk of leaving before building a habit. Get a coach in front of them — a 15-minute 1-on-1 to set specific movement goals for their first month. Then: structured check-ins after their 1st, 7th, and 14th day. Early skill wins create belonging.",
+        detail: "This member is at high risk of leaving before even learning your culture. Get a coach in front of them and set three specific, measurable movement goals for their first 21 days. Then: structured check-ins after Day 1 (Post-Reset), Day 7, and Day 14. Early skill wins create belonging.",
         microGuidance: "Book a 15-min 1-on-1 goal session; check in after day 1, 7, and 14",
         urgency: "immediate",
       };
@@ -607,8 +602,8 @@ function selectIntervention(
     }
     return {
       type: "win-back",
-      detail: "This member is likely to cancel without direct action. Reconnection happens through shared experience, not emails or discounts. Personally invite them to a partner workout, a community event, or during Open season, encourage them to sign up. Shared physical experience rebuilds the connection that keeps people.",
-      microGuidance: "Personally invite to the next partner workout or upcoming event",
+      detail: "This member is likely to cancel without direct action. Reconnect them with their 'why' and scheudle a goal review session. Get them reintegrated into the community by inviting them to a community event they would be interested in, or during Open season, encourage them to sign up. Shared physical experience rebuilds the connection that keeps people.",
+      microGuidance: "Scheudle a goal review session within 7 days. Reintegrate with the community.",
       urgency: "this-week",
     };
   }
@@ -617,7 +612,7 @@ function selectIntervention(
     if (tenureDays <= 60 && hasContactGap) {
       return {
         type: "coach-connection",
-        detail: "This member hasn't been personally connected to a coach yet. Assign one. Have them spend 5 minutes after the next class just listening — not instructing — to find out what this person actually needs to feel like they belong here.",
+        detail: "This member hasn't been personally connected to a coach yet. Assign one and have the coach take some ownership in this. Have them spend 5 minutes after the next class just listening — not instructing — to find out what this person actually needs to feel like they belong here.",
         microGuidance: "Assign a coach; 5-min post-class conversation within 7 days",
         urgency: "this-week",
       };
@@ -790,7 +785,7 @@ function selectCrossfitLanguageTemplate(
         {
           hook: "Protect the first 30 days before habits fade.",
           ownerAction: "What to do this week: ask the coach they usually see to do a 2-minute check-in after class and lock the next two class days.",
-          coachCue: "Coach cue: 'Let's pick two training days this week and protect them.'",
+          coachCue: "Coach cue: 'Let's pick two training days this week and lock them in.'",
           winCondition: "Win condition: member attends 2+ classes in the next 7 days.",
           timeBox: "Time box: 7 days.",
           memberScript: "Coach-to-member: 'You're building rhythm now; two classes this week is the win.'",
@@ -801,7 +796,7 @@ function selectCrossfitLanguageTemplate(
           hook: "Member is acting like a reset case; treat as re-onboarding.",
           ownerAction: "What to do this week: have their usual class coach run a quick reset check-in and confirm schedule fit.",
           coachCue: "Coach cue: 'What's the friction this month? Let's make your next two weeks easier.'",
-          winCondition: "Win condition: no 7+ day attendance gap in next 14 days.",
+          winCondition: "Win condition: no 7+ day attendance gap in next 21 days.",
           timeBox: "Time box: 14 days.",
           memberScript: "Coach-to-member: 'We're rebuilding training rhythm, not chasing intensity yet.'",
         },
@@ -1558,14 +1553,14 @@ function derivePriority(score: number, allScores: number[]): "critical" | "high"
 // executionStandard 1 sentence, no cross-pillar drift
 // ═══════════════════════════════════════════════════════════════
 
-const SCOPE_BANNED_KEYWORDS: Record<string, string[]> = {
-  "Retention": ["pricing", "upsell", "add-on", "corporate rate", "ARM increase", "subscription upgrade"],
-  "Acquisition": ["onboarding touchpoint", "coaching audit", "scaling consistency", "whiteboard brief", "nutrition coaching"],
-  "Community Depth": ["referral sprint", "corporate rate", "lead flow", "inbound inquiries", "coaching audit"],
-  "Coaching Quality": ["referral", "bring-a-friend", "upsell", "pricing", "ARM increase", "nutrition challenge", "social proof"],
-};
-
-const CROSS_LEVER_BLOCKED_TOPICS = ["onboarding", "coaching development", "upsell", "upsells", "pricing"];
+import {
+  SCOPE_BANNED_KEYWORDS,
+  CROSS_LEVER_BLOCKED_TOPICS,
+  removeBlockedTopicContent,
+  trimToWordLimit,
+  sentenceViolatesScope,
+  allowsBlockedTopic,
+} from "./scope-rules";
 const TITLE_STOP_WORDS = new Set([
   "the", "and", "for", "with", "from", "into", "this", "that", "your", "month", "members", "member", "plan", "program", "build", "improve", "increase", "reduce", "retention", "acquisition",
 ]);
@@ -1584,25 +1579,6 @@ function isSameLeverItem(item: string, leverKeywords: string[]): boolean {
   return leverKeywords.some((keyword) => clean.includes(keyword));
 }
 
-function allowsBlockedTopic(rec: BriefRecommendation, topic: string): boolean {
-  const haystack = `${rec.headline} ${rec.interventionType} ${rec.category}`.toLowerCase();
-  return haystack.includes(topic);
-}
-
-function removeBlockedTopicContent(text: string, rec: BriefRecommendation): string {
-  const sentences = text.split(/(?<=[.!?])\s+/).filter(Boolean);
-  const filtered = sentences.filter((sentence) => {
-    const lower = sentence.toLowerCase();
-    return !CROSS_LEVER_BLOCKED_TOPICS.some((topic) => lower.includes(topic) && !allowsBlockedTopic(rec, topic));
-  });
-  return filtered.join(" ").trim();
-}
-
-function trimToWordLimit(text: string, wordLimit: number): string {
-  const words = text.trim().split(/\s+/);
-  if (words.length <= wordLimit) return text.trim();
-  return words.slice(0, wordLimit).join(" ").trim();
-}
 
 function buildFallbackChecklist(rec: BriefRecommendation, leverKeywords: string[]): string[] {
   const lever = leverKeywords[0] ?? rec.interventionType.toLowerCase();

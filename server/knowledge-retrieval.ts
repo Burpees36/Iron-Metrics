@@ -1,6 +1,7 @@
 import { storage } from "./storage";
 import { generateEmbedding } from "./knowledge-ingestion";
 import type { BriefRecommendation } from "./predictive";
+import { sentenceViolatesScope } from "./scope-rules";
 
 const INTERVENTION_TO_SEARCH: Record<string, { query: string; tags: string[] }> = {
   "New Member Onboarding Touchpoints": { query: "new member onboarding first 90 days retention touchpoints coach check-in", tags: ["onboarding", "retention"] },
@@ -157,8 +158,10 @@ export async function groundRecommendations(
       if (chunks.length === 0) continue;
 
       const sentences = extractActionableSentences(chunks, 6);
-      const detailAugmentation = buildDetailAugmentation(sentences);
-      const executionStandard = buildExecutionStandard(sentences);
+      const scopedSentences = sentences.filter(s => !sentenceViolatesScope(s, rec));
+      if (scopedSentences.length === 0) continue;
+      const detailAugmentation = buildDetailAugmentation(scopedSentences);
+      const executionStandard = buildExecutionStandard(scopedSentences);
 
       if (!detailAugmentation && !executionStandard) continue;
 
