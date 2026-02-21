@@ -1680,27 +1680,60 @@ function generateStrategicBrief(
 
   let stabilityVerdict: string;
   let stabilityLevel: "strong" | "moderate" | "fragile";
+
+  const { summary } = memberPredictions;
+  const hasEarlyChurnProblem = memberPredictions.members.filter(m => m.tenureDays <= 90 && (m.engagementClass === "drifter" || m.engagementClass === "at-risk" || m.engagementClass === "ghost")).length > 2;
+
   if (latestRsi >= 80 && gymChurnRate <= 5) {
     stabilityLevel = "strong";
-    stabilityVerdict = "Your gym is in a strong position. Retention is working, revenue is predictable, and your community is stable. Now deepen it — invest in coaching development and don't coast.";
+    if (gymChurnRate <= 3) {
+      stabilityVerdict = "Retention is locked in. Your members are staying, referring others, and building the community that makes this gym resilient. You have earned the right to invest forward — deepen coaching quality, introduce quarterly goal reviews for every member, and build the identity-level connection that turns 14-month members into 24-month members.";
+    } else {
+      stabilityVerdict = "Your gym is stable and your retention system is working. The foundation is solid. Now move from the Safety Net to the Engagement Engine: structured goal reviews every 90 days, visible progress tracking, and community events that build bonds beyond the workout. The difference between 5% and 3% churn is the difference between treading water and compounding growth.";
+    }
   } else if (latestRsi >= 60 && gymChurnRate <= 7) {
     stabilityLevel = "moderate";
-    stabilityVerdict = "Your gym is functional but not fortified. The numbers are acceptable, but one bad month — a coaching change, a competitor opening, a seasonal dip — could expose the cracks. Now is the time to strengthen, while you have margin.";
+    if (hasEarlyChurnProblem) {
+      stabilityVerdict = "Your gym is functional but your early-member journey has gaps. Members in their first 90 days are disengaging at a higher rate than they should. Without structured onboarding, average retention is roughly 78 days. With it, retention extends to 8 months. Prioritize: a personal check-in after every new member's first week, a goal-setting session by day 30, and a 90-day progress review. These three touchpoints change everything.";
+    } else {
+      stabilityVerdict = "Your gym is holding, but it is not fortified. The numbers are acceptable today, but one bad month — a coaching change, a competitor opening, a seasonal dip — could expose the cracks. The leaky bucket is real: at your current churn rate, you are replacing members just to stay flat. Now is the time to strengthen, while you have margin. Start with attendance-based outreach for anyone missing 14 or more days, and quarterly goal reviews for every active member.";
+    }
   } else {
     stabilityLevel = "fragile";
-    stabilityVerdict = "Your gym is in a tough spot. Revenue is volatile, retention is leaking, and your membership base isn't building the loyalty that creates resilience. Start with the fundamentals: define your standards, connect individually with your members, and build trust. Every month without action makes the next month harder.";
+    if (gymChurnRate > 7) {
+      stabilityVerdict = `Your churn rate is above 7%. At this level, you need ${Math.ceil(activeMemberCount * gymChurnRate / 100)} new members every month just to stay flat — that is unsustainable. Fix the leak before investing in acquisition. Three non-negotiable steps: first, flag every member who has not attended in 14 days and reach out personally within 48 hours. Second, schedule a goal review with every member this month — show them their progress and set 3 new targets. Third, launch a weekly Bright Spots ritual to build the emotional investment that makes leaving feel like a loss. Every month without these systems costs you members you already paid to acquire.`;
+    } else {
+      stabilityVerdict = "Your gym is in a tough spot. Revenue is volatile, retention is leaking, and your membership base has not built the loyalty that creates resilience. Start with the Safety Net: track attendance daily and flag anyone absent 14 or more days for immediate outreach. Then build upward — goal reviews every 90 days, a recognition culture that celebrates every milestone, and consistent coaching quality across every class. The path from fragile to stable is sequential: catch the drifters first, then give them reasons to stay, then make this gym part of who they are.";
+    }
   }
 
-  // Executive summary
-  const { summary } = memberPredictions;
   const totalRevAtRisk = summary.totalRevenueAtRisk;
   const annualRisk = totalRevAtRisk * 12;
+  const retainOneMonthValue = activeMemberCount > 0 ? Math.round(gymArm * activeMemberCount * 0.01) : 0;
 
   let executiveSummary: string;
   if (summary.totalAtRisk === 0) {
-    executiveSummary = `All ${activeMemberCount} active members are in good shape. No immediate risk. Focus on community and referrals.`;
+    executiveSummary = `All ${activeMemberCount} active members are engaged. No immediate risk detected. This is the moment to invest forward — quarterly goal reviews to deepen commitment, community events to build referral momentum, and coaching development to lock in consistency. Every 1% improvement in retention adds roughly $${retainOneMonthValue.toLocaleString()}/month in protected revenue.`;
   } else {
-    executiveSummary = `${summary.totalAtRisk} of ${activeMemberCount} members are showing signs they might leave, putting $${totalRevAtRisk.toLocaleString()}/month ($${annualRisk.toLocaleString()}/year) at risk. ${summary.urgentInterventions > 0 ? `${summary.urgentInterventions} need action this week.` : "All can be addressed through structured outreach this month."} The most common issue: ${summary.topRiskDriver}.`;
+    const ghostCount = memberPredictions.members.filter(m => m.engagementClass === "ghost").length;
+    const newAtRisk = memberPredictions.members.filter(m => m.tenureDays <= 90 && (m.engagementClass === "drifter" || m.engagementClass === "at-risk" || m.engagementClass === "ghost")).length;
+
+    let urgencyLine: string;
+    if (summary.urgentInterventions > 0) {
+      urgencyLine = `${summary.urgentInterventions} need personal outreach this week — a direct text or call from a coach, not an automated message.`;
+    } else {
+      urgencyLine = "All can be addressed through structured outreach this month.";
+    }
+
+    let contextLine = "";
+    if (ghostCount > 0) {
+      contextLine += ` ${ghostCount} member${ghostCount > 1 ? "s have" : " has"} gone silent — no attendance in 30+ days. After 14 days without a class, the probability of cancellation rises sharply.`;
+    }
+    if (newAtRisk > 0) {
+      contextLine += ` ${newAtRisk} at-risk member${newAtRisk > 1 ? "s are" : " is"} in the first 90 days — the highest-risk window. Without intervention, this is where most gyms lose people.`;
+    }
+
+    executiveSummary = `${summary.totalAtRisk} of ${activeMemberCount} members are showing signs of disengagement, putting $${totalRevAtRisk.toLocaleString()}/month ($${annualRisk.toLocaleString()}/year) at risk. ${urgencyLine}${contextLine} The most common driver: ${summary.topRiskDriver}.`;
   }
 
   // ═══════════════════════════════════════════════════════════════

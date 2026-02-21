@@ -838,22 +838,22 @@ function FlaggedMemberCard({ member: m, gymId, monthDate }: { member: AtRiskMemb
 function getRiskReason(member: AtRiskMember): { label: string; description: string } {
   if (member.riskCategory === "disengaging") {
     if (member.riskLabel === "No class 30+ days")
-      return { label: "No class 30+ days", description: "This member hasn't attended a class in over a month. The routine is broken. A personal text or call from a coach can re-engage them before they decide to cancel." };
+      return { label: "No class 30+ days", description: "This member has not attended a class in over a month. After 14 days without a class, the probability of cancellation rises sharply. At 30+ days, the routine is broken. A personal text or call from their coach — not an automated message — asking how they are doing and inviting them to a specific class can re-engage them before the decision to cancel is made." };
     if (member.riskLabel === "No class 14+ days")
-      return { label: "No class 14+ days", description: "Two weeks without a class. The habit is slipping. A quick check-in now — asking how they're doing, suggesting a class — can pull them back in." };
+      return { label: "No class 14+ days", description: "Two weeks without a class. This is the critical threshold where disengagement accelerates. Reach out personally within 48 hours: ask how they are doing, reference something specific about their progress, and suggest a class time. Members who receive a personal coach check-in at this stage are significantly more likely to return." };
     if (member.riskLabel === "No attendance recorded")
-      return { label: "No attendance recorded", description: "No class attendance on record for this member. They may be paying but not showing up — the most silent form of disengagement." };
+      return { label: "No attendance recorded", description: "No class attendance on record. This member may be paying but not showing up — the most silent form of disengagement. Schedule a goal review: show them their progress, set 3 specific targets for the next 90 days, and agree on a weekly attendance commitment. The goal review creates a psychological contract that reactivates engagement." };
     if (member.riskLabel === "Never contacted")
-      return { label: "Never contacted", description: "This member has been around a while but has never received a personal outreach. They may feel invisible. A single check-in can change the trajectory." };
+      return { label: "Never contacted", description: "This member has never received a personal outreach. They may feel invisible. One of the five pillars of retention is Fame — members need to feel seen and valued. A single personal check-in, asking about their goals and how the gym fits their life, can shift the entire trajectory. Schedule a goal review this week." };
     if (member.riskLabel === "Silent 60+ days")
-      return { label: "Silent 60+ days", description: "No contact in over 2 months. This member is quietly disengaging. A direct, personal reconnection is urgent before they make the decision to cancel." };
-    return { label: "Drifting", description: "No contact in 30+ days. The connection is fading. A coach check-in or personal text now can prevent a slow slide toward cancellation." };
+      return { label: "Silent 60+ days", description: "No contact in over 2 months. This member is quietly disengaging. At this stage, a direct and personal reconnection is the only effective intervention. Call them — not a text, a call. Reference their history, express that they are missed, and offer a specific re-entry path: a class with their favorite coach, a goal-setting session, or an invitation to a community event." };
+    return { label: "Drifting", description: "No contact in 30+ days. The connection is fading. Without intervention, drifters become ghosts. A coach check-in now — referencing a specific milestone or asking about a goal — can prevent the slow slide toward cancellation. Members who feel a coach knows their name and cares about their progress stay dramatically longer." };
   }
   if (member.tenureDays <= 14)
-    return { label: "First 2 weeks", description: "Joined in the last 2 weeks. Highest cancellation risk — personal outreach now has the greatest impact." };
+    return { label: "First 2 weeks", description: "Joined in the last 2 weeks — the highest-risk window. Without structured onboarding, average retention is roughly 78 days. Ensure they have been greeted by name, introduced to at least 3 other members, and have a clear schedule for their first week. The target: 3 classes in the first 7 days. A personal follow-up after their second class asking how they felt is one of the highest-impact touchpoints you can make." };
   if (member.tenureDays <= 30)
-    return { label: "First month", description: "In their first month. Still deciding if this gym is the right fit. Check-ins and class introductions reduce drop-off." };
-  return { label: "Pre-habit window", description: "30-60 days in. Exercise habits haven't solidified yet. Social connections and routine consistency are key to retention." };
+    return { label: "First month", description: "In their first month. Still deciding if this gym is the right fit. By week 2, schedule a goal-setting session to define 3 specific, measurable targets. By day 30, conduct a check-in to review initial progress and address any barriers. Members who complete a goal review within their first 90 days are 3 times more likely to reach the 6-month mark." };
+  return { label: "Pre-habit window", description: "30 to 90 days in. The novelty is wearing off and exercise habits have not solidified yet. This is where visible progress tracking and social connections determine whether they stay. Celebrate any wins — a PR, an attendance streak, mastering a new movement. Introduce them to a workout buddy. Schedule their first quarterly goal review to show measurable progress and set the next targets." };
 }
 
 function RiskTierBadge({ current }: { current: string }) {
@@ -1175,6 +1175,58 @@ function TenureDisplay({ tenureMonths, tenureDays }: { tenureMonths: number; ten
   );
 }
 
+function getRecommendedAction(member: EnrichedMember): string {
+  const isHighRisk = member.risk === "high";
+  const hasNeverBeenContacted = member.daysSinceContact === null;
+  const isLongSilent = member.daysSinceContact !== null && member.daysSinceContact > 60;
+  const isDrifting = member.daysSinceContact !== null && member.daysSinceContact > 30;
+
+  if (member.tenureDays <= 14) {
+    if (hasNeverBeenContacted) {
+      return "This member is in their first two weeks — the highest-risk window. Send a personal follow-up today asking how their first classes felt. Introduce them to at least 3 other members by name. The target is 3 classes in their first 7 days. Members who complete structured onboarding extend their average retention from 78 days to 8 months.";
+    }
+    return "First two weeks. Ensure they have a clear schedule recommendation, have been introduced to other members, and feel welcomed beyond the workout. A 30-day goal-setting session should already be on the calendar. Early wins — a PR, a skill milestone, a coach callout — build the momentum that turns trial into commitment.";
+  }
+
+  if (member.tenureDays <= 30) {
+    return "In their first month. Schedule a goal-setting session this week to define 3 specific, measurable targets. Ask what is working and what could be better. Members who complete a goal review within their first 90 days are 3 times more likely to reach the 6-month mark. Address any scheduling friction or social discomfort now, before it becomes a cancellation reason.";
+  }
+
+  if (member.tenureDays <= 90) {
+    if (isHighRisk) {
+      return "In the first 90 days and showing risk signals. The novelty is wearing off and the habit has not solidified. Schedule a goal review immediately — show them any progress they have made, set 3 new targets, and pair them with a workout buddy. Celebrate any wins publicly. Without intervention in this window, most gyms lose these members.";
+    }
+    return "In the pre-habit window. Visible progress tracking and social connections determine whether they stay. If their first quarterly goal review has not happened yet, schedule it now. Show them measurable improvement, celebrate milestones, and deepen their connection to at least one coach and one other member.";
+  }
+
+  if (member.tenureDays <= 270) {
+    if (isHighRisk || isLongSilent) {
+      return "5 to 9 months in — the identity formation period. This member's connection to the gym is weakening. The gym needs to become part of who they are, not just where they work out. A direct call from their coach, referencing their progress and goals, is the intervention. Invite them to a community event or challenge. Ask if their schedule still works. Compatibility and belonging are the levers here.";
+    }
+    if (isDrifting) {
+      return "Mid-tenure member showing signs of drift. Schedule a goal review to reset motivation. Ask what is working and what is not. Introduce a new challenge — a skill progression, a competition, or a community event. Members at this stage need to feel that the gym sees them as an individual, not just a membership number.";
+    }
+    return "Established member in the engagement window. Ensure quarterly goal reviews are happening consistently. Look for opportunities to deepen their involvement: community events, bring-a-friend invitations, or small leadership roles. Members who refer someone stay approximately 6 months longer.";
+  }
+
+  if (member.tenureDays <= 365) {
+    if (isHighRisk) {
+      return "Approaching the critical one-year mark with risk signals. This is a pivotal moment — a goal review showing tangible progress over the year is essential. Show them how far they have come since joining. Set ambitious but achievable goals for year two. Consider offering a leadership opportunity or competition entry. The identity-level connection that keeps members beyond year one requires demonstrating that this gym is invested in their future.";
+    }
+    return "Approaching the one-year mark. Conduct a comprehensive annual review: celebrate their journey, show measurable progress, and set year-two goals. This is the moment to invite deeper engagement — competition participation, a referral, or a mentorship role with newer members. Members who cross the one-year threshold with clear forward direction tend to stay for 2 or more years.";
+  }
+
+  if (isHighRisk || isLongSilent) {
+    return "Long-tenure member showing risk signals. These members are the hardest to replace and the most valuable to retain. A direct, personal call from their coach is non-negotiable. Acknowledge their history with the gym, ask what has changed, and offer flexibility — schedule adjustments, a membership pause, or a different class format. Losing a member with this much tenure costs far more than the effort to save them.";
+  }
+
+  if (hasNeverBeenContacted) {
+    return "Long-standing member who has never received personal outreach. They have stayed on their own momentum, but that is not a system. A goal review that acknowledges their loyalty, celebrates their milestones, and sets forward-looking targets converts a passive member into an ambassador. Ask if they would be open to mentoring a newer member or bringing a friend to a workout.";
+  }
+
+  return "Established member in good standing. Ensure quarterly goal reviews continue, celebrate milestones, and look for referral opportunities. Members who feel seen, challenged, and connected to the community are the ones who stay for years and bring others with them.";
+}
+
 function MemberDrawer({ member, gymId, onClose }: { member: EnrichedMember | null; gymId: string; onClose: () => void }) {
   const { toast } = useToast();
   const [note, setNote] = useState("");
@@ -1278,6 +1330,15 @@ function MemberDrawer({ member, gymId, onClose }: { member: EnrichedMember | nul
                         {r}
                       </Badge>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {member.status === "active" && (
+                <div className="space-y-2">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Recommended Action</p>
+                  <div className="p-3 rounded-md bg-muted/50 text-sm leading-relaxed" data-testid="text-recommended-action">
+                    {getRecommendedAction(member)}
                   </div>
                 </div>
               )}
