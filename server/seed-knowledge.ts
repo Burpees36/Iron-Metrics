@@ -413,6 +413,170 @@ What smaller affiliates can learn from CFSB includes prioritizing coaching quali
 
 The counterintuitive lesson from CFSB is that sometimes the best growth strategy is to stop focusing on growth and start focusing on making every existing member's experience extraordinary. When you do that, growth takes care of itself.`,
   },
+  {
+    sourceSlug: "twobrain-never-lose-client",
+    sourceName: "Two-Brain Business",
+    sourceUrl: "https://twobrainbusiness.com/never-lose-a-client-again/",
+    title: "Never Lose a Client Again: The Client Journey Map",
+    externalId: "twobrain-never-lose-client",
+    content: `Client retention follows a predictable journey with specific risk windows. The five pillars of retention are Results, Fame, Compatibility, Consistency, and Referrals. Each pillar addresses a different emotional and practical need that keeps members engaged long-term.
+
+Results means clients need measurable evidence they are improving. Without tangible markers of progress, members default to "I can do this at home." Quarterly goal-setting sessions are the primary tool. These sessions review strength gains, body composition changes, attendance frequency, and skill milestones. The coach asks: "Are we still helping you reach your goals?" If the answer is ambiguous, the member is at risk.
+
+Fame means members need to feel seen and celebrated. Public recognition through Bright Spots Friday, social media features, PR bells, and milestone celebrations creates emotional investment. A member who has been publicly celebrated for a first pull-up or a 100th class is psychologically harder to lose. Fame is not vanity. It is validation that the gym values them as a person.
+
+Compatibility means the gym experience must fit the member's life. Class schedules must accommodate work patterns. Coaching style must match communication preferences. The social environment must feel welcoming rather than cliquish. When compatibility breaks down, usually through a schedule change, coach conflict, or feeling like an outsider, the member starts looking for alternatives.
+
+Consistency means delivering the same quality experience every session regardless of which coach is leading. Members tolerate variation in workout design but not in coaching quality. If one coach provides individualized attention and another ignores half the class, the inconsistency creates dissatisfaction. Standard operating procedures for class flow, member interaction, and scaling ensure consistency.
+
+Referrals are both a retention driver and a growth lever. Members who refer someone stay approximately 6 months longer. The act of recommending the gym creates psychological commitment. Build referral opportunities into the member journey at natural high points: after a PR, completing a challenge, or reaching a milestone. Bring-a-friend workouts lower the barrier for members to share the experience.
+
+The client journey has specific risk windows where intervention is most critical. Months 0 to 3 represent the onboarding window where without structured ramp-up, members feel overwhelmed and leave. Months 2 to 5 are when novelty wears off and members need visible progress milestones. Months 5 to 9 represent the identity formation period where the gym must become part of who they are, not just where they work out. Months 9 to 12 are the critical year-one mark where a goal review showing tangible progress is essential. Years 1 to 2 require deepening the relationship through leadership opportunities, competition participation, and community investment.
+
+The financial math is stark. Moving average retention from 7.8 months to 18.6 months, which the industry achieved between 2023 and 2024, adds approximately $45,000 per year in owner income. Every additional month of retention across a 120-member gym at $175 per month equals $21,000 in annual revenue with zero acquisition cost.`,
+  },
+  {
+    sourceSlug: "twobrain-class-economics",
+    sourceName: "Two-Brain Business",
+    sourceUrl: "https://twobrainbusiness.com/crossfit-class-economics/",
+    title: "The Real Economics of a CrossFit Class",
+    externalId: "twobrain-class-economics",
+    content: `Industry data from over 2,000 gyms reveals the real economics behind every CrossFit class session. The average class has 6.6 attendees generating $10.94 gross revenue per attendee. With average coach pay at $32.50 per class hour, a class needs at minimum 6 attendees to break even before facility and overhead costs.
+
+The class profitability formula is straightforward. Total class revenue equals attendees multiplied by per-class revenue per member. Per-class revenue depends on monthly membership rate divided by average monthly visits. If a member pays $175 per month and attends 14 times, each class visit generates $12.50 in revenue. A class with 10 attendees produces $125 in revenue against $32.50 in coach costs, yielding $92.50 gross margin per class.
+
+Classes below 6 attendees are subsidized by the rest of the schedule. This has strategic implications. Early morning and late evening classes often run below breakeven but serve a retention purpose by accommodating members who cannot attend peak hours. Cutting unprofitable time slots may save short-term costs but risks losing members who depend on those times.
+
+The relationship between class attendance and retention is direct. Members who attend 3 or more times per week have dramatically higher retention than those attending once or twice. The goal is not just filling classes but increasing per-member attendance frequency. Strategies include scheduling accountability through workout buddies, progressive programming that rewards consistency, coach outreach when attendance drops below a member's normal pattern, and making each class feel like a unique experience worth showing up for.
+
+Class size management affects both profitability and member experience. Classes above 20 members reduce coaching quality and individual attention. Classes below 4 members feel empty and lack community energy. The target zone is 8 to 16 members per class. If classes consistently exceed 16, add another time slot rather than cramming more members in. If classes consistently fall below 6, consider consolidating time slots and communicating the change as an upgrade to member experience.
+
+Revenue diversification beyond group classes is essential. Personal training at $60 to $100 per session generates 3 to 5 times the revenue per hour compared to group coaching. Nutrition coaching adds $100 to $300 per month per participant. Specialty programs such as competition training, youth programs, and masters programming create additional revenue streams. The target Average Revenue per Member should be $205 or higher when all services are included.`,
+  },
+  {
+    sourceSlug: "twobrain-churn-math",
+    sourceName: "Two-Brain Business",
+    sourceUrl: "https://twobrainbusiness.com/gym-churn-rate/",
+    title: "Churn Math: Why 3% vs 5% Is Life or Death",
+    externalId: "twobrain-churn-math",
+    content: `The difference between 3 percent and 5 percent monthly churn is the difference between a thriving gym and a struggling one. For a 122-member gym, 5 percent monthly churn means losing 6 members per month and needing 6 new sign-ups just to stay flat. At 3 percent churn, you lose 4 members and need only 4 replacements. Those 2 fewer cancellations per month equal 24 retained members per year, worth approximately $50,400 in annual revenue at $175 per month.
+
+The compounding effect of churn reduction is dramatic. A gym losing 5 percent per month retains only 54 percent of its members after 12 months. At 3 percent, retention reaches 69 percent after 12 months. The difference means a 122-member gym has either 66 or 84 original members remaining after one year. Those 18 additional retained members generate $37,800 in revenue without any marketing spend.
+
+Most gym owners focus almost exclusively on acquisition because adding members feels productive. But every dollar spent on retention generates higher returns than the same dollar spent on marketing. Acquiring a new member costs $200 to $300 in marketing, sales time, and onboarding effort. Retaining an existing member for one additional month costs nearly nothing if you have systems in place.
+
+The retention system that moves churn from 5 to 3 percent requires four elements. First, an early warning detection system that flags members whose attendance drops below their normal pattern. The key threshold is 14 days without a class visit, at which point disengagement is likely without intervention. Second, a structured outreach protocol with escalating touchpoints from automated text to personal coach call to goal review session. Third, quarterly goal reviews that provide measurable proof of progress and reset motivation. Fourth, community integration practices that build social bonds making the gym harder to leave.
+
+Length of Engagement (LEG) is a more useful metric than monthly churn rate because it reveals where members are leaving. If average LEG is 8 months, the problem is in the 3 to 6 month window. If LEG is 14 months, members are surviving the first year but disengaging after. Each window requires a different intervention. Track LEG by cohort to measure whether operational changes are actually improving retention over time.
+
+The target benchmarks from industry data: monthly churn under 3 percent, Length of Engagement above 14 months with top performers reaching 20 or more months, and annual retention rate above 75 percent. Gyms consistently hitting these numbers report owner benefit above $100,000 per year.`,
+  },
+  {
+    sourceSlug: "twobrain-retention-system",
+    sourceName: "Two-Brain Business",
+    sourceUrl: "https://twobrainbusiness.com/gym-retention-strategies/",
+    title: "Retention System: From Leaky Bucket to Stable Growth",
+    externalId: "twobrain-retention-system",
+    content: `The gym growth journey has four stages, and at every stage retention is the primary lever for financial stability. Stage 1 owners earning under $18,000 per year should focus exclusively on fixing retention leaks before spending on marketing. Stage 2 owners earning under $100,000 should have retention systems locked before scaling acquisition.
+
+The leaky bucket metaphor is precise. Most gyms operate with a 5 percent monthly churn rate, meaning they lose half their membership base every year. Pouring marketing dollars into acquiring new members while losing them at 5 percent per month is like filling a bucket with holes. Fix the holes first.
+
+The proven retention system has three tiers. Tier 1 is the Safety Net, which includes automated attendance tracking with alerts when a member misses their usual pattern, a 48-hour personal outreach protocol for flagged members, and a structured on-ramp or foundations program that extends average retention from 78 days to 8 months. These are non-negotiable baseline systems.
+
+Tier 2 is the Engagement Engine, which includes quarterly goal reviews measuring strength, body composition, attendance, and skills. Bright Spots Friday and public recognition programs create emotional investment. Structured progression pathways give members visible milestones. Community events at minimum quarterly create social bonds beyond the workout. These systems move average LEG from 8 months to 14 or more months.
+
+Tier 3 is the Identity Lock, which includes member leadership opportunities such as welcoming new members, organizing events, and mentoring. Competition participation including the CrossFit Open and local throwdowns builds athletic identity. Skill progression tracking through gymnastics progressions, lifting milestones, and benchmark retests gives long-term direction. Referral programs create psychological commitment where the member becomes an ambassador. These systems are what create 20-plus-month retention.
+
+The critical insight is that each tier addresses a different psychological need. The Safety Net catches members before they drift away. The Engagement Engine gives them reasons to stay. The Identity Lock makes the gym part of who they are, making departure feel like losing part of themselves.
+
+Implementation priority should follow the tiers sequentially. Do not invest in Identity Lock activities while the Safety Net is broken. A gym without attendance tracking and outreach protocols will not benefit from referral programs because members are leaving before reaching the referral stage.
+
+The financial trajectory: Tier 1 alone can reduce churn from 5 percent to 4 percent, adding approximately $25,000 in annual revenue for a 120-member gym. Tier 2 drops churn to 3 percent, adding another $25,000. Tier 3 pushes toward 2 percent churn, where annual revenue gains compound dramatically because the member base is growing rather than just stabilizing.`,
+  },
+  {
+    sourceSlug: "twobrain-goal-reviews",
+    sourceName: "Two-Brain Business",
+    sourceUrl: "https://twobrainbusiness.com/goal-reviews/",
+    title: "Goal Reviews: The Highest-Leverage Retention Conversation",
+    externalId: "twobrain-goal-reviews",
+    content: `The quarterly goal review is the single highest-leverage activity for member retention. Industry data shows that members who receive regular goal reviews stay 2 to 3 times longer than those who do not.
+
+The goal review is a 15 to 20 minute one-on-one meeting between a coach and a member, conducted every 90 days. It is not a sales conversation. It is a progress audit and motivational reset. The structure follows a proven framework.
+
+Step 1 is reviewing progress against previous goals. Pull the member's data: attendance frequency, PRs, body composition changes, and any tracked metrics. Show them tangible evidence of improvement. Even small gains matter. A member who added 5 pounds to their back squat needs to hear that this is real, measurable progress.
+
+Step 2 is exploring satisfaction and obstacles. Ask open-ended questions: "What is working well for you right now?" and "What is one thing that could be better?" This surfaces issues before they become cancellation reasons. Common concerns include scheduling conflicts, feeling plateaued, social discomfort, and coach communication style. Each can be addressed if caught early.
+
+Step 3 is setting new goals. Goals should be specific, measurable, and achievable within 90 days. Examples: "Attend 3 times per week consistently," "Get your first strict pull-up," "Add 20 pounds to your deadlift," or "Complete a nutrition challenge." The member should leave with exactly 3 goals written down.
+
+Step 4 is prescribing the path. Based on the goals, recommend specific actions. This might include staying with the current program, adding a personal training session per week, joining a specialty program, or adjusting class times. This is where additional services can be introduced naturally, not as an upsell but as a genuine prescription for their goals.
+
+The retention impact is measurable. Members who complete a goal review within their first 90 days are 3 times more likely to reach the 6-month mark. Members who complete 4 consecutive quarterly reviews almost never cancel. The review creates a psychological contract: "My coach knows my goals, is tracking my progress, and cares whether I succeed."
+
+Implementation requires scheduling discipline. Block time on the calendar for goal reviews. Target completing all active members within a 2-week window each quarter. Use a simple tracking spreadsheet or CRM to ensure no member is missed. Train all coaches on the framework so the experience is consistent regardless of who conducts the review.
+
+The goal review also generates actionable data for the gym owner. Aggregating common concerns, requested services, and satisfaction signals provides a real-time pulse on gym health. If multiple members mention the same issue, it is a systemic problem requiring attention.`,
+  },
+  {
+    sourceSlug: "twobrain-sell-by-chat",
+    sourceName: "Two-Brain Business",
+    sourceUrl: "https://twobrainbusiness.com/sell-chat-gym-owners/",
+    title: "Acquisition Efficiency: Sell by Chat and Lead Conversion",
+    externalId: "twobrain-sell-by-chat",
+    content: `The sell-by-chat acquisition strategy has been tested extensively, and while it can work, the return on time invested is modest. Professional chat teams initiating 40 conversations per day with qualified leads in a high-affinity Facebook group yielded 6 new clients over 3 months, approximately a 2 percent close rate.
+
+The sell-by-chat process follows four steps. Step 1 is starting a non-salesy conversation with a warm lead, usually someone who followed the gym on social media or engaged with a post. The opening message acknowledges them without pitching. Step 2 is discovering their current fitness status and motivation through questions. Step 3 is inviting them to a consultation or workout. Step 4 is making a prescription and presenting the appropriate membership option.
+
+The close rate benchmarks for this approach are 3 to 5 percent for direct sales via direct message, and 12 to 15 percent when the goal is getting prospects to book a free consultation first. The math matters: to close 5 new members per month at a 5 percent conversion rate, you need to start 100 chat conversations per month.
+
+This strategy should only be prioritized by gym owners who have already mastered higher-return activities. The priority hierarchy for acquisition time is: first, referral programs through existing members because referred leads convert at the highest rate and referred members stay longest. Second, content marketing through blog, social media, and email list building, which creates authority and trust. Third, affinity marketing through local partnerships, community events, and sponsorships. Fourth, direct outreach including sell-by-chat and networking. Fifth, paid advertising, which should only be added once sales conversion metrics are solid.
+
+The critical acquisition insight is that most gym owners have an acquisition problem because they have a retention problem. If monthly churn is 5 percent, you need 6 new members per month just to stay flat for a 120-member gym. At 3 percent churn, you need only 4. Those 2 fewer required acquisitions per month compound into significant savings on marketing time and dollars.
+
+The No Sweat Intro remains the highest-converting sales tool. Industry benchmark is 70 to 80 percent close rate from consultation to membership. Speed to lead is critical: responding to inquiries within 5 minutes increases conversion by 400 percent compared to 30-minute response time. The follow-up sequence for non-converters should include a thank-you text within 2 hours, a follow-up call at 48 hours, a value-add email at 1 week, and a final outreach at 2 weeks.`,
+  },
+  {
+    sourceSlug: "twobrain-bright-spots",
+    sourceName: "Two-Brain Business",
+    sourceUrl: "https://twobrainbusiness.com/bright-spots-friday/",
+    title: "Bright Spots Friday and Community Depth Practices",
+    externalId: "twobrain-bright-spots",
+    content: `Bright Spots Friday is a community-building practice that has become one of the most widely adopted retention tools across CrossFit affiliates. Every Friday, members share a positive moment from their week, whether fitness-related or personal. The practice creates a culture of positivity, vulnerability, and mutual support.
+
+The psychological mechanism behind Bright Spots Friday is that it shifts the gym culture from performance-focused to person-focused. When a member shares that their bright spot was "making it to the gym 4 times this week despite a brutal work schedule," the community validates their effort. This creates belonging that no PR bell or leaderboard can replicate.
+
+Community depth practices extend beyond Bright Spots Friday. Member milestone celebrations recognize attendance streaks, gym anniversaries, and personal achievements. The CrossFit Open transforms from a competition into a community bonding event through Friday Night Lights where members cheer each other through workouts. Charity workouts like Murph on Memorial Day and Hero WODs create shared experiences with emotional weight. Social events including gym barbecues, potlucks, and holiday parties build relationships beyond the gym floor.
+
+Seasonal event programming maintains community energy throughout the year. January through March includes New Year goal-setting workshops and the Open prep period. April through June includes spring nutrition challenges, outdoor workouts, and memorial day events. July through September includes summer socials, bring-a-friend events, and back-to-school themed programming. October through December includes fall throwdowns, Thanksgiving gratitude workouts, and holiday celebrations.
+
+The financial impact of community depth is significant. Members who report feeling "part of a community" stay an average of 3 times longer than those who describe their experience as "just a workout." In a gym with 120 members at $175 per month, extending average retention by just 3 months through community investment adds approximately $63,000 in annual revenue.
+
+The community moat is the strongest competitive advantage a CrossFit gym has. No home gym, online program, or big-box facility can replicate the genuine human connections formed through shared struggle, celebration, and vulnerability. Gym owners who invest systematically in community depth create a barrier to exit that no competitor can overcome.
+
+Common mistakes in community building include relying on organic social dynamics without intentional facilitation, creating cliques that make newer members feel excluded, over-emphasizing competitive culture that alienates the majority of members who are fitness enthusiasts not competitors, and treating social events as optional extras rather than core retention investments.`,
+  },
+  {
+    sourceSlug: "twobrain-coach-development",
+    sourceName: "Two-Brain Business",
+    sourceUrl: "https://twobrainbusiness.com/gym-coach-development/",
+    title: "Coach Development as a Retention Multiplier",
+    externalId: "twobrain-coach-development",
+    content: `Industry data shows that gyms investing in formal coach development see an average 15 percent increase in member retention within 6 months. Coaching quality is the primary delivery mechanism for every retention strategy. Without consistently excellent coaching, no system, program, or community event will overcome the daily experience of mediocre class leadership.
+
+The coach development framework has four layers. Layer 1 is technical competency. Every coach must demonstrate proficiency in movement assessment, scaling decisions, and class time management. This is the minimum bar. A coach who cannot appropriately scale a workout for a 55-year-old beginner is a retention liability.
+
+Layer 2 is connection quality. Coaches must know every member's name, goals, and at least one personal detail. They must greet members individually before class. They must follow up after missed sessions. They must adjust their communication style to match different member personalities. This layer transforms coaching from instruction into relationship.
+
+Layer 3 is consistency across the coaching staff. Every class should feel like the same gym regardless of which coach is leading. This requires documented class flow standards, shared scaling frameworks, and regular coaching meetings where the team aligns on approach. Inconsistency between coaches is one of the top reasons members cite for canceling at gyms with multiple coaches.
+
+Layer 4 is leadership development. Coaches who see a career path stay longer and invest more in their role. This means opportunities for advancement including lead coach, head coach, and program director. Continuing education support through certifications, seminars, and mentorship creates growth. Revenue-sharing models for personal training and specialty programs align coach incentives with gym success.
+
+The direct relationship between coach quality and financial outcomes is measurable. Classes led by higher-rated coaches have higher attendance rates. Members who train primarily with coaches they rate highly have longer Length of Engagement. Coach turnover directly correlates with member churn because members form relationships with their coaches.
+
+Common coaching development mistakes include promoting the best athlete rather than the best communicator, providing no feedback loop through video review, peer observation, or member surveys, paying coaches so poorly they must treat coaching as a side job, and allowing coaching quality to vary dramatically across the schedule creating "good class" and "bad class" reputations.
+
+The investment required is modest: weekly 30-minute coaching meetings, monthly video reviews of one class per coach, quarterly performance conversations, and an annual education budget of $500 to $1,000 per coach. The return in retained membership revenue dwarfs the investment.`,
+  },
 ];
 
 export async function seedKnowledgeBase(): Promise<{
