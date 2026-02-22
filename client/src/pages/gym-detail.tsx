@@ -680,7 +680,7 @@ function ReportCard({ report, gymId, atRiskMembers, monthDate }: { report: Metri
           <p className="text-xs font-medium text-primary font-mono">{report.impact}</p>
         </div>
 
-        <div className="grid sm:grid-cols-3 gap-5">
+        <div className="grid md:grid-cols-3 gap-5">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <div className="w-6 h-6 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -688,7 +688,7 @@ function ReportCard({ report, gymId, atRiskMembers, monthDate }: { report: Metri
               </div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">What This Means</p>
             </div>
-            <p className="text-sm leading-relaxed">{report.meaning}</p>
+            <p className="text-sm leading-relaxed break-words">{report.meaning}</p>
           </div>
           <div className="space-y-2">
             <div className="flex items-center gap-2">
@@ -697,7 +697,7 @@ function ReportCard({ report, gymId, atRiskMembers, monthDate }: { report: Metri
               </div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Why It Matters</p>
             </div>
-            <p className="text-sm leading-relaxed text-muted-foreground">{report.whyItMatters}</p>
+            <p className="text-sm leading-relaxed text-muted-foreground break-words">{report.whyItMatters}</p>
           </div>
           <div className="space-y-2">
             <div className="flex items-center gap-2">
@@ -706,7 +706,7 @@ function ReportCard({ report, gymId, atRiskMembers, monthDate }: { report: Metri
               </div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">What To Do Next</p>
             </div>
-            <p className="text-sm leading-relaxed text-muted-foreground">{report.action}</p>
+            <p className="text-sm leading-relaxed text-muted-foreground break-words">{report.action}</p>
           </div>
         </div>
 

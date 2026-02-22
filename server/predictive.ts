@@ -5,7 +5,7 @@ import type { Member, MemberContact } from "@shared/schema";
 // MEMBER-LEVEL PREDICTIVE INTELLIGENCE
 // ═══════════════════════════════════════════════════════════════
 
-export type EngagementClass = "core" | "drifter" | "at-risk" | "ghost";
+export type EngagementClass = "core" | "rising" | "drifter" | "at-risk" | "ghost";
 export type InterventionType = "personal-outreach" | "goal-setting" | "community-integration" | "win-back" | "pricing-review" | "coach-connection" | "milestone-celebration" | "onboarding-acceleration";
 export type GymArchetype = "growth-accelerator" | "community-anchor" | "premium-boutique" | "turnaround-lab";
 
@@ -440,9 +440,17 @@ function computeMemberPredictions(
 
     churnProb = Math.max(0.01, Math.min(0.95, churnProb));
 
+    const hasRecentAttendance = m.lastAttendedDate
+      ? (now.getTime() - new Date(m.lastAttendedDate).getTime()) / (1000 * 60 * 60 * 24) <= 7
+      : false;
+    const recentContact = lastContactDays !== null && lastContactDays <= 14;
+    const isRising = churnProb <= 0.20 && tenureDays <= 90 && (hasRecentAttendance || recentContact);
+
     let engagementClass: EngagementClass;
     if (churnProb <= 0.15 && tenureDays > 90) {
       engagementClass = "core";
+    } else if (isRising) {
+      engagementClass = "rising";
     } else if (churnProb <= 0.30) {
       engagementClass = "drifter";
     } else if (churnProb <= 0.55) {
@@ -525,7 +533,7 @@ function computeMemberPredictions(
 
   predictions.sort((a, b) => b.churnProbability - a.churnProbability);
 
-  const classBreakdown: Record<EngagementClass, number> = { core: 0, drifter: 0, "at-risk": 0, ghost: 0 };
+  const classBreakdown: Record<EngagementClass, number> = { core: 0, rising: 0, drifter: 0, "at-risk": 0, ghost: 0 };
   let totalAtRisk = 0;
   let totalRevenueAtRisk = 0;
   let totalLtvAtRisk = 0;
@@ -2320,7 +2328,7 @@ function getEmptyIntelligence(message: string): PredictiveIntelligence {
         totalRevenueAtRisk: 0,
         totalLtvAtRisk: 0,
         avgChurnProbability: 0,
-        classBreakdown: { core: 0, drifter: 0, "at-risk": 0, ghost: 0 },
+        classBreakdown: { core: 0, rising: 0, drifter: 0, "at-risk": 0, ghost: 0 },
         urgentInterventions: 0,
         topRiskDriver: message,
         gymArchetype: "growth-accelerator",

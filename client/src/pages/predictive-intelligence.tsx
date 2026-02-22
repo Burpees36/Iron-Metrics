@@ -19,7 +19,7 @@ import {
   Brain, AlertTriangle, TrendingDown, TrendingUp, Users, DollarSign,
   Shield, ShieldAlert, ShieldCheck, Target, Zap, FileText, BarChart3,
   ChevronRight, Clock, Minus, ArrowUp, ArrowDown, CheckCircle2, Circle,
-  MessageSquare, Phone, UserCheck, CalendarDays, Search, Star, Check,
+  MessageSquare, Phone, UserCheck, CalendarDays, Search, Star, Check, Sparkles,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
@@ -815,6 +815,7 @@ function StrategicBriefView({ gymId, periodStart, brief, recommendationExecution
 function MemberAlertCard({ alert, index }: { alert: MemberAlertEnriched; index: number }) {
   const classColors: Record<string, string> = {
     core: "text-primary",
+    rising: "text-sky-600 dark:text-sky-400",
     drifter: "text-amber-600 dark:text-amber-400",
     "at-risk": "text-orange-600 dark:text-orange-400",
     ghost: "text-red-600 dark:text-red-400",
@@ -884,12 +885,13 @@ function MemberAlertCard({ alert, index }: { alert: MemberAlertEnriched; index: 
 }
 
 // ═══════════════════════════════════════════════════════════════
-// MEMBER RISK VIEW
+// MEMBER INTELLIGENCE VIEW
 // ═══════════════════════════════════════════════════════════════
 
 function MemberRiskView({ predictions, gymId }: { predictions: PredictiveIntelligence["memberPredictions"]; gymId: string }) {
   const { summary, members } = predictions;
   const [search, setSearch] = useState("");
+  const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [selectedMember, setSelectedMember] = useState<EnrichedMember | null>(null);
   const [selectedPrediction, setSelectedPrediction] = useState<MemberPrediction | null>(null);
 
@@ -902,16 +904,19 @@ function MemberRiskView({ predictions, gymId }: { predictions: PredictiveIntelli
     },
   });
 
-  const filteredMembers = members.filter(m =>
-    search === "" ||
-    m.name.toLowerCase().includes(search.toLowerCase()) ||
-    (m.email && m.email.toLowerCase().includes(search.toLowerCase()))
-  );
+  const filteredMembers = members.filter(m => {
+    const matchesSearch = search === "" ||
+      m.name.toLowerCase().includes(search.toLowerCase()) ||
+      (m.email && m.email.toLowerCase().includes(search.toLowerCase()));
+    const matchesFilter = activeFilter === null || m.engagementClass === activeFilter;
+    return matchesSearch && matchesFilter;
+  });
 
   const totalMembers = Object.values(summary.classBreakdown).reduce((a, b) => a + b, 0);
 
   const classColors: Record<string, string> = {
     core: "text-primary bg-primary/10 border-primary/20",
+    rising: "text-sky-600 dark:text-sky-400 bg-sky-500/10 border-sky-500/20",
     drifter: "text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20",
     "at-risk": "text-orange-600 dark:text-orange-400 bg-orange-500/10 border-orange-500/20",
     ghost: "text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/20",
@@ -919,9 +924,26 @@ function MemberRiskView({ predictions, gymId }: { predictions: PredictiveIntelli
 
   const classIcons: Record<string, typeof ShieldCheck> = {
     core: ShieldCheck,
+    rising: Sparkles,
     drifter: Shield,
     "at-risk": ShieldAlert,
     ghost: AlertTriangle,
+  };
+
+  const classLabels: Record<string, string> = {
+    core: "Core",
+    rising: "Rising",
+    drifter: "Drifter",
+    "at-risk": "At-Risk",
+    ghost: "Ghost",
+  };
+
+  const classTooltips: Record<string, string> = {
+    core: "Your retention foundation. These members have been here 90+ days with consistently low churn probability. They attend regularly, are engaged, and drive a significant share of your revenue. Protect them.",
+    rising: "Members showing strong early engagement signals — recent attendance, low churn risk, and building momentum in their first 90 days. These are your future Core members. Nurture them with personal attention and goal-setting.",
+    drifter: "Showing early signs of disengagement. Attendance may be slipping, or contact has lapsed. A gentle check-in now — a quick text, a coach conversation — can prevent escalation before it starts.",
+    "at-risk": "Significant risk signals detected. These members are likely considering leaving. Prioritize direct outreach this week. A personal conversation about their goals can change the trajectory.",
+    ghost: "High probability of cancellation without intervention. These members have disengaged significantly and may already be mentally out the door. Immediate, personal outreach is critical to retain them.",
   };
 
   const classDescriptions: Record<string, (count: number, total: number, members: MemberPrediction[]) => string> = {
@@ -932,6 +954,7 @@ function MemberRiskView({ predictions, gymId }: { predictions: PredictiveIntelli
       const pct = totalRevenue > 0 ? Math.round((coreRevenue / totalRevenue) * 100) : 0;
       return `Core members account for ${pct}% of revenue. These are your retention foundation.`;
     },
+    rising: (count) => `${count} member${count !== 1 ? "s" : ""} building momentum early. Strong engagement in their first 90 days — future Core members.`,
     drifter: (count) => `${count} member${count !== 1 ? "s" : ""} showing early signs of drift. Gentle re-engagement now prevents escalation.`,
     "at-risk": (count) => `${count} member${count !== 1 ? "s" : ""} showing signs they might leave. Reach out this week.`,
     ghost: (count) => `${count} member${count !== 1 ? "s" : ""} likely to cancel without direct action. Immediate outreach is critical.`,
@@ -943,6 +966,8 @@ function MemberRiskView({ predictions, gymId }: { predictions: PredictiveIntelli
     "this-month": { color: "text-amber-600 dark:text-amber-400", bgColor: "bg-amber-500/10", dotColor: "bg-amber-500", label: "This Month" },
     monitor: { color: "text-muted-foreground", bgColor: "", dotColor: "bg-muted-foreground/40", label: "Monitor" },
   };
+
+  const allClasses = ["core", "rising", "drifter", "at-risk", "ghost"] as const;
 
   const directiveSummary = (() => {
     if (summary.urgentInterventions > 0) {
@@ -960,19 +985,23 @@ function MemberRiskView({ predictions, gymId }: { predictions: PredictiveIntelli
         <p className="text-sm leading-relaxed">{directiveSummary}</p>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3" data-testid="grid-risk-summary">
-        {(["core", "drifter", "at-risk", "ghost"] as const).map((cls) => {
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3" data-testid="grid-risk-summary">
+        {allClasses.map((cls) => {
           const Icon = classIcons[cls];
           const count = summary.classBreakdown[cls] || 0;
-          const description = classDescriptions[cls](count, totalMembers, members);
+          const isActive = activeFilter === cls;
           return (
             <Tooltip key={cls}>
               <TooltipTrigger asChild>
-                <Card data-testid={`card-segment-${cls}`}>
+                <Card
+                  className={`cursor-pointer transition-all duration-200 ${isActive ? `ring-2 ring-offset-1 ${classColors[cls].split(" ").slice(0, 1).join(" ")} ring-current` : "hover-elevate"}`}
+                  onClick={() => setActiveFilter(isActive ? null : cls)}
+                  data-testid={`card-segment-${cls}`}
+                >
                   <CardContent className="pt-4 pb-3 px-3">
                     <div className="flex items-center gap-2 mb-1">
                       <Icon className={`w-4 h-4 ${classColors[cls].split(" ")[0]}`} />
-                      <p className="text-xs font-medium capitalize">{cls}</p>
+                      <p className="text-xs font-medium">{classLabels[cls]}</p>
                     </div>
                     <p className="text-2xl font-bold">{count}</p>
                     {cls === "core" && totalMembers > 0 && (
@@ -984,12 +1013,31 @@ function MemberRiskView({ predictions, gymId }: { predictions: PredictiveIntelli
                 </Card>
               </TooltipTrigger>
               <TooltipContent side="bottom" className="max-w-xs">
-                <p className="text-xs leading-relaxed">{description}</p>
+                <p className="text-xs font-semibold mb-1">{classLabels[cls]}</p>
+                <p className="text-xs leading-relaxed text-muted-foreground">{classTooltips[cls]}</p>
               </TooltipContent>
             </Tooltip>
           );
         })}
       </div>
+
+      {activeFilter && (
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className={`text-xs ${classColors[activeFilter] || ""}`}>
+            {classLabels[activeFilter] || activeFilter}
+          </Badge>
+          <button
+            onClick={() => setActiveFilter(null)}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            data-testid="button-clear-filter"
+          >
+            Clear filter
+          </button>
+          <span className="text-xs text-muted-foreground">
+            — {filteredMembers.length} member{filteredMembers.length !== 1 ? "s" : ""}
+          </span>
+        </div>
+      )}
 
       <div className="grid sm:grid-cols-3 gap-3">
         <Card>
@@ -1082,9 +1130,9 @@ function MemberRiskView({ predictions, gymId }: { predictions: PredictiveIntelli
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={`text-xs capitalize ${classColors[m.engagementClass] || ""}`}>
+                    <Badge variant="outline" className={`text-xs ${classColors[m.engagementClass] || ""}`}>
                       <Icon className="w-3 h-3 mr-1" />
-                      {m.engagementClass}
+                      {classLabels[m.engagementClass] || m.engagementClass}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">

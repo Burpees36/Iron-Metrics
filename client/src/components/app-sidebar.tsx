@@ -49,7 +49,7 @@ export function AppSidebar() {
     { href: `/gyms/${activeGymId}`, label: "Overview", icon: LayoutDashboard, exact: true },
     { href: `/gyms/${activeGymId}/trends`, label: "Reports", icon: BarChart3 },
     { href: `/gyms/${activeGymId}/strategy`, label: "AI Strategy Plays", icon: FileText },
-    { href: `/gyms/${activeGymId}/member-risk`, label: "Member Risk", icon: Brain },
+    { href: `/gyms/${activeGymId}/member-risk`, label: "Member Intelligence", icon: Brain },
     { href: `/gyms/${activeGymId}/planning`, label: "Future Planning", icon: Target },
   ] : [];
 
