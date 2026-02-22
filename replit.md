@@ -13,6 +13,14 @@ The Stability Command Center for CrossFit gyms. A financial resilience operating
 - Update churn metrics
 - Consider adding attendance trend charts (weekly attendance frequency per member)
 
+## Recent Changes (2026-02-22)
+- Renamed "Member Risk" → "Member Intelligence" in sidebar navigation
+- Added "Rising" engagement category (sky blue, Sparkles icon) — members with low churn, recent attendance, <90 days tenure
+- Added clickable category filters on Member Intelligence page (click segment card → filter table, "Clear filter" to reset)
+- Added detailed tooltips on all 5 engagement category cards (Core, Rising, Drifter, At-Risk, Ghost)
+- Fixed Reports page card text truncation (break-words + md:grid-cols-3)
+- 5 engagement classes: core, rising, drifter, at-risk, ghost
+
 ## Architecture
 - **Frontend**: React + Vite + Tailwind CSS + shadcn/ui + Recharts
 - **Backend**: Express.js + Drizzle ORM + PostgreSQL
