@@ -3,7 +3,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -204,44 +203,25 @@ interface MemberContact {
   note: string | null;
 }
 
-export default function PredictiveIntelligenceView({ gymId, gymName }: { gymId: string; gymName: string }) {
-  const { data, isLoading, error } = useQuery<PredictiveIntelligence>({
+export function usePredictiveData(gymId: string) {
+  return useQuery<PredictiveIntelligence>({
     queryKey: [`/api/gyms/${gymId}/predictive`],
+    enabled: !!gymId,
   });
+}
+
+export { StrategicBriefView, MemberRiskView, FuturePlanningView, PredictiveSkeleton };
+export type { PredictiveIntelligence };
+
+export default function PredictiveIntelligenceView({ gymId, gymName }: { gymId: string; gymName: string }) {
+  const { data, isLoading, error } = usePredictiveData(gymId);
 
   if (isLoading) return <PredictiveSkeleton />;
   if (error || !data) return <div className="text-center py-12 text-muted-foreground" data-testid="predictive-error">Unable to load predictive intelligence. Import members and recompute metrics first.</div>;
 
   return (
     <div className="space-y-8">
-      <Tabs defaultValue="brief" data-testid="predictive-tabs">
-        <TabsList>
-          <TabsTrigger value="brief" data-testid="tab-brief">
-            <FileText className="w-4 h-4 mr-1" />
-            Strategic Brief
-          </TabsTrigger>
-          <TabsTrigger value="members" data-testid="tab-member-risk">
-            <Brain className="w-4 h-4 mr-1" />
-            Member Risk
-          </TabsTrigger>
-          <TabsTrigger value="planning" data-testid="tab-planning">
-            <Target className="w-4 h-4 mr-1" />
-            Future Planning
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="brief" className="mt-6">
-          <StrategicBriefView gymId={gymId} periodStart={data.periodStart} brief={data.strategicBrief} recommendationExecution={data.recommendationExecution} />
-        </TabsContent>
-
-        <TabsContent value="members" className="mt-6">
-          <MemberRiskView predictions={data.memberPredictions} gymId={gymId} />
-        </TabsContent>
-
-        <TabsContent value="planning" className="mt-6">
-          <FuturePlanningView cohorts={data.cohortIntelligence} scenario={data.revenueScenario} gymName={gymName} recommendations={data.strategicBrief.recommendations} memberPredictions={data.memberPredictions} />
-        </TabsContent>
-      </Tabs>
+      <StrategicBriefView gymId={gymId} periodStart={data.periodStart} brief={data.strategicBrief} recommendationExecution={data.recommendationExecution} />
     </div>
   );
 }

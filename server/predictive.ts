@@ -2169,7 +2169,7 @@ function generateStrategicBrief(
     });
   }
 
-  // [13] Programming & Experience Audit
+  // [13] Programming & Experience Audit JCole 
   // Trigger: plateau churn, inconsistent PRs, culture drift
   // Baseline: 1-3% long-term retention, confidence 0.60, impact 90-180 days
   if (gymChurnRate > 5 || (cohort3to6Drop && cohort3to6Drop.lostPct > 12)) {

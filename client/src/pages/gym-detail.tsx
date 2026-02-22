@@ -5,7 +5,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -60,7 +59,6 @@ import {
   Plug,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
-import PredictiveIntelligenceView from "./predictive-intelligence";
 import {
   LineChart,
   Line,
@@ -229,17 +227,14 @@ interface TrendIntelligence {
   };
 }
 
-export default function GymDetail() {
-  const [, params] = useRoute("/gyms/:id");
-  const gymId = params?.id;
-
-  const { data: gym, isLoading: gymLoading } = useQuery<Gym>({
+export function useGymData(gymId: string | undefined) {
+  return useQuery<Gym>({
     queryKey: ["/api/gyms", gymId],
+    enabled: !!gymId,
   });
+}
 
-  if (gymLoading) return <GymDetailSkeleton />;
-  if (!gym) return <GymNotFound />;
-
+export function GymPageShell({ gym, children, actions }: { gym: Gym; children: React.ReactNode; actions?: React.ReactNode }) {
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -254,7 +249,33 @@ export default function GymDetail() {
             )}
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        {actions && (
+          <div className="flex flex-wrap items-center gap-2">
+            {actions}
+          </div>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+export { ReportView, TrendsView, MembersView, RecomputeButton, GymNotFound, GymDetailSkeleton };
+
+export default function GymDetail() {
+  const [, params] = useRoute("/gyms/:id");
+  const gymId = params?.id;
+
+  const { data: gym, isLoading: gymLoading } = useGymData(gymId);
+
+  if (gymLoading) return <GymDetailSkeleton />;
+  if (!gym) return <GymNotFound />;
+
+  return (
+    <GymPageShell
+      gym={gym}
+      actions={
+        <>
           <Link href={`/gyms/${gym.id}/wodify`}>
             <Button data-testid="button-wodify-integration">
               <Plug className="w-4 h-4 mr-1" />
@@ -268,29 +289,11 @@ export default function GymDetail() {
             </Button>
           </Link>
           <RecomputeButton gymId={gym.id} />
-        </div>
-      </div>
-
-      <Tabs defaultValue="report">
-        <TabsList data-testid="tabs-gym-detail">
-          <TabsTrigger value="report" data-testid="tab-report">Report</TabsTrigger>
-          <TabsTrigger value="trends" data-testid="tab-trends">Trends</TabsTrigger>
-          <TabsTrigger value="predictive" data-testid="tab-predictive">Predictive</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="report" className="mt-8">
-          <ReportView gymId={gym.id} />
-        </TabsContent>
-
-        <TabsContent value="trends" className="mt-8">
-          <TrendsView gymId={gym.id} />
-        </TabsContent>
-
-        <TabsContent value="predictive" className="mt-8">
-          <PredictiveIntelligenceView gymId={gym.id} gymName={gym.name} />
-        </TabsContent>
-      </Tabs>
-    </div>
+        </>
+      }
+    >
+      <ReportView gymId={gym.id} />
+    </GymPageShell>
   );
 }
 
