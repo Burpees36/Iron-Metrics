@@ -23,7 +23,6 @@ import {
   Plus,
   Building2,
   LogOut,
-  Users,
   BarChart3,
   FileText,
   Brain,
@@ -48,7 +47,6 @@ export function AppSidebar() {
 
   const gymNavItems = activeGymId ? [
     { href: `/gyms/${activeGymId}`, label: "Overview", icon: LayoutDashboard, exact: true },
-    { href: `/gyms/${activeGymId}/members`, label: "Members", icon: Users },
     { href: `/gyms/${activeGymId}/trends`, label: "Reports", icon: BarChart3 },
     { href: `/gyms/${activeGymId}/strategy`, label: "AI Strategy Plays", icon: FileText },
     { href: `/gyms/${activeGymId}/member-risk`, label: "Member Risk", icon: Brain },
@@ -63,7 +61,7 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar>
+    <Sidebar className="sidebar-gradient">
       <SidebarHeader className="p-4">
         <Link href="/">
           <div className="flex items-center gap-2 hover-elevate rounded-md px-2 py-1.5 cursor-pointer" data-testid="link-home">

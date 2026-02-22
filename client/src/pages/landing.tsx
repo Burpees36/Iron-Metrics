@@ -29,7 +29,7 @@ const gymScenarios: GymScenario[] = [
     churn: { value: "6.8%", trend: "-0.3%" },
     atRisk: 8,
     revenueProtected: "$3,200",
-    verdict: "Moderate \u2014 intervention window open",
+    verdict: "Moderate — intervention window open",
   },
   {
     name: "Iron Republic",
@@ -38,7 +38,7 @@ const gymScenarios: GymScenario[] = [
     churn: { value: "3.1%", trend: "-0.5%" },
     atRisk: 2,
     revenueProtected: "$890",
-    verdict: "Strong \u2014 maintain current trajectory",
+    verdict: "Strong — maintain current trajectory",
   },
   {
     name: "Coastal Barbell",
@@ -47,7 +47,7 @@ const gymScenarios: GymScenario[] = [
     churn: { value: "9.2%", trend: "+1.8%" },
     atRisk: 19,
     revenueProtected: "$7,400",
-    verdict: "Fragile \u2014 immediate action required",
+    verdict: "Fragile — immediate action required",
   },
   {
     name: "Forge Athletics",
@@ -56,7 +56,7 @@ const gymScenarios: GymScenario[] = [
     churn: { value: "4.5%", trend: "-0.2%" },
     atRisk: 3,
     revenueProtected: "$1,100",
-    verdict: "Strong \u2014 stability threshold crossed",
+    verdict: "Strong — stability threshold crossed",
   },
 ];
 
@@ -190,7 +190,7 @@ export default function LandingPage() {
               <div className={`transition-all duration-400 ${transitioning ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"}`}>
                 <p className="text-xs font-medium text-muted-foreground mb-3 flex items-center gap-2" data-testid="text-scenario-name">
                   <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                  {scenario.name} \u2014 {scenario.members} members
+                  {scenario.name} — {scenario.members} members
                 </p>
                 <div className="space-y-3">
                   <Card className="bg-card/80 backdrop-blur-sm" data-testid="hero-card-stability">
