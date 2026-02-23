@@ -27,6 +27,7 @@ import {
   FileText,
   Brain,
   Target,
+  Settings,
 } from "lucide-react";
 
 export function AppSidebar() {
@@ -51,6 +52,7 @@ export function AppSidebar() {
     { href: `/gyms/${activeGymId}/strategy`, label: "AI Strategy Plays", icon: FileText },
     { href: `/gyms/${activeGymId}/member-risk`, label: "Member Intelligence", icon: Brain },
     { href: `/gyms/${activeGymId}/planning`, label: "Future Planning", icon: Target },
+    { href: `/gyms/${activeGymId}/settings`, label: "Settings", icon: Settings },
   ] : [];
 
   const isGymNavActive = (item: typeof gymNavItems[0]) => {

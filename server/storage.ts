@@ -29,7 +29,9 @@ export interface IStorage {
   getGymsByOwner(ownerId: string): Promise<Gym[]>;
 
   upsertMember(member: InsertMember): Promise<{ action: "inserted" | "updated" }>;
+  getMemberById(id: string): Promise<Member | undefined>;
   getMembersByGym(gymId: string): Promise<Member[]>;
+  updateGym(id: string, updates: Partial<Gym>): Promise<Gym>;
   getActiveMembers(gymId: string, asOfDate: string): Promise<Member[]>;
   getNewMembers(gymId: string, monthStart: string, monthEnd: string): Promise<Member[]>;
   getCancels(gymId: string, monthStart: string, monthEnd: string): Promise<Member[]>;
@@ -143,8 +145,18 @@ export class DatabaseStorage implements IStorage {
     return { action: "inserted" };
   }
 
+  async getMemberById(id: string): Promise<Member | undefined> {
+    const [member] = await db.select().from(members).where(eq(members.id, id));
+    return member;
+  }
+
   async getMembersByGym(gymId: string): Promise<Member[]> {
     return db.select().from(members).where(eq(members.gymId, gymId));
+  }
+
+  async updateGym(id: string, updates: Partial<Gym>): Promise<Gym> {
+    const [updated] = await db.update(gyms).set(updates).where(eq(gyms.id, id)).returning();
+    return updated;
   }
 
   async getActiveMembers(gymId: string, asOfDate: string): Promise<Member[]> {

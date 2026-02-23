@@ -16,6 +16,7 @@ import {
   Radar,
   TrendingUp,
 } from "lucide-react";
+import { ResponsiveContainer, AreaChart, Area } from "recharts";
 
 export default function Dashboard() {
   const { data: gyms, isLoading } = useQuery<Gym[]>({
@@ -31,7 +32,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-8 max-w-6xl mx-auto space-y-10">
+    <div className="p-4 sm:p-8 max-w-6xl mx-auto space-y-8 sm:space-y-10">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="space-y-1">
           <h1 className="text-xl font-bold tracking-tight" data-testid="text-dashboard-title">
@@ -70,6 +71,19 @@ function GymCard({ gym }: { gym: Gym }) {
       return res.json();
     },
   });
+
+  const { data: allMetrics } = useQuery<GymMonthlyMetrics[]>({
+    queryKey: ["/api/gyms", gym.id, "metrics"],
+    queryFn: async () => {
+      const res = await fetch(`/api/gyms/${gym.id}/metrics`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const sparkData = (allMetrics || [])
+    .slice(-6)
+    .map((m) => ({ rsi: m.rsi, mrr: Number(m.mrr) }));
 
   const netGrowth = metrics ? metrics.newMembers - metrics.cancels : null;
 
@@ -117,6 +131,21 @@ function GymCard({ gym }: { gym: Gym }) {
                   value={String(metrics.activeMembers)}
                 />
               </div>
+              {sparkData.length >= 2 && (
+                <div className="h-10 -mx-1" data-testid={`sparkline-${gym.id}`}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={sparkData}>
+                      <defs>
+                        <linearGradient id={`spark-${gym.id}`} x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.15} />
+                          <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <Area type="monotone" dataKey="rsi" stroke="hsl(var(--primary))" fill={`url(#spark-${gym.id})`} strokeWidth={1.5} dot={false} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
               <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground pt-1 border-t">
                 {netGrowth !== null && (
                   <span className="flex items-center gap-1">

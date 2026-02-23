@@ -336,3 +336,30 @@
     inset: -1px;
   }
 }
+
+@media print {
+  body { background: white !important; color: black !important; }
+  nav, aside, header, .no-print,
+  [data-testid="button-sidebar-toggle"],
+  [data-testid="button-recompute"],
+  [data-testid="button-export-report"],
+  [data-testid="button-print-report"],
+  [data-testid="button-export-members"],
+  [data-testid="button-prev-month"],
+  [data-testid="button-next-month"],
+  [data-testid="button-notifications"],
+  [data-testid="section-notifications"],
+  [data-testid="section-member-filters"],
+  [data-testid="input-search-members"],
+  [data-testid="date-range-selector"],
+  [role="dialog"],
+  [data-radix-popper-content-wrapper] {
+    display: none !important;
+  }
+  .hover-elevate::after, .active-elevate::after { display: none !important; }
+  * { box-shadow: none !important; }
+  main { overflow: visible !important; }
+  .animate-fade-in-up, .animate-fade-in { animation: none !important; }
+  .border { border-color: #e5e7eb !important; }
+  @page { margin: 0.75in; size: auto; }
+}

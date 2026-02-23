@@ -1,5 +1,5 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useRoute, Link } from "wouter";
+import { useRoute, Link, useLocation } from "wouter";
 import type { Gym, Member, GymMonthlyMetrics, MemberContact } from "@shared/schema";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -57,6 +57,9 @@ import {
   MessageSquare,
   X,
   Plug,
+  Download,
+  Printer,
+  CheckCircle2,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import {
@@ -237,7 +240,7 @@ export function useGymData(gymId: string | undefined) {
 
 export function GymPageShell({ gym, children, actions }: { gym: Gym; children: React.ReactNode; actions?: React.ReactNode }) {
   return (
-    <div className="p-8 max-w-6xl mx-auto space-y-8">
+    <div className="p-4 sm:p-8 max-w-6xl mx-auto space-y-6 sm:space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Activity className="w-5 h-5 text-primary flex-shrink-0" />
@@ -390,20 +393,38 @@ function ReportView({ gymId }: { gymId: string }) {
             <ChevronRight className="w-4 h-4" />
           </Button>
         </div>
+        <div className="flex items-center gap-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => window.open(`/api/gyms/${gymId}/export/report?month=${monthDate}`, "_blank")}
+                data-testid="button-export-report"
+              >
+                <Download className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent className="text-xs">Export report CSV</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => window.print()}
+                data-testid="button-print-report"
+              >
+                <Printer className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent className="text-xs">Print report</TooltipContent>
+          </Tooltip>
+        </div>
       </div>
 
       {!data ? (
-        <Card>
-          <CardContent className="p-10 text-center space-y-4">
-            <Activity className="w-10 h-10 text-muted-foreground mx-auto" />
-            <p className="text-muted-foreground">
-              No metrics available for {displayMonth}.
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Import members and recompute to generate your stability report.
-            </p>
-          </CardContent>
-        </Card>
+        <OnboardingChecklist gymId={gymId} month={displayMonth} />
       ) : (
         <>
           <div className="grid sm:grid-cols-3 lg:grid-cols-5 gap-4 animate-fade-in-up">
@@ -914,10 +935,131 @@ function ForecastSection({ forecast }: { forecast: Forecast }) {
   );
 }
 
+function OnboardingChecklist({ gymId, month }: { gymId: string; month: string }) {
+  const { data: members } = useQuery<any[]>({
+    queryKey: ["/api/gyms", gymId, "members", "enriched"],
+    queryFn: async () => {
+      const res = await fetch(`/api/gyms/${gymId}/members/enriched`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const hasMembers = members && members.length > 0;
+
+  const steps = [
+    {
+      id: "import",
+      label: "Import your member roster",
+      description: "Upload a CSV from Wodify, PushPress, Zen Planner, or any spreadsheet.",
+      done: !!hasMembers,
+      href: `/gyms/${gymId}/import`,
+      icon: Upload,
+    },
+    {
+      id: "recompute",
+      label: "Generate your first stability report",
+      description: "Once members are imported, compute your retention metrics.",
+      done: false,
+      action: "recompute",
+      icon: RefreshCw,
+    },
+    {
+      id: "review",
+      label: "Review your Command Center",
+      description: "Explore RSI, churn rate, member risk, and strategic recommendations.",
+      done: false,
+      icon: Activity,
+    },
+  ];
+
+  const completedCount = steps.filter((s) => s.done).length;
+  const progress = Math.round((completedCount / steps.length) * 100);
+
+  return (
+    <div className="space-y-6 animate-fade-in-up">
+      <Card className="border-dashed">
+        <CardContent className="p-8 space-y-6">
+          <div className="text-center space-y-2">
+            <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+              <Gauge className="w-7 h-7 text-primary" />
+            </div>
+            <h2 className="text-lg font-bold" data-testid="text-onboarding-title">Set Up Your Stability Engine</h2>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+              Complete these steps to unlock your retention intelligence for {month}.
+            </p>
+          </div>
+
+          <div className="max-w-md mx-auto">
+            <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
+              <span>{completedCount} of {steps.length} complete</span>
+              <span>{progress}%</span>
+            </div>
+            <div className="h-2 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary rounded-full transition-all duration-500"
+                style={{ width: `${progress}%` }}
+                data-testid="progress-onboarding"
+              />
+            </div>
+          </div>
+
+          <div className="max-w-md mx-auto space-y-3">
+            {steps.map((step, i) => (
+              <div
+                key={step.id}
+                className={`flex items-start gap-4 p-4 rounded-lg border ${
+                  step.done
+                    ? "bg-primary/5 border-primary/20"
+                    : i === completedCount
+                    ? "bg-card border-border shadow-sm"
+                    : "bg-muted/30 border-transparent opacity-60"
+                }`}
+                data-testid={`step-${step.id}`}
+              >
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    step.done
+                      ? "bg-primary text-primary-foreground"
+                      : i === completedCount
+                      ? "bg-primary/10 text-primary"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {step.done ? (
+                    <CheckCircle2 className="w-4 h-4" />
+                  ) : (
+                    <step.icon className="w-4 h-4" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0 space-y-1">
+                  <p className={`text-sm font-medium ${step.done ? "line-through text-muted-foreground" : ""}`}>
+                    {step.label}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{step.description}</p>
+                  {!step.done && i === completedCount && step.href && (
+                    <Link href={step.href}>
+                      <Button size="sm" className="mt-2" data-testid={`button-${step.id}`}>
+                        <step.icon className="w-3.5 h-3.5 mr-1" />
+                        Get Started
+                      </Button>
+                    </Link>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 function MembersView({ gymId }: { gymId: string }) {
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<MemberFilter>("all");
   const [selectedMember, setSelectedMember] = useState<EnrichedMember | null>(null);
+  const [, navigate] = useLocation();
   const { toast } = useToast();
 
   const { data: members, isLoading } = useQuery<EnrichedMember[]>({
@@ -1004,15 +1146,32 @@ function MembersView({ gymId }: { gymId: string }) {
             </Badge>
           )}
         </div>
-        <div className="relative w-full sm:w-64">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search members..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-            data-testid="input-search-members"
-          />
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="relative flex-1 sm:w-64">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Search members..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+              data-testid="input-search-members"
+            />
+          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => {
+                  window.open(`/api/gyms/${gymId}/export/members`, "_blank");
+                }}
+                data-testid="button-export-members"
+              >
+                <Download className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent className="text-xs">Export members CSV</TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
@@ -1049,7 +1208,7 @@ function MembersView({ gymId }: { gymId: string }) {
                 <TableRow
                   key={member.id}
                   className="cursor-pointer hover-elevate"
-                  onClick={() => setSelectedMember(member)}
+                  onClick={() => navigate(`/gyms/${gymId}/members/${member.id}`)}
                   data-testid={`row-member-${member.id}`}
                 >
                   <TableCell>
@@ -1386,11 +1545,14 @@ function MemberDrawer({ member, gymId, onClose }: { member: EnrichedMember | nul
   );
 }
 
+type DateRange = "3m" | "6m" | "12m" | "all";
+
 function TrendsView({ gymId }: { gymId: string }) {
   const { data: intelligence, isLoading: intellLoading } = useQuery<TrendIntelligence>({
     queryKey: ["/api/gyms", gymId, "trends", "intelligence"],
   });
   const [showTargetPath, setShowTargetPath] = useState(false);
+  const [dateRange, setDateRange] = useState<DateRange>("all");
 
   if (intellLoading) {
     return (
@@ -1445,6 +1607,9 @@ function TrendsView({ gymId }: { gymId: string }) {
     chartData[lastActualIdx + 1] = { ...n, mrrProjected: n.mrrProjected ?? b.mrr, membersProjected: n.membersProjected ?? b.members, churnProjected: n.churnProjected ?? b.churn, rsiProjected: n.rsiProjected ?? b.rsi, armProjected: n.armProjected ?? b.arm };
   }
 
+  const rangeSlice = dateRange === "3m" ? -3 : dateRange === "6m" ? -6 : dateRange === "12m" ? -12 : undefined;
+  const filteredChartData = rangeSlice ? chartData.slice(rangeSlice) : chartData;
+
   const tierColors = {
     "stable": { bg: "bg-primary/10 dark:bg-primary/15", border: "border-primary/30", text: "text-primary", dot: "bg-primary", barColor: "hsl(var(--primary))" },
     "plateau-risk": { bg: "bg-amber-500/10 dark:bg-amber-500/15", border: "border-amber-500/30", text: "text-amber-700 dark:text-amber-400", dot: "bg-amber-500", barColor: "#f59e0b" },
@@ -1486,8 +1651,29 @@ function TrendsView({ gymId }: { gymId: string }) {
       ? "bg-gradient-to-br from-background via-background to-red-500/[0.03] dark:to-red-500/[0.06]"
       : "";
 
+  const dateRanges: { label: string; value: DateRange }[] = [
+    { label: "3M", value: "3m" },
+    { label: "6M", value: "6m" },
+    { label: "12M", value: "12m" },
+    { label: "All", value: "all" },
+  ];
+
   return (
     <div className={`space-y-8 rounded-lg transition-colors duration-700 ${dynamicBg}`} style={{ background: dynamicBg ? undefined : "linear-gradient(135deg, hsl(var(--background)) 0%, hsl(215 18% 12% / 0.03) 100%)" }}>
+      <div className="flex items-center justify-end gap-1" data-testid="date-range-selector">
+        {dateRanges.map((r) => (
+          <Button
+            key={r.value}
+            variant={dateRange === r.value ? "default" : "ghost"}
+            size="sm"
+            className="h-7 px-3 text-xs"
+            onClick={() => setDateRange(r.value)}
+            data-testid={`button-range-${r.value}`}
+          >
+            {r.label}
+          </Button>
+        ))}
+      </div>
       {/* ── EXECUTIVE HEALTH + 90-DAY OUTLOOK ── */}
       <Card className={`${tc.bg} border ${tc.border} animate-fade-in-up`} data-testid="section-stability-score">
         <CardContent className="p-6">
@@ -1590,8 +1776,8 @@ function TrendsView({ gymId }: { gymId: string }) {
           <Shield className="w-3.5 h-3.5" /> Stability & Retention
         </h3>
         <div className="grid lg:grid-cols-2 gap-6">
-          <IntelligentChart title="Retention Stability Index" insight={getInsight("rsi")} kpi={getKpi("rsi")} dataKey="rsi" projectedKey="rsiProjected" gradientId="rsiGrad" color="hsl(var(--chart-1))" data={chartData} domain={[0, 100]} formatter={(v: number) => [`${v}/100`, "RSI"]} referenceArea={{ y1: 80, y2: 100, label: "Stable Zone" }} testId="chart-rsi" />
-          <IntelligentChurnChart insight={getInsight("churn")} kpi={getKpi("churn")} data={chartData} testId="chart-churn" />
+          <IntelligentChart title="Retention Stability Index" insight={getInsight("rsi")} kpi={getKpi("rsi")} dataKey="rsi" projectedKey="rsiProjected" gradientId="rsiGrad" color="hsl(var(--chart-1))" data={filteredChartData} domain={[0, 100]} formatter={(v: number) => [`${v}/100`, "RSI"]} referenceArea={{ y1: 80, y2: 100, label: "Stable Zone" }} testId="chart-rsi" />
+          <IntelligentChurnChart insight={getInsight("churn")} kpi={getKpi("churn")} data={filteredChartData} testId="chart-churn" />
         </div>
       </div>
 
@@ -1630,7 +1816,7 @@ function TrendsView({ gymId }: { gymId: string }) {
               ) : (
                 <div className="h-56">
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={chartData}>
+                    <AreaChart data={filteredChartData}>
                       <defs>
                         <linearGradient id="mrrGrad" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="hsl(var(--chart-2))" stopOpacity={0.15} />
@@ -1649,7 +1835,7 @@ function TrendsView({ gymId }: { gymId: string }) {
               )}
             </CardContent>
           </Card>
-          <IntelligentChart title="Revenue per Member" insight={getInsight("arm")} kpi={getKpi("arm")} dataKey="arm" projectedKey="armProjected" gradientId="armGrad" color="hsl(var(--chart-4))" data={chartData} formatter={(v: number) => [`$${v.toFixed(0)}`, "ARM"]} referenceLine={{ y: 150, label: "Target" }} testId="chart-arm" />
+          <IntelligentChart title="Revenue per Member" insight={getInsight("arm")} kpi={getKpi("arm")} dataKey="arm" projectedKey="armProjected" gradientId="armGrad" color="hsl(var(--chart-4))" data={filteredChartData} formatter={(v: number) => [`$${v.toFixed(0)}`, "ARM"]} referenceLine={{ y: 150, label: "Target" }} testId="chart-arm" />
         </div>
       </div>
 
@@ -1699,7 +1885,7 @@ function TrendsView({ gymId }: { gymId: string }) {
           <Radar className="w-3.5 h-3.5" /> Leading Indicators
         </h3>
         <div className="grid lg:grid-cols-2 gap-6">
-          <IntelligentChart title="Active Members" insight={getInsight("members")} kpi={getKpi("members")} dataKey="members" projectedKey="membersProjected" gradientId="memGrad" color="hsl(var(--chart-5))" data={chartData} testId="chart-members" />
+          <IntelligentChart title="Active Members" insight={getInsight("members")} kpi={getKpi("members")} dataKey="members" projectedKey="membersProjected" gradientId="memGrad" color="hsl(var(--chart-5))" data={filteredChartData} testId="chart-members" />
           {correlations.length > 0 && (
             <Card data-testid="section-correlations">
               <CardContent className="p-6 space-y-4">

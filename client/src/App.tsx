@@ -21,6 +21,9 @@ import GymTrends from "@/pages/gym-trends";
 import GymStrategy from "@/pages/gym-strategy";
 import GymMemberRisk from "@/pages/gym-member-risk";
 import GymPlanning from "@/pages/gym-planning";
+import MemberDetail from "@/pages/member-detail";
+import GymSettings from "@/pages/gym-settings";
+import { NotificationBell } from "@/components/notification-bell";
 
 
 function AuthenticatedApp() {
@@ -36,7 +39,10 @@ function AuthenticatedApp() {
         <div className="flex flex-col flex-1 min-w-0">
           <header className="flex items-center justify-between gap-4 p-2 border-b border-border/50 sticky top-0 z-40 bg-background/70 backdrop-blur-md">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
-            <ThemeToggle />
+            <div className="flex items-center gap-1">
+              <NotificationBell />
+              <ThemeToggle />
+            </div>
           </header>
           <main className="flex-1 overflow-auto">
             <Switch>
@@ -48,6 +54,8 @@ function AuthenticatedApp() {
               <Route path="/gyms/:id/strategy" component={GymStrategy} />
               <Route path="/gyms/:id/member-risk" component={GymMemberRisk} />
               <Route path="/gyms/:id/planning" component={GymPlanning} />
+              <Route path="/gyms/:id/settings" component={GymSettings} />
+              <Route path="/gyms/:id/members/:memberId" component={MemberDetail} />
               <Route path="/gyms/:id" component={GymDetail} />
               <Route component={NotFound} />
             </Switch>

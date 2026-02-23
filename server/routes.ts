@@ -671,6 +671,262 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/gyms/:id/members/:memberId/detail", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      const member = await storage.getMemberById(req.params.memberId);
+      if (!member || member.gymId !== req.params.id) return res.status(404).json({ message: "Member not found" });
+
+      const contacts = await storage.getContactsForMember(req.params.memberId);
+      const latestContact = contacts.length > 0 ? contacts[0].contactedAt : null;
+      const daysSinceContact = latestContact ? Math.floor((Date.now() - new Date(latestContact).getTime()) / (1000 * 60 * 60 * 24)) : null;
+
+      const tenureDays = Math.floor((Date.now() - new Date(member.joinDate + "T00:00:00").getTime()) / (1000 * 60 * 60 * 24));
+      const tenureMonths = Math.floor(tenureDays / 30);
+      const rate = Number(member.monthlyRate);
+      const totalRevenue = Math.round(rate * tenureMonths);
+
+      let churnProbability: number | null = null;
+      let engagementClass: string | null = null;
+      try {
+        const predictive = await generatePredictiveIntelligence(req.params.id);
+        const pred = predictive.memberPredictions.members.find((m: any) => m.memberId === req.params.memberId);
+        if (pred) {
+          churnProbability = pred.churnProbability;
+          engagementClass = pred.engagementClass;
+        }
+      } catch {}
+
+      const riskReasons: string[] = [];
+      if (tenureDays <= 60) riskReasons.push("New member (< 60 days)");
+      if (daysSinceContact === null) riskReasons.push("Never contacted");
+      else if (daysSinceContact > 14) riskReasons.push(`No contact in ${daysSinceContact} days`);
+      if (member.lastAttendedDate) {
+        const daysSinceAttendance = Math.floor((Date.now() - new Date(member.lastAttendedDate + "T00:00:00").getTime()) / (1000 * 60 * 60 * 24));
+        if (daysSinceAttendance > 14) riskReasons.push(`Last attended ${daysSinceAttendance} days ago`);
+      }
+
+      const risk = churnProbability !== null
+        ? (churnProbability >= 0.6 ? "high" : churnProbability >= 0.3 ? "medium" : "low")
+        : (tenureDays <= 60 || (daysSinceContact !== null && daysSinceContact > 14) ? "high" : tenureDays <= 120 ? "medium" : "low");
+
+      const isHighValue = rate >= 200;
+
+      res.json({
+        ...member,
+        tenureDays,
+        tenureMonths,
+        totalRevenue,
+        risk,
+        riskReasons,
+        daysSinceContact,
+        lastContacted: latestContact,
+        isHighValue,
+        churnProbability,
+        engagementClass,
+        contacts: contacts.slice(0, 50),
+      });
+    } catch (error) {
+      console.error("Error fetching member detail:", error);
+      res.status(500).json({ message: "Failed to fetch member detail" });
+    }
+  });
+
+  app.put("/api/gyms/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      const { name, location } = req.body;
+      const updates: any = {};
+      if (name && typeof name === "string") updates.name = name.trim();
+      if (location !== undefined) updates.location = location?.trim() || null;
+
+      const updated = await storage.updateGym(req.params.id, updates);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating gym:", error);
+      res.status(500).json({ message: "Failed to update gym" });
+    }
+  });
+
+  app.get("/api/gyms/:id/export/members", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      const membersList = await storage.getMembersByGym(req.params.id);
+      const contacts = await storage.getLatestContacts(req.params.id);
+      const contactMap = new Map<string, Date>();
+      for (const c of contacts) {
+        if (c.contactedAt && !contactMap.has(c.memberId)) {
+          contactMap.set(c.memberId, c.contactedAt);
+        }
+      }
+
+      const header = "Name,Email,Status,Join Date,Cancel Date,Monthly Rate,Last Contacted,Last Attended\n";
+      const rows = membersList.map(m => {
+        const lastContact = contactMap.get(m.id);
+        return [
+          `"${(m.name || "").replace(/"/g, '""')}"`,
+          `"${(m.email || "").replace(/"/g, '""')}"`,
+          m.status,
+          m.joinDate,
+          m.cancelDate || "",
+          m.monthlyRate,
+          lastContact ? new Date(lastContact).toISOString().slice(0, 10) : "",
+          m.lastAttendedDate || "",
+        ].join(",");
+      }).join("\n");
+
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="${gym.name.replace(/[^a-zA-Z0-9]/g, '_')}_members_${new Date().toISOString().slice(0, 10)}.csv"`);
+      res.send(header + rows);
+    } catch (error) {
+      console.error("Error exporting members:", error);
+      res.status(500).json({ message: "Failed to export members" });
+    }
+  });
+
+  app.get("/api/gyms/:id/export/report", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      const monthDate = (req.query.month as string) || new Date().toISOString().slice(0, 7) + "-01";
+      const metrics = await storage.getMonthlyMetrics(req.params.id, monthDate);
+      if (!metrics) {
+        return res.status(404).json({ message: "No metrics for this month" });
+      }
+
+      const reports = generateMetricReports(metrics);
+      const header = "Metric,Current Value,Target,Trend,What This Means,Why It Matters,What To Do Next\n";
+      const rows = reports.map(r => [
+        `"${r.metric}"`,
+        `"${r.current}"`,
+        `"${r.target}"`,
+        `"${r.trendDirection} ${r.trendValue}"`,
+        `"${(r.meaning || "").replace(/"/g, '""')}"`,
+        `"${(r.whyItMatters || "").replace(/"/g, '""')}"`,
+        `"${(r.action || "").replace(/"/g, '""')}"`,
+      ].join(",")).join("\n");
+
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="${gym.name.replace(/[^a-zA-Z0-9]/g, '_')}_report_${monthDate.slice(0, 7)}.csv"`);
+      res.send(header + rows);
+    } catch (error) {
+      console.error("Error exporting report:", error);
+      res.status(500).json({ message: "Failed to export report" });
+    }
+  });
+
+  app.get("/api/gyms/:id/alerts", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      const alerts: { id: string; type: string; severity: "info" | "warning" | "critical"; title: string; detail: string; timestamp: string }[] = [];
+      const now = new Date();
+
+      try {
+        const predictive = await generatePredictiveIntelligence(req.params.id);
+        const { summary } = predictive.memberPredictions;
+
+        if (summary.classBreakdown["ghost"] > 0) {
+          alerts.push({
+            id: `ghost-${now.toISOString().slice(0, 10)}`,
+            type: "member_risk",
+            severity: "critical",
+            title: `${summary.classBreakdown["ghost"]} member${summary.classBreakdown["ghost"] > 1 ? "s" : ""} classified as Ghost`,
+            detail: "These members show no recent engagement. Immediate outreach is recommended before they cancel.",
+            timestamp: now.toISOString(),
+          });
+        }
+
+        if (summary.classBreakdown["at-risk"] > 0) {
+          alerts.push({
+            id: `at-risk-${now.toISOString().slice(0, 10)}`,
+            type: "member_risk",
+            severity: "warning",
+            title: `${summary.classBreakdown["at-risk"]} member${summary.classBreakdown["at-risk"] > 1 ? "s" : ""} at risk of churning`,
+            detail: `$${summary.totalRevenueAtRisk.toLocaleString()}/mo in revenue at risk. Personal outreach can reverse this trajectory.`,
+            timestamp: now.toISOString(),
+          });
+        }
+
+        if (summary.classBreakdown["drifter"] > 0) {
+          alerts.push({
+            id: `drifter-${now.toISOString().slice(0, 10)}`,
+            type: "member_risk",
+            severity: "info",
+            title: `${summary.classBreakdown["drifter"]} member${summary.classBreakdown["drifter"] > 1 ? "s" : ""} drifting`,
+            detail: "Engagement declining but still recoverable. A check-in or class invitation can re-engage them.",
+            timestamp: now.toISOString(),
+          });
+        }
+      } catch {}
+
+      try {
+        const allMetrics = await storage.getAllMonthlyMetrics(req.params.id);
+        if (allMetrics.length >= 2) {
+          const latest = allMetrics[allMetrics.length - 1];
+          const prev = allMetrics[allMetrics.length - 2];
+          const churnRate = Number(latest.churnRate);
+          const prevChurnRate = Number(prev.churnRate);
+
+          if (churnRate > 7) {
+            alerts.push({
+              id: `churn-high-${now.toISOString().slice(0, 10)}`,
+              type: "metric",
+              severity: "critical",
+              title: `Churn rate at ${churnRate.toFixed(1)}% — above 7% threshold`,
+              detail: "Monthly churn is in the danger zone. Every percentage point above 5% compounds into significant annual revenue loss.",
+              timestamp: now.toISOString(),
+            });
+          } else if (churnRate > prevChurnRate + 1) {
+            alerts.push({
+              id: `churn-spike-${now.toISOString().slice(0, 10)}`,
+              type: "metric",
+              severity: "warning",
+              title: `Churn rate jumped from ${prevChurnRate.toFixed(1)}% to ${churnRate.toFixed(1)}%`,
+              detail: "A sudden increase in cancellations. Investigate whether a specific event, pricing change, or seasonal pattern caused this.",
+              timestamp: now.toISOString(),
+            });
+          }
+
+          const rsi = Number(latest.rsi);
+          if (rsi < 50) {
+            alerts.push({
+              id: `rsi-low-${now.toISOString().slice(0, 10)}`,
+              type: "metric",
+              severity: "warning",
+              title: `Retention Stability Index at ${rsi} — below healthy threshold`,
+              detail: "Your RSI indicates instability in your member base. Focus on reducing churn and strengthening new member onboarding.",
+              timestamp: now.toISOString(),
+            });
+          }
+        }
+      } catch {}
+
+      alerts.sort((a, b) => {
+        const severityOrder = { critical: 0, warning: 1, info: 2 };
+        return severityOrder[a.severity] - severityOrder[b.severity];
+      });
+
+      res.json(alerts);
+    } catch (error) {
+      console.error("Error fetching alerts:", error);
+      res.status(500).json({ message: "Failed to fetch alerts" });
+    }
+  });
+
   app.get("/api/gyms/:id/trends/intelligence", isAuthenticated, async (req: any, res) => {
     try {
       const gym = await storage.getGym(req.params.id);

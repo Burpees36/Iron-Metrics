@@ -12,6 +12,20 @@ The Stability Command Center for CrossFit gyms. A financial resilience operating
 ## TODO (Next Session)
 - Update churn metrics
 - Consider adding attendance trend charts (weekly attendance frequency per member)
+- Add member edit/delete functionality
+- Add bulk import validation improvements
+
+## Recent Changes (2026-02-23)
+- Added Member Detail profile page (/gyms/:id/members/:memberId) with risk trajectory, tenure timeline, contact history, outreach logging
+- Added Notification Bell component in header with severity-based alerts (critical/warning/info), dismissal, auto-refresh
+- Added Gym Settings page (/gyms/:id/settings) with editable gym name, location, monthly fee
+- Added CSV export buttons: Export Members (member list), Export Report (monthly report), Print Report
+- Added Onboarding Checklist on gym detail page when no metrics exist (step-by-step setup guide)
+- Added Dashboard sparklines (RSI trend) on gym cards using Recharts
+- Added Date Range selector (3M/6M/12M/All) on Trends page to filter chart data
+- Added print-friendly CSS with @media print rules (hides nav, buttons, popovers)
+- Mobile responsiveness improvements (responsive padding, layout adjustments)
+- Member table rows now navigate to Member Detail page instead of opening drawer
 
 ## Recent Changes (2026-02-22)
 - Renamed "Member Risk" → "Member Intelligence" in sidebar navigation
