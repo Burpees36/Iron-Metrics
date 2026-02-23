@@ -1698,26 +1698,7 @@ function TrendsView({ gymId }: { gymId: string }) {
             </CardContent>
           </Card>
 
-          <Card data-testid="chart-joins-cancels">
-            <CardContent className="p-6 space-y-4">
-              <div className="space-y-2">
-                <h3 className="font-semibold text-sm">Monthly Joins vs Cancellations</h3>
-              </div>
-              <div className="h-56">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={growthData}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                    <XAxis dataKey="month" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-                    <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-                    <RechartsTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12 }} formatter={(v: number, name: string) => [name === "cancels" ? `${Math.abs(v)}` : `${v}`, name === "cancels" ? "Cancellations" : "New Joins"]} />
-                    <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeOpacity={0.3} />
-                    <Bar dataKey="joins" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} name="joins" animationDuration={800} animationBegin={200} />
-                    <Bar dataKey="cancels" fill="#ef4444" radius={[0, 0, 3, 3]} name="cancels" animationDuration={800} animationBegin={400} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
+          <JoinsCancelsChart growthData={growthData} />
         </div>
       </div>
 
@@ -1757,6 +1738,62 @@ function TrendsView({ gymId }: { gymId: string }) {
       </div>
 
     </div>
+  );
+}
+
+function JoinsCancelsChart({ growthData }: { growthData: { month: string; joins: number; cancels: number }[] }) {
+  const monthsWithJoins = growthData.filter(g => g.joins > 0);
+  const monthsWithCancels = growthData.filter(g => g.cancels < 0);
+
+  const totalJoins = growthData.reduce((s, g) => s + g.joins, 0);
+  const totalCancels = growthData.reduce((s, g) => s + Math.abs(g.cancels), 0);
+  const avgJoins = growthData.length > 0 ? (totalJoins / growthData.length).toFixed(1) : "0";
+  const avgCancels = growthData.length > 0 ? (totalCancels / growthData.length).toFixed(1) : "0";
+
+  const bestMonth = monthsWithJoins.length > 0
+    ? monthsWithJoins.reduce((best, g) => g.joins > best.joins ? g : best, monthsWithJoins[0])
+    : null;
+  const worstMonth = monthsWithCancels.length > 0
+    ? monthsWithCancels.reduce((worst, g) => g.cancels < worst.cancels ? g : worst, monthsWithCancels[0])
+    : null;
+
+  return (
+    <Card data-testid="chart-joins-cancels">
+      <CardContent className="p-6 space-y-4">
+        <div className="space-y-2">
+          <h3 className="font-semibold text-sm">Monthly Joins vs Cancellations</h3>
+        </div>
+        <div className="h-56">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={growthData}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+              <XAxis dataKey="month" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+              <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+              <RechartsTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12 }} formatter={(v: number, name: string) => [name === "cancels" ? `${Math.abs(v)}` : `${v}`, name === "cancels" ? "Cancellations" : "New Joins"]} />
+              <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeOpacity={0.3} />
+              <Bar dataKey="joins" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} name="joins" animationDuration={800} animationBegin={200} />
+              <Bar dataKey="cancels" fill="#ef4444" radius={[0, 0, 3, 3]} name="cancels" animationDuration={800} animationBegin={400} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="grid grid-cols-2 gap-3 pt-1" data-testid="joins-cancels-insights">
+          <div className="rounded-md border p-3 space-y-1">
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Avg Joins / Month</p>
+            <p className="text-sm font-bold text-primary" data-testid="text-avg-joins">{avgJoins}</p>
+            {bestMonth && (
+              <p className="text-[10px] text-muted-foreground" data-testid="text-peak-joins">Peak: {bestMonth.joins} in {bestMonth.month}</p>
+            )}
+          </div>
+          <div className="rounded-md border p-3 space-y-1">
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Avg Cancels / Month</p>
+            <p className="text-sm font-bold text-red-600 dark:text-red-400" data-testid="text-avg-cancels">{avgCancels}</p>
+            {worstMonth && (
+              <p className="text-[10px] text-muted-foreground" data-testid="text-worst-cancels">Worst: {Math.abs(worstMonth.cancels)} in {worstMonth.month}</p>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1808,12 +1845,7 @@ function InsightHeader({ insight }: { insight?: TrendInsight }) {
         <div className={`w-2 h-2 rounded-full flex-shrink-0 ${sc.dot}`} />
         <p className={`text-sm font-semibold ${sc.text}`} data-testid="text-insight-headline">{insight.headline}</p>
       </div>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <p className="text-xs text-muted-foreground truncate cursor-help max-w-md">{insight.detail}</p>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" className="max-w-xs text-xs">{insight.detail}</TooltipContent>
-      </Tooltip>
+      <p className="text-xs text-muted-foreground leading-relaxed">{insight.detail}</p>
     </div>
   );
 }

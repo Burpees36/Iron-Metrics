@@ -728,12 +728,27 @@ function pctChange(current: number, previous: number): { value: string; directio
 }
 
 function determineTrend(values: number[]): "accelerating" | "decelerating" | "stable" {
-  if (values.length < 3) return "stable";
-  const recent = values.slice(-3);
-  const d1 = recent[1] - recent[0];
-  const d2 = recent[2] - recent[1];
-  if (d2 > d1 + 0.5) return "accelerating";
-  if (d2 < d1 - 0.5) return "decelerating";
+  if (values.length < 4) return "stable";
+  const window = values.slice(-Math.min(6, values.length));
+
+  const rates: number[] = [];
+  for (let i = 1; i < window.length; i++) {
+    rates.push(window[i] - window[i - 1]);
+  }
+
+  if (rates.length < 2) return "stable";
+
+  const mid = Math.floor(rates.length / 2) || 1;
+  const earlyAvg = rates.slice(0, mid).reduce((a, b) => a + b, 0) / mid;
+  const lateSlice = rates.slice(mid);
+  if (lateSlice.length === 0) return "stable";
+  const lateAvg = lateSlice.reduce((a, b) => a + b, 0) / lateSlice.length;
+
+  const magnitude = Math.abs(window[window.length - 1]) || 1;
+  const threshold = Math.max(magnitude * 0.03, 1);
+
+  if (lateAvg > earlyAvg + threshold && lateAvg > 0) return "accelerating";
+  if (lateAvg < -threshold) return "decelerating";
   return "stable";
 }
 
