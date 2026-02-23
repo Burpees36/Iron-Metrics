@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { parseMembersCsv, previewCsv, parseAllRows, computeFileHash, type ColumnMapping } from "./csv-parser";
-import { recomputeAllMetrics, computeMonthlyMetrics, generateMetricReports, generateForecast, generateTrendIntelligence, computeRiskCountWithContacts } from "./metrics";
+import { recomputeAllMetrics, computeMonthlyMetrics, generateMetricReports, generateForecast, generateTrendIntelligence } from "./metrics";
 import { generatePredictiveIntelligence } from "./predictive";
 import { ensureRecommendationCards, getOwnerActions, getPeriodStart, getRecommendationExecutionState, logOwnerAction, runLearningUpdate, toggleChecklistItem } from "./recommendation-learning";
 import { insertGymSchema, insertKnowledgeSourceSchema } from "@shared/schema";
@@ -545,17 +545,23 @@ export async function registerRoutes(
       monthEnd.setDate(monthEnd.getDate() - 1);
       const lastDayOfMonth = monthEnd.toISOString().slice(0, 10);
 
-      const activeMembers = await storage.getActiveMembers(req.params.id, lastDayOfMonth);
-      const contacts = await storage.getLatestContacts(req.params.id);
-      const contactMap = new Map<string, Date>();
-      for (const c of contacts) {
-        if (c.contactedAt && !contactMap.has(c.memberId)) {
-          contactMap.set(c.memberId, c.contactedAt);
-        }
+      let predictiveData: Awaited<ReturnType<typeof generatePredictiveIntelligence>> | null = null;
+      try {
+        predictiveData = await generatePredictiveIntelligence(req.params.id);
+      } catch (e) {
+        console.error("Predictive engine unavailable for report, falling back:", e);
       }
 
-      const asOfDate = monthEnd;
-      const riskBreakdown = computeRiskCountWithContacts(activeMembers, asOfDate, contactMap);
+      const predictiveRisk = predictiveData ? (() => {
+        const cb = predictiveData.memberPredictions.summary.classBreakdown;
+        return {
+          atRiskCount: cb["at-risk"] || 0,
+          ghostCount: cb["ghost"] || 0,
+          drifterCount: cb["drifter"] || 0,
+          totalFlagged: (cb["at-risk"] || 0) + (cb["ghost"] || 0),
+          revenueAtRisk: predictiveData.memberPredictions.summary.totalRevenueAtRisk,
+        };
+      })() : undefined;
 
       const reports = generateMetricReports({
         activeMembers: metrics.activeMembers,
@@ -566,19 +572,16 @@ export async function registerRoutes(
         rsi: metrics.rsi,
         res: Number(metrics.res),
         ltveImpact: Number(metrics.ltveImpact),
-        memberRiskCount: riskBreakdown.total,
+        memberRiskCount: predictiveRisk ? predictiveRisk.totalFlagged : metrics.memberRiskCount,
         rollingChurn3m: metrics.rollingChurn3m ? Number(metrics.rollingChurn3m) : null,
         newMembers: metrics.newMembers,
         cancels: metrics.cancels,
-        riskNewCount: riskBreakdown.newCount,
-        riskDisengagingCount: riskBreakdown.disengagingCount,
+        predictiveRisk,
       }, {
         prev1: toTrend(prev1),
         prev2: toTrend(prev2),
         prev3: toTrend(prev3),
       });
-
-      const hasAttendanceData = activeMembers.some(m => m.lastAttendedDate != null);
 
       const atRiskMembers: Array<{
         id: string;
@@ -589,72 +592,50 @@ export async function registerRoutes(
         tenureDays: number;
         lastContacted: string | null;
         lastAttended: string | null;
-        riskCategory: "new" | "disengaging";
+        riskCategory: "ghost" | "at-risk" | "drifter";
         riskLabel: string;
+        churnProbability: number;
       }> = [];
 
-      for (const m of activeMembers) {
-        const joinDate = new Date(m.joinDate + "T00:00:00");
-        const tenureDays = Math.max(0, Math.floor((asOfDate.getTime() - joinDate.getTime()) / (1000 * 60 * 60 * 24)));
-        const lastContact = contactMap.get(m.id);
-        const daysSinceContact = lastContact
-          ? Math.floor((asOfDate.getTime() - lastContact.getTime()) / (1000 * 60 * 60 * 24))
-          : null;
-
-        let riskCategory: "new" | "disengaging" | null = null;
-        let riskLabel = "";
-
-        if (tenureDays <= 60) {
-          riskCategory = "new";
-          if (tenureDays <= 14) riskLabel = "First 2 weeks";
-          else if (tenureDays <= 30) riskLabel = "First month";
-          else riskLabel = "Pre-habit window";
-        } else {
-          if (hasAttendanceData) {
-            if (m.lastAttendedDate) {
-              const lastAttended = new Date(m.lastAttendedDate + "T00:00:00");
-              const daysSinceAttendance = Math.floor((asOfDate.getTime() - lastAttended.getTime()) / (1000 * 60 * 60 * 24));
-              if (daysSinceAttendance >= 14) {
-                riskCategory = "disengaging";
-                if (daysSinceAttendance >= 30) riskLabel = "No class 30+ days";
-                else riskLabel = "No class 14+ days";
-              }
-            } else {
-              riskCategory = "disengaging";
-              riskLabel = "No attendance recorded";
-            }
-          } else {
-            if (daysSinceContact === null && tenureDays > 90) {
-              riskCategory = "disengaging";
-              riskLabel = "Never contacted";
-            } else if (daysSinceContact !== null && daysSinceContact > 30) {
-              riskCategory = "disengaging";
-              riskLabel = daysSinceContact > 60 ? "Silent 60+ days" : "Drifting 30+ days";
-            }
+      if (predictiveData) {
+        const activeMembers = await storage.getActiveMembers(req.params.id, lastDayOfMonth);
+        const memberMap = new Map(activeMembers.map(m => [m.id, m]));
+        const contacts = await storage.getLatestContacts(req.params.id);
+        const contactMap = new Map<string, Date>();
+        for (const c of contacts) {
+          if (c.contactedAt && !contactMap.has(c.memberId)) {
+            contactMap.set(c.memberId, c.contactedAt);
           }
         }
 
-        if (riskCategory) {
-          atRiskMembers.push({
-            id: m.id,
-            name: m.name,
-            email: m.email,
-            joinDate: m.joinDate,
-            monthlyRate: m.monthlyRate,
-            tenureDays,
-            lastContacted: lastContact?.toISOString() || null,
-            lastAttended: m.lastAttendedDate || null,
-            riskCategory,
-            riskLabel,
-          });
+        for (const pred of predictiveData.memberPredictions.members) {
+          if (pred.engagementClass === "ghost" || pred.engagementClass === "at-risk" || pred.engagementClass === "drifter") {
+            const member = memberMap.get(pred.memberId);
+            const lastContact = contactMap.get(pred.memberId);
+            atRiskMembers.push({
+              id: pred.memberId,
+              name: pred.name,
+              email: pred.email,
+              joinDate: member?.joinDate || "",
+              monthlyRate: String(pred.monthlyRate),
+              tenureDays: pred.tenureDays,
+              lastContacted: lastContact?.toISOString() || null,
+              lastAttended: member?.lastAttendedDate || null,
+              riskCategory: pred.engagementClass as "ghost" | "at-risk" | "drifter",
+              riskLabel: pred.riskDrivers[0] || pred.engagementClass,
+              churnProbability: pred.churnProbability,
+            });
+          }
         }
-      }
 
-      atRiskMembers.sort((a, b) => {
-        if (a.riskCategory === "disengaging" && b.riskCategory === "new") return -1;
-        if (a.riskCategory === "new" && b.riskCategory === "disengaging") return 1;
-        return a.tenureDays - b.tenureDays;
-      });
+        const classPriority: Record<string, number> = { ghost: 0, "at-risk": 1, drifter: 2 };
+        atRiskMembers.sort((a, b) => {
+          const pa = classPriority[a.riskCategory] ?? 3;
+          const pb = classPriority[b.riskCategory] ?? 3;
+          if (pa !== pb) return pa - pb;
+          return b.churnProbability - a.churnProbability;
+        });
+      }
 
       const prevMetrics = [
         metrics,

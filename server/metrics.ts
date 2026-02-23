@@ -267,6 +267,13 @@ export function generateMetricReports(metrics: {
   cancels: number;
   riskNewCount?: number;
   riskDisengagingCount?: number;
+  predictiveRisk?: {
+    atRiskCount: number;
+    ghostCount: number;
+    drifterCount: number;
+    totalFlagged: number;
+    revenueAtRisk: number;
+  };
 }, trendData?: {
   prev1?: { rsi: number; churnRate: number; mrr: number; arm: number; ltv: number; memberRiskCount: number; activeMembers: number };
   prev2?: { rsi: number; churnRate: number; mrr: number; arm: number; ltv: number; memberRiskCount: number; activeMembers: number };
@@ -397,9 +404,9 @@ export function generateMetricReports(metrics: {
   });
 
   const riskTrend = get90DayTrend(metrics.memberRiskCount, "memberRiskCount");
-  const newRisk = metrics.riskNewCount ?? 0;
-  const disengagingRisk = metrics.riskDisengagingCount ?? 0;
-  const totalRisk = metrics.memberRiskCount;
+  const pr = metrics.predictiveRisk;
+
+  const totalRisk = pr ? pr.totalFlagged : metrics.memberRiskCount;
   const riskPct = metrics.activeMembers > 0
     ? ((totalRisk / metrics.activeMembers) * 100).toFixed(1)
     : "0";
@@ -411,69 +418,81 @@ export function generateMetricReports(metrics: {
         ? "Low"
         : "Clear";
 
-  const hasNew = newRisk > 0;
-  const hasDisengaging = disengagingRisk > 0;
-  const riskScenario: "mixed" | "new-only" | "disengaging-only" | "clear" =
-    hasNew && hasDisengaging ? "mixed"
-    : hasNew ? "new-only"
-    : hasDisengaging ? "disengaging-only"
-    : "clear";
-
-  const riskCurrentLabel = riskScenario === "clear"
-    ? `0 flagged (0%)`
-    : riskScenario === "new-only"
-      ? `${totalRisk} flagged (${riskPct}%) — ${newRisk} new`
-      : riskScenario === "disengaging-only"
-        ? `${totalRisk} flagged (${riskPct}%) — ${disengagingRisk} disengaging`
-        : `${totalRisk} flagged (${riskPct}%) — ${newRisk} new, ${disengagingRisk} disengaging`;
-
+  let riskCurrentLabel: string;
   let riskMeaning: string;
   let riskWhyItMatters: string;
   let riskAction: string;
+  let riskImpact: string;
 
-  if (riskScenario === "clear") {
-    riskMeaning = "No members are showing risk signals right now. Your onboarding is effective and your established members are staying connected.";
-    riskWhyItMatters = "A clear radar is earned, not given. It means your outreach, coaching relationships, and member experience are all working in sync. This is the standard to maintain.";
-    riskAction = "Use this stability to go on offense. Reach out to your most engaged members and document what's working. Build those patterns into your playbook so the next wave of new members inherits a proven system.";
-  } else if (riskScenario === "new-only") {
-    riskMeaning = riskTier === "High"
-      ? `${newRisk} new members are in the danger zone. Every one of them is deciding right now whether your gym is worth keeping. Your onboarding process is under pressure.`
-      : riskTier === "Moderate"
-        ? `${newRisk} newer members haven't locked in yet. They're still in the window where a single missed week can turn into a cancellation.`
-        : `A small group of new members need attention. They're in the critical first 60 days where habits either form or don't.`;
-    riskWhyItMatters = "New members are 3–5x more likely to cancel than members who've been around 6+ months. The first 60 days are where you either build a committed member or lose them to inertia. Every dollar you spent acquiring them is wasted if they leave before forming a routine.";
-    riskAction = riskTier === "High"
-      ? "Execute a direct personal intervention for every flagged new member this week. Not a group email — a 1-on-1 conversation. Assign each one a coach anchor, set a 14-day movement goal, and schedule their next 3 classes. If they don't feel known by Day 14, they're already gone."
-      : "Reach out to every flagged new member within the next 7 days. A personal text or call from their coach cuts early cancellation risk in half. Ask about their goals, acknowledge their effort, and make sure they have a class booked.";
-  } else if (riskScenario === "disengaging-only") {
-    riskMeaning = riskTier === "High"
-      ? `${disengagingRisk} established members have gone quiet. These aren't new faces drifting — these are people who were once committed and are now pulling away. That's a culture signal, not an onboarding problem.`
-      : riskTier === "Moderate"
-        ? `${disengagingRisk} members who've been around a while are showing signs of disengagement. No new members are at risk, but your veterans are starting to drift.`
-        : `A few long-standing members have gone silent. The good news: your new member pipeline is clean. The concern: established members are slipping without anyone noticing.`;
-    riskWhyItMatters = "When established members disengage, it's rarely about the workout. It's about feeling invisible. These members carry institutional knowledge, social connections, and referral potential. Losing a 2-year member costs you more than losing 3 new signups — both in revenue and in community fabric.";
-    riskAction = riskTier === "High"
-      ? "This is a retention emergency hiding in plain sight. Pull your disengaging member list today and personally reach out to every one. Ask what's changed. Re-invite them to a class with a specific coach. If they've been absent 30+ days, offer a free 1-on-1 session to reconnect. Do not wait."
-      : "Schedule a personal check-in with each disengaging member this month. A simple 'We miss you' text from their coach is often enough to restart the habit. Ask about schedule changes, injuries, or life events — then remove the friction.";
+  if (pr) {
+    const parts: string[] = [];
+    if (pr.ghostCount > 0) parts.push(`${pr.ghostCount} ghost`);
+    if (pr.atRiskCount > 0) parts.push(`${pr.atRiskCount} at-risk`);
+    if (pr.drifterCount > 0) parts.push(`${pr.drifterCount} drifting`);
+    riskCurrentLabel = totalRisk === 0
+      ? "0 flagged (0%)"
+      : `${totalRisk} flagged (${riskPct}%) — ${parts.join(", ")}`;
+    riskImpact = totalRisk > 0
+      ? `$${pr.revenueAtRisk.toLocaleString()}/mo revenue at risk`
+      : "No members currently flagged";
+
+    if (totalRisk === 0) {
+      riskMeaning = "No members are showing risk signals right now. Your onboarding is effective and your established members are staying connected.";
+      riskWhyItMatters = "A clear radar is earned, not given. It means your outreach, coaching relationships, and member experience are all working in sync. This is the standard to maintain.";
+      riskAction = "Use this stability to go on offense. Reach out to your most engaged members and document what's working. Build those patterns into your playbook so the next wave of new members inherits a proven system.";
+    } else if (pr.ghostCount > 0 && pr.atRiskCount > 0) {
+      riskMeaning = riskTier === "High"
+        ? `${pr.ghostCount} members are likely to cancel without intervention and ${pr.atRiskCount} more are showing significant risk signals. This is active revenue erosion.`
+        : `${pr.ghostCount} ghost and ${pr.atRiskCount} at-risk members need attention. The predictive model shows elevated churn probability — act before these become cancellations.`;
+      riskWhyItMatters = "Ghost members have mentally checked out — they're no longer engaged and inertia is the only thing keeping their membership active. At-risk members are earlier in the disengagement curve, which means you still have a window to reverse course. Both groups represent real revenue that's already slipping.";
+      riskAction = riskTier === "High"
+        ? "Prioritize ghost members first — personal call from their primary coach this week. For at-risk members, a direct text asking about their goals and scheduling their next class. Both tracks require 1-on-1 contact, not group outreach."
+        : "Schedule personal check-ins with all flagged members this month. Ghost members get a phone call. At-risk members get a text from their coach. Remove friction, acknowledge the gap, and give them a specific reason to come back.";
+    } else if (pr.ghostCount > 0) {
+      riskMeaning = riskTier === "High"
+        ? `${pr.ghostCount} members have essentially disengaged. These are high-probability cancellations without direct intervention.`
+        : `${pr.ghostCount} member${pr.ghostCount !== 1 ? "s" : ""} showing ghost-level disengagement. The window to re-engage is closing.`;
+      riskWhyItMatters = "Ghost members aren't coming back on their own. Every week without contact makes cancellation more likely. These members once chose your gym — that history is leverage if you use it now.";
+      riskAction = "Personal outreach to every ghost member this week. Call, don't text. Ask what changed, acknowledge their history, and offer a specific re-entry point — a class with their favorite coach, a 1-on-1 session, anything concrete.";
+    } else if (pr.atRiskCount > 0) {
+      riskMeaning = `${pr.atRiskCount} member${pr.atRiskCount !== 1 ? "s" : ""} are showing at-risk signals. They haven't fully disengaged yet, but the trajectory is concerning.`;
+      riskWhyItMatters = "At-risk members are in the intervention window — they're still deciding whether to stay. A single personal conversation can shift the outcome. Wait too long and they become ghosts.";
+      riskAction = "Reach out to each at-risk member within the next 7 days. A personal text or brief conversation about their goals is enough to interrupt the drift. Make sure they have a class booked before the conversation ends.";
+    } else {
+      riskMeaning = `${pr.drifterCount} member${pr.drifterCount !== 1 ? "s" : ""} showing early drift signals. No one is in immediate danger, but these are early warnings worth watching.`;
+      riskWhyItMatters = "Drifters are the earliest signal of potential disengagement. Catching drift early is the most efficient retention lever you have — it takes one touchpoint now versus five later.";
+      riskAction = "Monitor drifters closely this month. A casual check-in from their coach — 'Hey, haven't seen you in a few days, everything good?' — is often all it takes to re-engage early drifters.";
+    }
   } else {
-    riskMeaning = riskTier === "High"
-      ? `${newRisk} new members and ${disengagingRisk} established members are flagged. You're losing ground on two fronts: new members aren't sticking and veterans are fading. This combination accelerates churn and erodes your community from both ends.`
-      : riskTier === "Moderate"
-        ? `You have ${newRisk} new members in the risk window and ${disengagingRisk} established members going quiet. Both groups need different interventions — one needs onboarding intensity, the other needs re-engagement.`
-        : `A small mix of ${newRisk} new and ${disengagingRisk} established members need attention. The risk is manageable, but both groups require different approaches.`;
-    riskWhyItMatters = "New members and disengaging veterans leave for completely different reasons. New members haven't formed a habit yet — they need structure, connection, and early wins. Disengaging veterans have lost their reason to show up — they need to be seen, heard, and re-invited. Treating both groups the same wastes your effort and misses the real problem.";
-    riskAction = riskTier === "High"
-      ? "Split your outreach into two tracks immediately. For new members: assign a coach anchor, set a 14-day goal, and schedule their next 3 classes. For disengaging veterans: personal call from their primary coach this week — ask what's changed, acknowledge their history, and offer a specific re-entry point. Both tracks require direct human contact. No mass emails."
-      : "Prioritize personal outreach for both groups this month. New members get a check-in text and a class invitation from their coach. Disengaging members get a genuine 'We noticed you've been away' conversation. Different problems, different solutions — but both require you to reach out first.";
+    const newRisk = metrics.riskNewCount ?? 0;
+    const disengagingRisk = metrics.riskDisengagingCount ?? 0;
+    const hasNew = newRisk > 0;
+    const hasDisengaging = disengagingRisk > 0;
+    const riskScenario: "mixed" | "new-only" | "disengaging-only" | "clear" =
+      hasNew && hasDisengaging ? "mixed"
+      : hasNew ? "new-only"
+      : hasDisengaging ? "disengaging-only"
+      : "clear";
+    riskCurrentLabel = riskScenario === "clear"
+      ? `0 flagged (0%)`
+      : riskScenario === "new-only"
+        ? `${totalRisk} flagged (${riskPct}%) — ${newRisk} new`
+        : riskScenario === "disengaging-only"
+          ? `${totalRisk} flagged (${riskPct}%) — ${disengagingRisk} disengaging`
+          : `${totalRisk} flagged (${riskPct}%) — ${newRisk} new, ${disengagingRisk} disengaging`;
+    riskImpact = totalRisk > 0
+      ? `$${Math.round(totalRisk * metrics.arm).toLocaleString()}/mo revenue at risk`
+      : "No members currently flagged";
+    riskMeaning = "Member risk data available. View Member Intelligence for detailed engagement classifications.";
+    riskWhyItMatters = "Retention is the heartbeat of your gym business. Identifying members at risk early gives you the window to intervene before cancellations happen.";
+    riskAction = "Review your Member Intelligence page for detailed per-member risk analysis and recommended actions.";
   }
 
   reports.push({
     metric: "Member Risk Radar",
     current: riskCurrentLabel,
     target: "< 10% of roster",
-    impact: totalRisk > 0
-      ? `$${Math.round(totalRisk * metrics.arm).toLocaleString()}/mo revenue at risk`
-      : "No members currently flagged",
+    impact: riskImpact,
     meaning: riskMeaning,
     whyItMatters: riskWhyItMatters,
     action: riskAction,

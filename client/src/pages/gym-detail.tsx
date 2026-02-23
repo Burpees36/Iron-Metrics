@@ -95,11 +95,12 @@ interface AtRiskMember {
   email: string | null;
   joinDate: string;
   monthlyRate: string;
-  riskCategory: "new" | "disengaging";
+  riskCategory: "ghost" | "at-risk" | "drifter";
   riskLabel: string;
   tenureDays: number;
   lastContacted: string | null;
   lastAttended: string | null;
+  churnProbability: number;
 }
 
 interface EnrichedMember {
@@ -711,40 +712,31 @@ function ReportCard({ report, gymId, atRiskMembers, monthDate }: { report: Metri
         </div>
 
         {isRiskRadar && atRiskMembers && atRiskMembers.length > 0 && (() => {
-          const newMembers = atRiskMembers.filter(m => m.riskCategory === "new");
-          const disengagingMembers = atRiskMembers.filter(m => m.riskCategory === "disengaging");
+          const ghostMembers = atRiskMembers.filter(m => m.riskCategory === "ghost");
+          const atRiskOnly = atRiskMembers.filter(m => m.riskCategory === "at-risk");
+          const drifterMembers = atRiskMembers.filter(m => m.riskCategory === "drifter");
+          const sections: { label: string; members: AtRiskMember[]; color: string; watchList?: boolean }[] = [
+            { label: "Ghost", members: ghostMembers, color: "bg-red-500" },
+            { label: "At-Risk", members: atRiskOnly, color: "bg-amber-500" },
+            { label: "Drifting — Watch List", members: drifterMembers, color: "bg-yellow-400", watchList: true },
+          ];
           return (
             <div className="border-t pt-4 space-y-4" data-testid="section-flagged-members">
-              {disengagingMembers.length > 0 && (
-                <div className="space-y-3">
+              {sections.map(({ label, members, color }) => members.length > 0 && (
+                <div key={label} className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-amber-500" />
+                    <div className={`w-2 h-2 rounded-full ${color}`} />
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      Disengaging ({disengagingMembers.length})
+                      {label} ({members.length})
                     </p>
                   </div>
                   <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                    {disengagingMembers.map((m) => (
+                    {members.map((m) => (
                       <FlaggedMemberCard key={m.id} member={m} gymId={gymId} monthDate={monthDate} />
                     ))}
                   </div>
                 </div>
-              )}
-              {newMembers.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-blue-500" />
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      New Members ({newMembers.length})
-                    </p>
-                  </div>
-                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                    {newMembers.map((m) => (
-                      <FlaggedMemberCard key={m.id} member={m} gymId={gymId} monthDate={monthDate} />
-                    ))}
-                  </div>
-                </div>
-              )}
+              ))}
             </div>
           );
         })()}
@@ -839,24 +831,23 @@ function FlaggedMemberCard({ member: m, gymId, monthDate }: { member: AtRiskMemb
 }
 
 function getRiskReason(member: AtRiskMember): { label: string; description: string } {
-  if (member.riskCategory === "disengaging") {
-    if (member.riskLabel === "No class 30+ days")
-      return { label: "No class 30+ days", description: "This member has not attended a class in over a month. After 14 days without a class, the probability of cancellation rises sharply. At 30+ days, the routine is broken. A personal text or call from their coach — not an automated message — asking how they are doing and inviting them to a specific class can re-engage them before the decision to cancel is made." };
-    if (member.riskLabel === "No class 14+ days")
-      return { label: "No class 14+ days", description: "Two weeks without a class. This is the critical threshold where disengagement accelerates. Reach out personally within 48 hours: ask how they are doing, reference something specific about their progress, and suggest a class time. Members who receive a personal coach check-in at this stage are significantly more likely to return." };
-    if (member.riskLabel === "No attendance recorded")
-      return { label: "No attendance recorded", description: "No class attendance on record. This member may be paying but not showing up — the most silent form of disengagement. Schedule a goal review: show them their progress, set 3 specific targets for the next 90 days, and agree on a weekly attendance commitment. The goal review creates a psychological contract that reactivates engagement." };
-    if (member.riskLabel === "Never contacted")
-      return { label: "Never contacted", description: "This member has never received a personal outreach. They may feel invisible. One of the five pillars of retention is Fame — members need to feel seen and valued. A single personal check-in, asking about their goals and how the gym fits their life, can shift the entire trajectory. Schedule a goal review this week." };
-    if (member.riskLabel === "Silent 60+ days")
-      return { label: "Silent 60+ days", description: "No contact in over 2 months. This member is quietly disengaging. At this stage, a direct and personal reconnection is the only effective intervention. Call them — not a text, a call. Reference their history, express that they are missed, and offer a specific re-entry path: a class with their favorite coach, a goal-setting session, or an invitation to a community event." };
-    return { label: "Drifting", description: "No contact in 30+ days. The connection is fading. Without intervention, drifters become ghosts. A coach check-in now — referencing a specific milestone or asking about a goal — can prevent the slow slide toward cancellation. Members who feel a coach knows their name and cares about their progress stay dramatically longer." };
+  const pct = Math.round(member.churnProbability * 100);
+  if (member.riskCategory === "ghost") {
+    return {
+      label: `Ghost · ${pct}% churn risk`,
+      description: "This member has essentially disengaged. Without direct personal intervention — a phone call, not a text — they are very likely to cancel. Reference their history, express that they are missed, and offer a specific re-entry path: a class with their favorite coach, a goal-setting session, or an invitation to a community event."
+    };
   }
-  if (member.tenureDays <= 14)
-    return { label: "First 2 weeks", description: "Joined in the last 2 weeks — the highest-risk window. Without structured onboarding, average retention is roughly 78 days. Ensure they have been greeted by name, introduced to at least 3 other members, and have a clear schedule for their first week. The target: 3 classes in the first 7 days. A personal follow-up after their second class asking how they felt is one of the highest-impact touchpoints you can make." };
-  if (member.tenureDays <= 30)
-    return { label: "First month", description: "In their first month. Still deciding if this gym is the right fit. By week 2, schedule a goal-setting session to define 3 specific, measurable targets. By day 30, conduct a check-in to review initial progress and address any barriers. Members who complete a goal review within their first 90 days are 3 times more likely to reach the 6-month mark." };
-  return { label: "Pre-habit window", description: "30 to 90 days in. The novelty is wearing off and exercise habits have not solidified yet. This is where visible progress tracking and social connections determine whether they stay. Celebrate any wins — a PR, an attendance streak, mastering a new movement. Introduce them to a workout buddy. Schedule their first quarterly goal review to show measurable progress and set the next targets." };
+  if (member.riskCategory === "at-risk") {
+    return {
+      label: `At-Risk · ${pct}% churn risk`,
+      description: "This member is showing significant disengagement signals but hasn't fully checked out. A personal check-in from their coach — asking about their goals, acknowledging their effort, and scheduling their next class — can interrupt the drift before it becomes a cancellation."
+    };
+  }
+  return {
+    label: `Drifting · ${pct}% churn risk`,
+    description: "Early signs of disengagement. The connection is fading but the window to re-engage is still wide open. A casual coach check-in — referencing a specific milestone or asking about a goal — can prevent the slow slide toward cancellation."
+  };
 }
 
 function RiskTierBadge({ current }: { current: string }) {
