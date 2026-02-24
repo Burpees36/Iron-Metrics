@@ -22,9 +22,7 @@ import {
   Download,
   Info,
   Zap,
-  Timer,
   Target,
-  ArrowRight,
 } from "lucide-react";
 import {
   LineChart,
@@ -187,40 +185,42 @@ function PremiumFunnel({ counts, rates }: {
   const maxCount = Math.max(...stages.map(s => s.count), 1);
 
   return (
-    <div className="space-y-3 py-1" data-testid="funnel-visual">
+    <div className="space-y-0 py-1" data-testid="funnel-visual">
       {stages.map((stage, i) => {
-        const widthPct = Math.max(20, (stage.count / maxCount) * 100);
+        const widthPct = Math.max(30, (stage.count / maxCount) * 100);
         const isLast = i === stages.length - 1;
-        const opacity = 1 - (i * 0.15);
+        const opacity = 1 - (i * 0.18);
 
         return (
           <div key={stage.label}>
             <div className="flex items-center gap-3">
               <div
-                className="relative rounded-lg overflow-hidden transition-all duration-500"
-                style={{ width: `${widthPct}%`, minWidth: "80px" }}
+                className="relative rounded-md overflow-hidden transition-all duration-500 mx-auto"
+                style={{ width: `${widthPct}%`, minWidth: "100px" }}
               >
                 <div
-                  className="px-4 py-3 relative z-10"
+                  className="px-4 py-2.5 relative z-10"
                   style={{
                     background: `linear-gradient(135deg, hsl(var(--primary) / ${opacity}) 0%, hsl(var(--primary) / ${opacity * 0.6}) 100%)`,
                   }}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-primary-foreground/80 uppercase tracking-wider">{stage.label}</span>
-                    <span className="text-lg font-bold text-primary-foreground tabular-nums">{stage.count}</span>
+                    <span className="text-[10px] font-medium text-primary-foreground/80 uppercase tracking-wider">{stage.label}</span>
+                    <span className="text-base font-bold text-primary-foreground tabular-nums">{stage.count}</span>
                   </div>
                 </div>
               </div>
-              {!isLast && stage.rate !== null && (
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <ArrowRight className="w-3.5 h-3.5 text-muted-foreground/40" />
-                  <span className="text-xs font-semibold tabular-nums text-muted-foreground">
+            </div>
+            {!isLast && (
+              <div className="flex flex-col items-center py-1">
+                <ChevronDown className="w-4 h-4 text-muted-foreground/40" />
+                {stage.rate !== null && (
+                  <span className="text-[10px] font-semibold tabular-nums text-muted-foreground -mt-0.5">
                     {(stage.rate * 100).toFixed(0)}%
                   </span>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </div>
         );
       })}
@@ -255,12 +255,6 @@ function SalesHealthCard({ composite, bottleneck }: { composite: SalesSummary["c
   const colors = getScoreColor(score);
   const directive = getStrategicDirective(score, composite, bottleneck);
 
-  const subScores = [
-    { label: "Conversion", value: composite.conversionSubScore, weight: "50%", desc: "Lead-to-member rate vs. 20-40% target" },
-    { label: "Speed", value: composite.speedSubScore, weight: "25%", desc: "Response time vs. 5-60 min window" },
-    { label: "Show & Close", value: composite.stageSubScore, weight: "25%", desc: "Show rate (70-90%) and close rate (60-85%)" },
-  ];
-
   return (
     <Card className={`ring-1 ${colors.ring}`} data-testid="health-score-card">
       <CardContent className="p-5 space-y-4">
@@ -280,67 +274,80 @@ function SalesHealthCard({ composite, bottleneck }: { composite: SalesSummary["c
         <div className={`rounded-lg p-3 border ${score >= 65 ? "border-emerald-500/15 bg-emerald-500/5" : score >= 40 ? "border-amber-500/15 bg-amber-500/5" : "border-red-500/15 bg-red-500/5"}`}>
           <p className="text-xs leading-relaxed font-medium" data-testid="health-directive">{directive}</p>
         </div>
-
-        <div className="space-y-2.5">
-          {subScores.map((sub) => {
-            const subColors = getScoreColor(sub.value);
-            const pct = Math.min(sub.value, 100);
-            return (
-              <Tooltip key={sub.label}>
-                <TooltipTrigger asChild>
-                  <div className="space-y-1 cursor-default">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-muted-foreground font-medium">{sub.label} <span className="text-muted-foreground/50">({sub.weight})</span></span>
-                      <span className={`font-bold tabular-nums ${subColors.text}`}>{sub.value}</span>
-                    </div>
-                    <div className="h-1.5 rounded-full bg-muted/50 overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all duration-700 ${subColors.bg}`}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="left" className="text-xs max-w-[200px]">{sub.desc}</TooltipContent>
-              </Tooltip>
-            );
-          })}
-        </div>
       </CardContent>
     </Card>
   );
+}
+
+function getSourceInsight(data: SourceRow[]): string | null {
+  if (data.length < 2) return null;
+
+  const withConversion = data.filter(r => r.conversionRate !== null && r.leads >= 2);
+  if (withConversion.length === 0) return null;
+
+  const best = withConversion.reduce((a, b) => (a.conversionRate! > b.conversionRate! ? a : b));
+  const mostVolume = data.reduce((a, b) => (a.leads > b.leads ? a : b));
+  const weakest = withConversion.filter(r => r.leads >= 3).reduce((a, b) => (a.conversionRate! < b.conversionRate! ? a : b), withConversion[0]);
+
+  const parts: string[] = [];
+
+  if (best.conversionRate! >= 0.3) {
+    parts.push(`${best.source} is your strongest converter at ${(best.conversionRate! * 100).toFixed(0)}%.`);
+  }
+
+  if (mostVolume.source !== best.source && mostVolume.leads > best.leads) {
+    parts.push(`${mostVolume.source} drives the most volume (${mostVolume.leads} leads) but converts at ${mostVolume.conversionRate !== null ? (mostVolume.conversionRate * 100).toFixed(0) + "%" : "an unknown rate"}.`);
+  }
+
+  if (weakest && weakest.source !== best.source && weakest.conversionRate! < 0.2 && weakest.leads >= 3) {
+    parts.push(`${weakest.source} needs attention — ${weakest.leads} leads but only ${(weakest.conversionRate! * 100).toFixed(0)}% conversion.`);
+  }
+
+  if (parts.length === 0) {
+    parts.push(`${best.source} leads with ${(best.conversionRate! * 100).toFixed(0)}% conversion across ${best.leads} leads.`);
+  }
+
+  return parts.join(" ");
 }
 
 function SourceTable({ data }: { data: SourceRow[] }) {
   if (data.length === 0) return <p className="text-sm text-muted-foreground p-4">No source data available.</p>;
 
   const maxLeads = Math.max(...data.map(r => r.leads), 1);
+  const insight = getSourceInsight(data);
 
   return (
-    <div className="space-y-2" data-testid="source-breakdown-table">
-      {data.map((row) => {
-        const barPct = (row.leads / maxLeads) * 100;
-        return (
-          <div key={row.source} className="group" data-testid={`source-row-${row.source}`}>
-            <div className="flex items-center justify-between text-xs mb-1">
-              <span className="font-medium truncate mr-3">{row.source}</span>
-              <div className="flex items-center gap-3 flex-shrink-0 tabular-nums text-muted-foreground">
-                <span>{row.leads} leads</span>
-                <span>{row.newMembers} members</span>
-                <span className="font-semibold text-foreground w-12 text-right">
-                  {row.conversionRate !== null ? `${(row.conversionRate * 100).toFixed(0)}%` : "—"}
-                </span>
+    <div className="space-y-3" data-testid="source-breakdown-table">
+      <div className="space-y-2">
+        {data.map((row) => {
+          const barPct = (row.leads / maxLeads) * 100;
+          return (
+            <div key={row.source} className="group" data-testid={`source-row-${row.source}`}>
+              <div className="flex items-center justify-between text-xs mb-1">
+                <span className="font-medium truncate mr-3">{row.source}</span>
+                <div className="flex items-center gap-3 flex-shrink-0 tabular-nums text-muted-foreground">
+                  <span>{row.leads} leads</span>
+                  <span>{row.newMembers} members</span>
+                  <span className="font-semibold text-foreground w-12 text-right">
+                    {row.conversionRate !== null ? `${(row.conversionRate * 100).toFixed(0)}%` : "—"}
+                  </span>
+                </div>
+              </div>
+              <div className="h-1.5 rounded-full bg-muted/40 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-primary/60 transition-all duration-500"
+                  style={{ width: `${barPct}%` }}
+                />
               </div>
             </div>
-            <div className="h-1.5 rounded-full bg-muted/40 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-primary/60 transition-all duration-500"
-                style={{ width: `${barPct}%` }}
-              />
-            </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
+      {insight && (
+        <p className="text-[11px] leading-relaxed text-muted-foreground border-t border-border/30 pt-2" data-testid="source-insight">
+          {insight}
+        </p>
+      )}
     </div>
   );
 }
@@ -533,7 +540,7 @@ export default function SalesIntelligence() {
                 title="Speed to Lead"
                 value={summary.speed.responseMedianMin}
                 delta={summary.deltas.responseMedianMin}
-                tooltip="Median time from lead creation to first contact. Under 5 minutes increases conversion by 4x."
+                tooltip="Median time from lead creation to first contact. Target: sub 5 minutes."
                 icon={Zap}
                 format="time"
                 accent={
