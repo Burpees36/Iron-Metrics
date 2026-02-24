@@ -4,6 +4,7 @@ import {
   wodifyConnections, wodifySyncRuns, wodifyRawClients, wodifyRawMemberships,
   knowledgeSources, knowledgeDocuments, knowledgeChunks,
   recommendationChunkAudit, ingestJobs,
+  leads, consults, salesMemberships, payments,
   type Gym, type InsertGym,
   type Member, type InsertMember,
   type GymMonthlyMetrics, type InsertGymMonthlyMetrics,
@@ -18,6 +19,10 @@ import {
   type KnowledgeChunk, type InsertKnowledgeChunk,
   type RecommendationChunkAudit, type InsertRecommendationChunkAudit,
   type IngestJob, type InsertIngestJob,
+  type Lead, type InsertLead,
+  type Consult, type InsertConsult,
+  type SalesMembership, type InsertSalesMembership,
+  type Payment, type InsertPayment,
 } from "@shared/schema";
 import { db } from "./db";
 import { pool } from "./db";
@@ -98,6 +103,19 @@ export interface IStorage {
   createIngestJob(job: InsertIngestJob): Promise<IngestJob>;
   updateIngestJob(id: string, updates: Partial<IngestJob>): Promise<IngestJob>;
   getIngestJobs(sourceId?: string): Promise<IngestJob[]>;
+
+  createLead(lead: InsertLead): Promise<Lead>;
+  getLeadsByGym(gymId: string, start: Date, end: Date): Promise<Lead[]>;
+  getLeadById(id: string): Promise<Lead | undefined>;
+
+  createConsult(consult: InsertConsult): Promise<Consult>;
+  getConsultsByGym(gymId: string, start: Date, end: Date): Promise<Consult[]>;
+
+  createSalesMembership(membership: InsertSalesMembership): Promise<SalesMembership>;
+  getSalesMembershipsByGym(gymId: string, start: Date, end: Date): Promise<SalesMembership[]>;
+
+  createPayment(payment: InsertPayment): Promise<Payment>;
+  getPaymentsByGym(gymId: string, start: Date, end: Date): Promise<Payment[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -655,6 +673,55 @@ export class DatabaseStorage implements IStorage {
       return db.select().from(ingestJobs).where(eq(ingestJobs.sourceId, sourceId)).orderBy(desc(ingestJobs.startedAt));
     }
     return db.select().from(ingestJobs).orderBy(desc(ingestJobs.startedAt)).limit(50);
+  }
+
+  async createLead(lead: InsertLead): Promise<Lead> {
+    const [created] = await db.insert(leads).values(lead).returning();
+    return created;
+  }
+
+  async getLeadsByGym(gymId: string, start: Date, end: Date): Promise<Lead[]> {
+    return db.select().from(leads).where(
+      and(eq(leads.gymId, gymId), gte(leads.createdAt, start), lte(leads.createdAt, end))
+    ).orderBy(desc(leads.createdAt));
+  }
+
+  async getLeadById(id: string): Promise<Lead | undefined> {
+    const [lead] = await db.select().from(leads).where(eq(leads.id, id));
+    return lead;
+  }
+
+  async createConsult(consult: InsertConsult): Promise<Consult> {
+    const [created] = await db.insert(consults).values(consult).returning();
+    return created;
+  }
+
+  async getConsultsByGym(gymId: string, start: Date, end: Date): Promise<Consult[]> {
+    return db.select().from(consults).where(
+      and(eq(consults.gymId, gymId), gte(consults.bookedAt, start), lte(consults.bookedAt, end))
+    ).orderBy(desc(consults.bookedAt));
+  }
+
+  async createSalesMembership(membership: InsertSalesMembership): Promise<SalesMembership> {
+    const [created] = await db.insert(salesMemberships).values(membership).returning();
+    return created;
+  }
+
+  async getSalesMembershipsByGym(gymId: string, start: Date, end: Date): Promise<SalesMembership[]> {
+    return db.select().from(salesMemberships).where(
+      and(eq(salesMemberships.gymId, gymId), gte(salesMemberships.startedAt, start), lte(salesMemberships.startedAt, end))
+    ).orderBy(desc(salesMemberships.startedAt));
+  }
+
+  async createPayment(payment: InsertPayment): Promise<Payment> {
+    const [created] = await db.insert(payments).values(payment).returning();
+    return created;
+  }
+
+  async getPaymentsByGym(gymId: string, start: Date, end: Date): Promise<Payment[]> {
+    return db.select().from(payments).where(
+      and(eq(payments.gymId, gymId), gte(payments.paidAt, start), lte(payments.paidAt, end))
+    ).orderBy(desc(payments.paidAt));
   }
 }
 

@@ -6,13 +6,14 @@ import { parseMembersCsv, previewCsv, parseAllRows, computeFileHash, type Column
 import { recomputeAllMetrics, computeMonthlyMetrics, generateMetricReports, generateForecast, generateTrendIntelligence } from "./metrics";
 import { generatePredictiveIntelligence } from "./predictive";
 import { ensureRecommendationCards, getOwnerActions, getPeriodStart, getRecommendationExecutionState, logOwnerAction, runLearningUpdate, toggleChecklistItem } from "./recommendation-learning";
-import { insertGymSchema, insertKnowledgeSourceSchema } from "@shared/schema";
+import { insertGymSchema, insertKnowledgeSourceSchema, insertLeadSchema, insertConsultSchema, insertSalesMembershipSchema, insertPaymentSchema } from "@shared/schema";
 import multer from "multer";
 import { encryptApiKey, generateFingerprint, testWodifyConnection } from "./wodify-connector";
 import { runWodifySync } from "./wodify-sync";
 import { ingestSource, reprocessDocument, TAXONOMY_TAGS } from "./knowledge-ingestion";
 import { searchKnowledge } from "./knowledge-retrieval";
 import { seedKnowledgeBase } from "./seed-knowledge";
+import { computeSalesSummary, computeTrends, computeBySource, computeByCoach } from "./sales-intelligence";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -1345,6 +1346,154 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching recommendation audits:", error);
       res.status(500).json({ message: "Failed to fetch audits" });
+    }
+  });
+
+  function parseDateRange(req: any): { start: Date; end: Date; prevStart: Date; prevEnd: Date } {
+    const now = new Date();
+    let start: Date;
+    let end = new Date(req.query.end || now.toISOString());
+    if (req.query.start) {
+      start = new Date(req.query.start);
+    } else {
+      start = new Date(end);
+      start.setDate(start.getDate() - 30);
+    }
+    const duration = end.getTime() - start.getTime();
+    const prevEnd = new Date(start.getTime() - 1);
+    const prevStart = new Date(prevEnd.getTime() - duration);
+    return { start, end, prevStart, prevEnd };
+  }
+
+  app.get("/api/gyms/:id/sales-intelligence/summary", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      const { start, end, prevStart, prevEnd } = parseDateRange(req);
+      const [leadsArr, consultsArr, membershipsArr, paymentsArr, prevLeads, prevConsults, prevMemberships, prevPayments] = await Promise.all([
+        storage.getLeadsByGym(req.params.id, start, end),
+        storage.getConsultsByGym(req.params.id, start, end),
+        storage.getSalesMembershipsByGym(req.params.id, start, end),
+        storage.getPaymentsByGym(req.params.id, start, end),
+        storage.getLeadsByGym(req.params.id, prevStart, prevEnd),
+        storage.getConsultsByGym(req.params.id, prevStart, prevEnd),
+        storage.getSalesMembershipsByGym(req.params.id, prevStart, prevEnd),
+        storage.getPaymentsByGym(req.params.id, prevStart, prevEnd),
+      ]);
+
+      const summary = computeSalesSummary(leadsArr, consultsArr, membershipsArr, paymentsArr, prevLeads, prevConsults, prevMemberships, prevPayments);
+      res.json(summary);
+    } catch (error) {
+      console.error("Error computing sales summary:", error);
+      res.status(500).json({ message: "Failed to compute sales summary" });
+    }
+  });
+
+  app.get("/api/gyms/:id/sales-intelligence/trends", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      const { start, end } = parseDateRange(req);
+      const bucket = req.query.bucket === "weekly" ? "weekly" : "daily" as const;
+      const [leadsArr, membershipsArr] = await Promise.all([
+        storage.getLeadsByGym(req.params.id, start, end),
+        storage.getSalesMembershipsByGym(req.params.id, start, end),
+      ]);
+
+      const trends = computeTrends(leadsArr, membershipsArr, bucket);
+      res.json(trends);
+    } catch (error) {
+      console.error("Error computing sales trends:", error);
+      res.status(500).json({ message: "Failed to compute sales trends" });
+    }
+  });
+
+  app.get("/api/gyms/:id/sales-intelligence/by-source", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      const { start, end } = parseDateRange(req);
+      const [leadsArr, membershipsArr] = await Promise.all([
+        storage.getLeadsByGym(req.params.id, start, end),
+        storage.getSalesMembershipsByGym(req.params.id, start, end),
+      ]);
+
+      const bySource = computeBySource(leadsArr, membershipsArr);
+      res.json(bySource);
+    } catch (error) {
+      console.error("Error computing source breakdown:", error);
+      res.status(500).json({ message: "Failed to compute source breakdown" });
+    }
+  });
+
+  app.get("/api/gyms/:id/sales-intelligence/by-coach", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      const { start, end } = parseDateRange(req);
+      const [consultsArr, membershipsArr] = await Promise.all([
+        storage.getConsultsByGym(req.params.id, start, end),
+        storage.getSalesMembershipsByGym(req.params.id, start, end),
+      ]);
+
+      const byCoach = computeByCoach(consultsArr, membershipsArr);
+      res.json(byCoach);
+    } catch (error) {
+      console.error("Error computing coach breakdown:", error);
+      res.status(500).json({ message: "Failed to compute coach breakdown" });
+    }
+  });
+
+  app.post("/api/gyms/:id/leads", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      const data = insertLeadSchema.parse({ ...req.body, gymId: req.params.id });
+      const lead = await storage.createLead(data);
+      res.json(lead);
+    } catch (error) {
+      console.error("Error creating lead:", error);
+      res.status(500).json({ message: "Failed to create lead" });
+    }
+  });
+
+  app.post("/api/gyms/:id/consults", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      const data = insertConsultSchema.parse({ ...req.body, gymId: req.params.id });
+      const consult = await storage.createConsult(data);
+      res.json(consult);
+    } catch (error) {
+      console.error("Error creating consult:", error);
+      res.status(500).json({ message: "Failed to create consult" });
+    }
+  });
+
+  app.post("/api/gyms/:id/sales-memberships", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+
+      const data = insertSalesMembershipSchema.parse({ ...req.body, gymId: req.params.id });
+      const membership = await storage.createSalesMembership(data);
+      res.json(membership);
+    } catch (error) {
+      console.error("Error creating sales membership:", error);
+      res.status(500).json({ message: "Failed to create sales membership" });
     }
   });
 

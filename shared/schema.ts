@@ -397,6 +397,96 @@ export const insertRecommendationChunkAuditSchema = createInsertSchema(recommend
 export type InsertRecommendationChunkAudit = z.infer<typeof insertRecommendationChunkAuditSchema>;
 export type RecommendationChunkAudit = typeof recommendationChunkAudit.$inferSelect;
 
+export const leads = pgTable("leads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gymId: varchar("gym_id").notNull().references(() => gyms.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  source: text("source").notNull().default("Unknown"),
+  status: text("status").notNull().default("new"),
+  firstContactAt: timestamp("first_contact_at"),
+  metadata: jsonb("metadata"),
+}, (table) => [
+  index("idx_leads_gym").on(table.gymId),
+  index("idx_leads_created").on(table.createdAt),
+]);
+
+export const leadsRelations = relations(leads, ({ one }) => ({
+  gym: one(gyms, { fields: [leads.gymId], references: [gyms.id] }),
+}));
+
+export const insertLeadSchema = createInsertSchema(leads).omit({ id: true });
+export type InsertLead = z.infer<typeof insertLeadSchema>;
+export type Lead = typeof leads.$inferSelect;
+
+export const consults = pgTable("consults", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gymId: varchar("gym_id").notNull().references(() => gyms.id),
+  leadId: varchar("lead_id").notNull().references(() => leads.id),
+  bookedAt: timestamp("booked_at").defaultNow().notNull(),
+  scheduledFor: timestamp("scheduled_for"),
+  showedAt: timestamp("showed_at"),
+  noShowAt: timestamp("no_show_at"),
+  coachId: varchar("coach_id"),
+  notes: text("notes"),
+}, (table) => [
+  index("idx_consults_gym").on(table.gymId),
+  index("idx_consults_lead").on(table.leadId),
+  index("idx_consults_booked").on(table.bookedAt),
+]);
+
+export const consultsRelations = relations(consults, ({ one }) => ({
+  gym: one(gyms, { fields: [consults.gymId], references: [gyms.id] }),
+  lead: one(leads, { fields: [consults.leadId], references: [leads.id] }),
+}));
+
+export const insertConsultSchema = createInsertSchema(consults).omit({ id: true });
+export type InsertConsult = z.infer<typeof insertConsultSchema>;
+export type Consult = typeof consults.$inferSelect;
+
+export const salesMemberships = pgTable("sales_memberships", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gymId: varchar("gym_id").notNull().references(() => gyms.id),
+  leadId: varchar("lead_id").notNull().references(() => leads.id),
+  startedAt: timestamp("started_at").notNull(),
+  endedAt: timestamp("ended_at"),
+  priceMonthly: numeric("price_monthly", { precision: 10, scale: 2 }).notNull().default("0"),
+  status: text("status").notNull().default("active"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_sales_memberships_gym").on(table.gymId),
+  index("idx_sales_memberships_lead").on(table.leadId),
+  index("idx_sales_memberships_started").on(table.startedAt),
+]);
+
+export const salesMembershipsRelations = relations(salesMemberships, ({ one }) => ({
+  gym: one(gyms, { fields: [salesMemberships.gymId], references: [gyms.id] }),
+  lead: one(leads, { fields: [salesMemberships.leadId], references: [leads.id] }),
+}));
+
+export const insertSalesMembershipSchema = createInsertSchema(salesMemberships).omit({ id: true, createdAt: true });
+export type InsertSalesMembership = z.infer<typeof insertSalesMembershipSchema>;
+export type SalesMembership = typeof salesMemberships.$inferSelect;
+
+export const payments = pgTable("payments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gymId: varchar("gym_id").notNull().references(() => gyms.id),
+  membershipId: varchar("membership_id").notNull().references(() => salesMemberships.id),
+  amount: numeric("amount", { precision: 10, scale: 2 }).notNull().default("0"),
+  paidAt: timestamp("paid_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_payments_gym").on(table.gymId),
+  index("idx_payments_membership").on(table.membershipId),
+]);
+
+export const paymentsRelations = relations(payments, ({ one }) => ({
+  gym: one(gyms, { fields: [payments.gymId], references: [gyms.id] }),
+  membership: one(salesMemberships, { fields: [payments.membershipId], references: [salesMemberships.id] }),
+}));
+
+export const insertPaymentSchema = createInsertSchema(payments).omit({ id: true });
+export type InsertPayment = z.infer<typeof insertPaymentSchema>;
+export type Payment = typeof payments.$inferSelect;
+
 export const ingestJobs = pgTable("ingest_jobs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   sourceId: varchar("source_id").notNull().references(() => knowledgeSources.id),

@@ -23,6 +23,7 @@ import GymMemberRisk from "@/pages/gym-member-risk";
 import GymPlanning from "@/pages/gym-planning";
 import MemberDetail from "@/pages/member-detail";
 import GymSettings from "@/pages/gym-settings";
+import SalesIntelligence from "@/pages/sales-intelligence";
 import { NotificationBell } from "@/components/notification-bell";
 
 
@@ -54,6 +55,7 @@ function AuthenticatedApp() {
               <Route path="/gyms/:id/strategy" component={GymStrategy} />
               <Route path="/gyms/:id/member-risk" component={GymMemberRisk} />
               <Route path="/gyms/:id/planning" component={GymPlanning} />
+              <Route path="/gyms/:id/sales" component={SalesIntelligence} />
               <Route path="/gyms/:id/settings" component={GymSettings} />
               <Route path="/gyms/:id/members/:memberId" component={MemberDetail} />
               <Route path="/gyms/:id" component={GymDetail} />
