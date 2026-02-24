@@ -60,6 +60,7 @@ import {
   Download,
   Printer,
   CheckCircle2,
+  Brain,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import {
@@ -715,10 +716,10 @@ function ReportView({ gymId }: { gymId: string }) {
       {/* ── Section 5: Drill-Down Gateways ── */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 animate-fade-in-up animation-delay-200" data-testid="section-drill-down">
         {[
-          { label: "Retention Intelligence", href: `/gyms/${gymId}/member-risk`, icon: Activity },
-          { label: "Sales Intelligence", href: `/gyms/${gymId}/sales`, icon: TrendingUp },
-          { label: "Revenue Modeling", href: `/gyms/${gymId}/planning`, icon: DollarSign },
-          { label: "Member Risk Radar", href: `/gyms/${gymId}/trends`, icon: Radar },
+          { label: "Reports", href: `/gyms/${gymId}/trends`, icon: BarChart3 },
+          { label: "Member Intelligence", href: `/gyms/${gymId}/member-risk`, icon: Brain },
+          { label: "Sales Intelligence", href: `/gyms/${gymId}/sales`, icon: DollarSign },
+          { label: "Future Planning", href: `/gyms/${gymId}/planning`, icon: Target },
         ].map((link) => (
           <Link key={link.href} href={link.href}>
             <Card className="hover-elevate transition-all duration-300 cursor-pointer group" data-testid={`gateway-${link.label.toLowerCase().replace(/\s+/g, "-")}`}>
