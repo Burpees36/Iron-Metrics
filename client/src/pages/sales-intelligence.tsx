@@ -16,13 +16,15 @@ import {
   UserPlus,
   TrendingUp,
   TrendingDown,
-  DollarSign,
   AlertTriangle,
   ChevronDown,
   ChevronRight,
   Download,
   Info,
-  Gauge,
+  Zap,
+  Timer,
+  Target,
+  ArrowRight,
 } from "lucide-react";
 import {
   LineChart,
@@ -35,7 +37,7 @@ import {
   Legend,
 } from "recharts";
 
-type DatePreset = "7d" | "30d" | "90d" | "mtd" | "last-month" | "custom";
+type DatePreset = "7d" | "30d" | "90d" | "mtd" | "last-month";
 
 function getDateRange(preset: DatePreset): { start: string; end: string; label: string } {
   const now = new Date();
@@ -126,18 +128,20 @@ function DeltaBadge({ value, inverted }: { value: number | null; inverted?: bool
   );
 }
 
-function KPICard({ title, value, delta, tooltip, icon: Icon, format = "number" }: {
+function KPICard({ title, value, delta, tooltip, icon: Icon, format = "number", accent }: {
   title: string;
   value: number | null;
   delta: number | null;
   tooltip: string;
   icon: typeof Users;
-  format?: "number" | "percent" | "currency";
+  format?: "number" | "percent" | "currency" | "time";
+  accent?: string;
 }) {
   let displayValue = "—";
   if (value !== null) {
     if (format === "percent") displayValue = `${(value * 100).toFixed(1)}%`;
     else if (format === "currency") displayValue = `$${value.toFixed(2)}`;
+    else if (format === "time") displayValue = value < 1 ? "<1 min" : `${Math.round(value)} min`;
     else displayValue = value.toString();
   }
 
@@ -155,10 +159,10 @@ function KPICard({ title, value, delta, tooltip, icon: Icon, format = "number" }
                 <TooltipContent side="top" className="max-w-[220px] text-xs">{tooltip}</TooltipContent>
               </Tooltip>
             </div>
-            <p className="text-2xl font-bold tracking-tight" data-testid={`kpi-value-${title.toLowerCase().replace(/\s+/g, "-")}`}>
+            <p className={`text-2xl font-bold tracking-tight ${accent || ""}`} data-testid={`kpi-value-${title.toLowerCase().replace(/\s+/g, "-")}`}>
               {displayValue}
             </p>
-            <DeltaBadge value={delta} />
+            <DeltaBadge value={delta} inverted={format === "time"} />
           </div>
           <div className="p-2 rounded-lg bg-muted/50">
             <Icon className="w-4 h-4 text-muted-foreground" />
@@ -169,71 +173,174 @@ function KPICard({ title, value, delta, tooltip, icon: Icon, format = "number" }
   );
 }
 
-function FunnelStage({ label, count, rate, isLast }: { label: string; count: number; rate: number | null; isLast?: boolean }) {
+function PremiumFunnel({ counts, rates }: {
+  counts: SalesSummary["counts"];
+  rates: SalesSummary["rates"];
+}) {
+  const stages = [
+    { label: "Leads", count: counts.leads, rate: rates.setRate },
+    { label: "Booked", count: counts.booked, rate: rates.showRate },
+    { label: "Showed", count: counts.shows, rate: rates.closeRate },
+    { label: "Members", count: counts.newMembers, rate: null },
+  ];
+
+  const maxCount = Math.max(...stages.map(s => s.count), 1);
+
   return (
-    <div className="flex items-center gap-2" data-testid={`funnel-stage-${label.toLowerCase().replace(/\s+/g, "-")}`}>
-      <div className="flex-1 bg-muted/50 rounded-lg p-3 text-center">
-        <p className="text-lg font-bold">{count}</p>
-        <p className="text-xs text-muted-foreground">{label}</p>
-      </div>
-      {!isLast && (
-        <div className="flex flex-col items-center gap-0.5 text-muted-foreground px-1">
-          <ChevronRight className="w-4 h-4" />
-          <span className="text-[10px] font-medium">
-            {rate !== null ? `${(rate * 100).toFixed(1)}%` : "—"}
-          </span>
-        </div>
-      )}
+    <div className="space-y-3 py-1" data-testid="funnel-visual">
+      {stages.map((stage, i) => {
+        const widthPct = Math.max(20, (stage.count / maxCount) * 100);
+        const isLast = i === stages.length - 1;
+        const opacity = 1 - (i * 0.15);
+
+        return (
+          <div key={stage.label}>
+            <div className="flex items-center gap-3">
+              <div
+                className="relative rounded-lg overflow-hidden transition-all duration-500"
+                style={{ width: `${widthPct}%`, minWidth: "80px" }}
+              >
+                <div
+                  className="px-4 py-3 relative z-10"
+                  style={{
+                    background: `linear-gradient(135deg, hsl(var(--primary) / ${opacity}) 0%, hsl(var(--primary) / ${opacity * 0.6}) 100%)`,
+                  }}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-primary-foreground/80 uppercase tracking-wider">{stage.label}</span>
+                    <span className="text-lg font-bold text-primary-foreground tabular-nums">{stage.count}</span>
+                  </div>
+                </div>
+              </div>
+              {!isLast && stage.rate !== null && (
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <ArrowRight className="w-3.5 h-3.5 text-muted-foreground/40" />
+                  <span className="text-xs font-semibold tabular-nums text-muted-foreground">
+                    {(stage.rate * 100).toFixed(0)}%
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-function SalesHealthGauge({ score, label }: { score: number; label: string }) {
-  const getColor = (s: number) => {
-    if (s >= 75) return "text-emerald-500";
-    if (s >= 50) return "text-amber-500";
-    return "text-red-500";
-  };
+function getScoreColor(score: number) {
+  if (score >= 75) return { text: "text-emerald-500", bg: "bg-emerald-500", ring: "ring-emerald-500/20" };
+  if (score >= 50) return { text: "text-amber-500", bg: "bg-amber-500", ring: "ring-amber-500/20" };
+  return { text: "text-red-500", bg: "bg-red-500", ring: "ring-red-500/20" };
+}
+
+function getStrategicDirective(score: number, composite: SalesSummary["composite"], bottleneck: SalesSummary["bottleneck"]): string {
+  if (score >= 80) return "Pipeline is strong. Protect your speed advantage and maintain coaching consistency through the close.";
+  if (score >= 65) {
+    if (composite.speedSubScore < 50) return "Your conversion is solid but speed is costing you. Leads contacted within 5 minutes close at 4x the rate. Tighten response time.";
+    if (composite.stageSubScore < 50) return "Leads are entering the funnel but dropping off at the consultation stage. Review your show-up process and closing conversation.";
+    return "Good foundation. Focus on the weakest sub-score to unlock the next tier of performance.";
+  }
+  if (score >= 40) {
+    if (bottleneck?.stage === "Lead → Booked") return "Leads aren't converting to consultations. Implement a same-day follow-up system and give every lead a clear next step.";
+    if (bottleneck?.stage === "Booked → Show") return "No-shows are bleeding your pipeline. Add confirmation texts, reduce time-to-appointment, and make the consultation feel unmissable.";
+    if (bottleneck?.stage === "Show → Member") return "People are showing up but not signing. Restructure your consultation to lead with their goals, not your pricing.";
+    return "Multiple pipeline stages need attention. Start with the biggest bottleneck and fix one stage at a time.";
+  }
+  return "Pipeline needs foundational work. Prioritize speed-to-lead and a structured follow-up system before optimizing downstream stages.";
+}
+
+function SalesHealthCard({ composite, bottleneck }: { composite: SalesSummary["composite"]; bottleneck: SalesSummary["bottleneck"] }) {
+  const score = composite.salesHealthScore;
+  const colors = getScoreColor(score);
+  const directive = getStrategicDirective(score, composite, bottleneck);
+
+  const subScores = [
+    { label: "Conversion", value: composite.conversionSubScore, weight: "50%", desc: "Lead-to-member rate vs. 20-40% target" },
+    { label: "Speed", value: composite.speedSubScore, weight: "25%", desc: "Response time vs. 5-60 min window" },
+    { label: "Show & Close", value: composite.stageSubScore, weight: "25%", desc: "Show rate (70-90%) and close rate (60-85%)" },
+  ];
 
   return (
-    <div className="text-center space-y-2" data-testid="sales-health-score">
-      <div className="flex items-center justify-center gap-2">
-        <Gauge className={`w-5 h-5 ${getColor(score)}`} />
-        <span className={`text-3xl font-bold ${getColor(score)}`}>{score}</span>
-        <span className="text-sm text-muted-foreground">/ 100</span>
-      </div>
-      <p className="text-xs text-muted-foreground max-w-[280px] mx-auto">{label}</p>
-    </div>
+    <Card className={`ring-1 ${colors.ring}`} data-testid="health-score-card">
+      <CardContent className="p-5 space-y-4">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground mb-1">Sales Health</p>
+            <div className="flex items-baseline gap-1.5">
+              <span className={`text-4xl font-bold tracking-tight ${colors.text}`} data-testid="health-score-value">{score}</span>
+              <span className="text-sm text-muted-foreground font-medium">/ 100</span>
+            </div>
+          </div>
+          <div className={`p-2.5 rounded-xl ${colors.ring} ring-1 bg-background`}>
+            <Target className={`w-5 h-5 ${colors.text}`} />
+          </div>
+        </div>
+
+        <div className={`rounded-lg p-3 border ${score >= 65 ? "border-emerald-500/15 bg-emerald-500/5" : score >= 40 ? "border-amber-500/15 bg-amber-500/5" : "border-red-500/15 bg-red-500/5"}`}>
+          <p className="text-xs leading-relaxed font-medium" data-testid="health-directive">{directive}</p>
+        </div>
+
+        <div className="space-y-2.5">
+          {subScores.map((sub) => {
+            const subColors = getScoreColor(sub.value);
+            const pct = Math.min(sub.value, 100);
+            return (
+              <Tooltip key={sub.label}>
+                <TooltipTrigger asChild>
+                  <div className="space-y-1 cursor-default">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-muted-foreground font-medium">{sub.label} <span className="text-muted-foreground/50">({sub.weight})</span></span>
+                      <span className={`font-bold tabular-nums ${subColors.text}`}>{sub.value}</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-muted/50 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-700 ${subColors.bg}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="left" className="text-xs max-w-[200px]">{sub.desc}</TooltipContent>
+              </Tooltip>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
 function SourceTable({ data }: { data: SourceRow[] }) {
   if (data.length === 0) return <p className="text-sm text-muted-foreground p-4">No source data available.</p>;
 
+  const maxLeads = Math.max(...data.map(r => r.leads), 1);
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm" data-testid="source-breakdown-table">
-        <thead>
-          <tr className="border-b text-left">
-            <th className="py-2 pr-4 font-medium text-muted-foreground">Source</th>
-            <th className="py-2 pr-4 font-medium text-muted-foreground text-right">Leads</th>
-            <th className="py-2 pr-4 font-medium text-muted-foreground text-right">New Members</th>
-            <th className="py-2 font-medium text-muted-foreground text-right">Conversion</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.map((row) => (
-            <tr key={row.source} className="border-b border-border/30" data-testid={`source-row-${row.source}`}>
-              <td className="py-2 pr-4 font-medium">{row.source}</td>
-              <td className="py-2 pr-4 text-right">{row.leads}</td>
-              <td className="py-2 pr-4 text-right">{row.newMembers}</td>
-              <td className="py-2 text-right">
-                {row.conversionRate !== null ? `${(row.conversionRate * 100).toFixed(1)}%` : "—"}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-2" data-testid="source-breakdown-table">
+      {data.map((row) => {
+        const barPct = (row.leads / maxLeads) * 100;
+        return (
+          <div key={row.source} className="group" data-testid={`source-row-${row.source}`}>
+            <div className="flex items-center justify-between text-xs mb-1">
+              <span className="font-medium truncate mr-3">{row.source}</span>
+              <div className="flex items-center gap-3 flex-shrink-0 tabular-nums text-muted-foreground">
+                <span>{row.leads} leads</span>
+                <span>{row.newMembers} members</span>
+                <span className="font-semibold text-foreground w-12 text-right">
+                  {row.conversionRate !== null ? `${(row.conversionRate * 100).toFixed(0)}%` : "—"}
+                </span>
+              </div>
+            </div>
+            <div className="h-1.5 rounded-full bg-muted/40 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-primary/60 transition-all duration-500"
+                style={{ width: `${barPct}%` }}
+              />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -256,9 +363,9 @@ function CoachTable({ data }: { data: CoachRow[] }) {
           {data.map((row) => (
             <tr key={row.coachId} className="border-b border-border/30" data-testid={`coach-row-${row.coachId}`}>
               <td className="py-2 pr-4 font-medium">{row.coachId}</td>
-              <td className="py-2 pr-4 text-right">{row.shows}</td>
-              <td className="py-2 pr-4 text-right">{row.newMembers}</td>
-              <td className="py-2 text-right">
+              <td className="py-2 pr-4 text-right tabular-nums">{row.shows}</td>
+              <td className="py-2 pr-4 text-right tabular-nums">{row.newMembers}</td>
+              <td className="py-2 text-right tabular-nums font-semibold">
                 {row.closeRate !== null ? `${(row.closeRate * 100).toFixed(1)}%` : "—"}
               </td>
             </tr>
@@ -284,7 +391,7 @@ function exportSourceCSV(data: SourceRow[]) {
 export default function SalesIntelligence() {
   const [, params] = useRoute("/gyms/:id/sales");
   const gymId = params?.id;
-  const [preset, setPreset] = useState<DatePreset>("30d");
+  const [preset, setPreset] = useState<DatePreset>("90d");
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [coachOpen, setCoachOpen] = useState(false);
 
@@ -418,212 +525,171 @@ export default function SalesIntelligence() {
                 title="Funnel Conversion"
                 value={summary.rates.funnelConversion}
                 delta={summary.deltas.funnelConversion}
-                tooltip="New Members ÷ Leads — the percentage of leads that became members"
+                tooltip="New Members / Leads — percentage of leads that became members"
                 icon={TrendingUp}
                 format="percent"
               />
               <KPICard
-                title="Revenue / Lead"
-                value={summary.revenue.revenuePerLead}
-                delta={summary.deltas.revenuePerLead}
-                tooltip="Total first-month revenue from new members ÷ total leads"
-                icon={DollarSign}
-                format="currency"
+                title="Speed to Lead"
+                value={summary.speed.responseMedianMin}
+                delta={summary.deltas.responseMedianMin}
+                tooltip="Median time from lead creation to first contact. Under 5 minutes increases conversion by 4x."
+                icon={Zap}
+                format="time"
+                accent={
+                  summary.speed.responseMedianMin !== null
+                    ? summary.speed.responseMedianMin <= 5 ? "text-emerald-500" : summary.speed.responseMedianMin <= 30 ? "" : "text-amber-500"
+                    : ""
+                }
               />
             </div>
 
-            <div className="grid md:grid-cols-5 gap-4">
-              <Card className="md:col-span-3" data-testid="funnel-visual">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Sales Funnel</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-1 overflow-x-auto py-2">
-                    <FunnelStage label="Leads" count={summary.counts.leads} rate={summary.rates.setRate} />
-                    <FunnelStage label="Booked" count={summary.counts.booked} rate={summary.rates.showRate} />
-                    <FunnelStage label="Shows" count={summary.counts.shows} rate={summary.rates.closeRate} />
-                    <FunnelStage label="Members" count={summary.counts.newMembers} rate={null} isLast />
-                  </div>
-                </CardContent>
-              </Card>
+            <div className="grid md:grid-cols-3 gap-4">
+              <div className="md:col-span-2 grid md:grid-cols-2 gap-4">
+                <Card data-testid="funnel-card">
+                  <CardHeader className="pb-1">
+                    <CardTitle className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Pipeline</CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <PremiumFunnel counts={summary.counts} rates={summary.rates} />
+                  </CardContent>
+                </Card>
 
-              <div className="md:col-span-2 space-y-4">
+                <Card data-testid="source-breakdown">
+                  <CardHeader className="pb-1">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Sources</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-2">
+                    <SourceTable data={sourceData || []} />
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="space-y-4">
+                <SalesHealthCard composite={summary.composite} bottleneck={summary.bottleneck} />
+
                 {summary.bottleneck && (
-                  <Card className="border-amber-500/30 bg-amber-500/5" data-testid="bottleneck-card">
+                  <Card className="border-amber-500/20" data-testid="bottleneck-card">
                     <CardContent className="p-4 space-y-1.5">
                       <div className="flex items-center gap-1.5">
-                        <AlertTriangle className="w-4 h-4 text-amber-500" />
-                        <p className="text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">Biggest Bottleneck</p>
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-600 dark:text-amber-400">Bottleneck</p>
                       </div>
                       <p className="text-sm font-bold" data-testid="bottleneck-stage">{summary.bottleneck.stage}</p>
-                      <p className="text-xs text-muted-foreground">{summary.bottleneck.dropPercent}% drop-off</p>
-                      <p className="text-xs text-muted-foreground mt-1">{summary.bottleneck.explanation}</p>
+                      <p className="text-xs text-muted-foreground">{summary.bottleneck.dropPercent}% drop-off — {summary.bottleneck.explanation}</p>
                     </CardContent>
                   </Card>
                 )}
-
-                <Card data-testid="health-score-card">
-                  <CardContent className="p-4 space-y-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sales Health Score</p>
-                    <SalesHealthGauge
-                      score={summary.composite.salesHealthScore}
-                      label="A simple summary of how well your pipeline is converting and how quickly you respond. Higher is better."
-                    />
-                    <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
-                      <div>
-                        <p className="text-muted-foreground">Conversion</p>
-                        <p className="font-semibold">{summary.composite.conversionSubScore}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Speed</p>
-                        <p className="font-semibold">{summary.composite.speedSubScore}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Show/Close</p>
-                        <p className="font-semibold">{summary.composite.stageSubScore}</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
               </div>
             </div>
 
             {trends && trends.length > 1 && (
-              <div className="grid md:grid-cols-2 gap-4">
-                <Card data-testid="chart-leads-members">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Leads & New Members</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-48">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={trends} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-                          <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" />
-                          <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
-                          <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-                          <RechartsTooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                          <Legend wrapperStyle={{ fontSize: 11 }} />
-                          <Line type="monotone" dataKey="leads" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="Leads" />
-                          <Line type="monotone" dataKey="newMembers" stroke="hsl(142, 76%, 36%)" strokeWidth={2} dot={false} name="New Members" />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card data-testid="chart-conversion">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Conversion Rate</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-48">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={trends.filter(t => t.conversionRate !== null)} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-                          <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" />
-                          <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
-                          <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `${(Number(v) * 100).toFixed(0)}%`} />
-                          <RechartsTooltip
-                            contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                            formatter={(value: number) => [`${(value * 100).toFixed(1)}%`, "Conversion"]}
-                          />
-                          <Line type="monotone" dataKey="conversionRate" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="Conversion %" />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
+              <Card data-testid="chart-leads-members">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Lead & Member Volume</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-52">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={trends} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-border/20" />
+                        <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} className="text-muted-foreground" />
+                        <YAxis tick={{ fontSize: 10 }} allowDecimals={false} className="text-muted-foreground" />
+                        <RechartsTooltip contentStyle={{ fontSize: 12, borderRadius: 10, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }} />
+                        <Legend wrapperStyle={{ fontSize: 11 }} />
+                        <Line type="monotone" dataKey="leads" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="Leads" />
+                        <Line type="monotone" dataKey="newMembers" stroke="hsl(142, 76%, 36%)" strokeWidth={2} dot={false} name="New Members" />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
             )}
-
-            <Card data-testid="source-breakdown">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Source Breakdown</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <SourceTable data={sourceData || []} />
-              </CardContent>
-            </Card>
 
             <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
               <CollapsibleTrigger asChild>
-                <Button variant="ghost" className="w-full justify-between text-sm" data-testid="toggle-details">
-                  <span>Stage & Speed Details</span>
-                  {detailsOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                </Button>
+                <button className="w-full flex items-center justify-between text-xs font-medium text-muted-foreground hover:text-foreground transition-colors py-2 px-1" data-testid="toggle-details">
+                  <span className="uppercase tracking-[0.12em]">Stage & Speed Details</span>
+                  {detailsOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                </button>
               </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-4 pt-2">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Stage Conversion Rates</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-3 gap-4 text-center">
-                      <div data-testid="metric-set-rate">
-                        <Tooltip>
-                          <TooltipTrigger>
-                            <p className="text-xs text-muted-foreground">Set Rate</p>
-                          </TooltipTrigger>
-                          <TooltipContent className="text-xs">Booked Consults ÷ Leads</TooltipContent>
-                        </Tooltip>
-                        <p className="text-xl font-bold">{summary.rates.setRate !== null ? `${(summary.rates.setRate * 100).toFixed(1)}%` : "—"}</p>
-                        <DeltaBadge value={summary.deltas.setRate} />
+              <CollapsibleContent className="space-y-4 pt-1">
+                <div className="grid md:grid-cols-2 gap-4">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Stage Rates</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-3 gap-4 text-center">
+                        <div data-testid="metric-set-rate">
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Set Rate</p>
+                            </TooltipTrigger>
+                            <TooltipContent className="text-xs">Booked Consults / Leads</TooltipContent>
+                          </Tooltip>
+                          <p className="text-xl font-bold tabular-nums mt-0.5">{summary.rates.setRate !== null ? `${(summary.rates.setRate * 100).toFixed(1)}%` : "—"}</p>
+                          <DeltaBadge value={summary.deltas.setRate} />
+                        </div>
+                        <div data-testid="metric-show-rate">
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Show Rate</p>
+                            </TooltipTrigger>
+                            <TooltipContent className="text-xs">Shows / Booked Consults</TooltipContent>
+                          </Tooltip>
+                          <p className="text-xl font-bold tabular-nums mt-0.5">{summary.rates.showRate !== null ? `${(summary.rates.showRate * 100).toFixed(1)}%` : "—"}</p>
+                          <DeltaBadge value={summary.deltas.showRate} />
+                        </div>
+                        <div data-testid="metric-close-rate">
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Close Rate</p>
+                            </TooltipTrigger>
+                            <TooltipContent className="text-xs">New Members / Shows</TooltipContent>
+                          </Tooltip>
+                          <p className="text-xl font-bold tabular-nums mt-0.5">{summary.rates.closeRate !== null ? `${(summary.rates.closeRate * 100).toFixed(1)}%` : "—"}</p>
+                          <DeltaBadge value={summary.deltas.closeRate} />
+                        </div>
                       </div>
-                      <div data-testid="metric-show-rate">
-                        <Tooltip>
-                          <TooltipTrigger>
-                            <p className="text-xs text-muted-foreground">Show Rate</p>
-                          </TooltipTrigger>
-                          <TooltipContent className="text-xs">Shows ÷ Booked Consults</TooltipContent>
-                        </Tooltip>
-                        <p className="text-xl font-bold">{summary.rates.showRate !== null ? `${(summary.rates.showRate * 100).toFixed(1)}%` : "—"}</p>
-                        <DeltaBadge value={summary.deltas.showRate} />
-                      </div>
-                      <div data-testid="metric-close-rate">
-                        <Tooltip>
-                          <TooltipTrigger>
-                            <p className="text-xs text-muted-foreground">Close Rate</p>
-                          </TooltipTrigger>
-                          <TooltipContent className="text-xs">New Members ÷ Shows</TooltipContent>
-                        </Tooltip>
-                        <p className="text-xl font-bold">{summary.rates.closeRate !== null ? `${(summary.rates.closeRate * 100).toFixed(1)}%` : "—"}</p>
-                        <DeltaBadge value={summary.deltas.closeRate} />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
 
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Speed</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-2 gap-4 text-center">
-                      <div data-testid="metric-response-time">
-                        <p className="text-xs text-muted-foreground">Median Response Time</p>
-                        <p className="text-xl font-bold">
-                          {summary.speed.responseMedianMin !== null ? `${summary.speed.responseMedianMin} min` : "Not enough data"}
-                        </p>
-                        <DeltaBadge value={summary.deltas.responseMedianMin} inverted />
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Speed Metrics</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 gap-4 text-center">
+                        <div data-testid="metric-response-time">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Response Time</p>
+                          <p className="text-xl font-bold tabular-nums mt-0.5">
+                            {summary.speed.responseMedianMin !== null ? `${Math.round(summary.speed.responseMedianMin)}m` : "—"}
+                          </p>
+                          <DeltaBadge value={summary.deltas.responseMedianMin} inverted />
+                        </div>
+                        <div data-testid="metric-lead-to-member">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Lead to Member</p>
+                          <p className="text-xl font-bold tabular-nums mt-0.5">
+                            {summary.speed.leadToMemberMedianDays !== null ? `${summary.speed.leadToMemberMedianDays}d` : "—"}
+                          </p>
+                        </div>
                       </div>
-                      <div data-testid="metric-lead-to-member">
-                        <p className="text-xs text-muted-foreground">Lead → Member Time</p>
-                        <p className="text-xl font-bold">
-                          {summary.speed.leadToMemberMedianDays !== null ? `${summary.speed.leadToMemberMedianDays} days` : "Not enough data"}
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
+                </div>
 
                 {coachData && coachData.length > 0 && (
                   <Collapsible open={coachOpen} onOpenChange={setCoachOpen}>
                     <CollapsibleTrigger asChild>
-                      <Button variant="ghost" className="w-full justify-between text-sm" data-testid="toggle-coach-breakdown">
-                        <span>Coach Breakdown</span>
-                        {coachOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                      </Button>
+                      <button className="w-full flex items-center justify-between text-xs font-medium text-muted-foreground hover:text-foreground transition-colors py-2 px-1" data-testid="toggle-coach-breakdown">
+                        <span className="uppercase tracking-[0.12em]">Coach Breakdown</span>
+                        {coachOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                      </button>
                     </CollapsibleTrigger>
-                    <CollapsibleContent className="pt-2">
+                    <CollapsibleContent className="pt-1">
                       <Card>
                         <CardContent className="p-4">
                           <CoachTable data={coachData} />
