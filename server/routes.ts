@@ -647,7 +647,34 @@ export async function registerRoutes(
 
       const forecast = generateForecast(prevMetrics);
 
-      res.json({ metrics, reports, atRiskMembers, forecast });
+      const allMembers = await storage.getMembersByGym(req.params.id);
+      const activeMembersList = allMembers.filter(m => m.status === "active");
+      const now = new Date();
+      let recencySum = 0;
+      let recentCount = 0;
+      let hasDataCount = 0;
+
+      for (const m of activeMembersList) {
+        if (m.lastAttendedDate) {
+          hasDataCount++;
+          const daysSince = (now.getTime() - new Date(m.lastAttendedDate).getTime()) / 86400000;
+          if (daysSince <= 3) recencySum += 100;
+          else if (daysSince <= 7) recencySum += 85;
+          else if (daysSince <= 14) recencySum += 65;
+          else if (daysSince <= 30) recencySum += 35;
+          else recencySum += 10;
+          if (daysSince <= 14) recentCount++;
+        }
+      }
+
+      const activePercent = activeMembersList.length > 0 ? Math.round((recentCount / activeMembersList.length) * 100) : 0;
+      const avgRecency = hasDataCount > 0 ? recencySum / hasDataCount : 50;
+      const coverage = activeMembersList.length > 0 ? (hasDataCount / activeMembersList.length) * 100 : 0;
+      const ceiScore = Math.min(Math.round((avgRecency * 0.50) + (activePercent * 0.30) + (coverage * 0.20)), 100);
+
+      const communityEngagement = { score: ceiScore, activePercent };
+
+      res.json({ metrics, reports, atRiskMembers, forecast, communityEngagement });
     } catch (error) {
       console.error("Error fetching report:", error);
       res.status(500).json({ message: "Failed to fetch report" });
