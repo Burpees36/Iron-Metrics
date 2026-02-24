@@ -1,0 +1,263 @@
+You are building a new page in an existing multi-tenant gym analytics web app called "Iron Metrics".
+
+GOAL
+Create a new top-level page: "Sales Intelligence" (route: /sales-intelligence) that provides gym owners with:
+1) Their key sales numbers (simple and actionable).
+2) A clear view of bottlenecks in the sales funnel.
+3) Conversion trends and where performance changed.
+IMPORTANT: Build everything EXCEPT “Strategic Recommendations.” (We will add that later.)
+
+NON-GOALS
+- Do not implement AI coaching or recommendation text yet.
+- Do not add heavy/overly technical charts that confuse owners.
+- Do not require external paid APIs.
+
+TECH STACK ASSUMPTIONS
+- Frontend: React (TypeScript) with a component library (or Tailwind) and Recharts for charts.
+- Backend: Node/Express OR Python/FastAPI (choose what the repo uses; if unknown, implement a simple backend service layer in the same style as existing pages).
+- Database: Postgres (preferred) or existing DB in project. Multi-tenant: all queries scoped by gym_id.
+- Dates: store as ISO timestamps in UTC; display in local time.
+
+DATA MODEL (Create tables if they do not exist; otherwise map to existing)
+1) leads
+- id (uuid pk)
+- gym_id (uuid, indexed)
+- created_at (timestamp, indexed)
+- source (text)               // e.g. "Facebook Ads", "Referral", "Walk-in", "Google"
+- status (text)               // optional: "new", "contacted", "booked", "won", "lost"
+- first_contact_at (timestamp nullable)  // for response time metric
+- metadata (jsonb nullable)
+
+2) consults
+- id (uuid pk)
+- gym_id (uuid, indexed)
+- lead_id (uuid fk -> leads.id, indexed)
+- booked_at (timestamp, indexed)
+- scheduled_for (timestamp nullable)     // optional if booked_at exists but appointment time differs
+- showed_at (timestamp nullable)         // set when attended
+- no_show_at (timestamp nullable)
+- coach_id (uuid nullable)
+- notes (text nullable)
+
+3) memberships
+- id (uuid pk)
+- gym_id (uuid, indexed)
+- lead_id (uuid fk -> leads.id, indexed) // link the sale back to a lead
+- started_at (timestamp, indexed)
+- ended_at (timestamp nullable)          // if canceled
+- price_monthly (numeric)                // current monthly membership price
+- status (text)                          // active/canceled
+- created_at (timestamp)
+
+4) payments (optional if existing elsewhere)
+- id (uuid pk)
+- gym_id (uuid, indexed)
+- membership_id (uuid fk -> memberships.id, indexed)
+- amount (numeric)
+- paid_at (timestamp)
+
+If payments table does not exist or isn’t used, estimate revenue from memberships.price_monthly with assumptions described below.
+
+DATE FILTERS (REQUIRED)
+Support date range selection:
+- Presets: Last 7 days, Last 30 days, Last 90 days, Month-to-date, Last month, Custom.
+All metrics on the page update based on the selected window.
+Also compute the "Previous period" window (same length immediately preceding) for deltas.
+
+SALES FUNNEL DEFINITIONS (REQUIRED AND MUST BE CONSISTENT)
+Within the selected date range:
+- Leads: count of leads.created_at within range.
+- Booked Consults: count of consults.booked_at within range.
+- Shows: count of consults.showed_at within range.
+- New Members (Closed/Won): count of memberships.started_at within range (or membership created_at; prefer started_at).
+
+IMPORTANT: Lead-to-booked attribution
+- A lead can book later than lead created date. For this page, use simple stage-based counting within the range (not cohort-based) to avoid confusion.
+- Later, we can add cohort views.
+
+CORE KPIs (DISPLAY ONLY THESE AT TOP; DO NOT OVERLOAD)
+Top KPI Cards (4 cards max):
+1) Leads (count)
+2) New Members (count)
+3) Funnel Conversion Rate (%)
+   Formula: Funnel Conversion Rate = New Members / Leads
+   (If Leads=0, show “—”)
+4) Revenue per Lead (RPL)
+   Formula:
+   - If payments exist: RPL = Sum(payment.amount for memberships tied to leads in range AND paid_at in range) / Leads
+   - If no payments: Estimate first-month revenue = Sum(memberships.price_monthly for memberships started in range) / Leads
+   (If Leads=0, show “—”)
+
+SECONDARY KPIs (SHOWN BELOW, NOT ALL AT ONCE; use collapsible “Details”)
+Stage Conversion Rates:
+- Set Rate = Booked Consults / Leads
+- Show Rate = Shows / Booked Consults
+- Close Rate = New Members / Shows
+All displayed with % and a small delta vs previous period.
+
+Velocity Metrics (in a small section called “Speed”):
+- Median Lead Response Time (minutes)
+  Formula: median(first_contact_at - created_at) for leads with first_contact_at in range
+- Median Lead → Member Time (days)
+  Formula: median(memberships.started_at - leads.created_at) for memberships started in range with linked lead
+
+COMPOSITE SCORE (1 MAX) — SALES HEALTH SCORE (0–100)
+Purpose: a simple “at-a-glance” indicator. Keep it interpretable and explain in plain English.
+Compute Sales Health Score based on 3 sub-scores capped 0..100:
+A) Conversion Sub-score (weight 50%)
+   Use Funnel Conversion Rate scaled to target range:
+   target_low = 0.20, target_high = 0.40
+   conv_score = clamp( (conversion - target_low) / (target_high - target_low) * 100, 0, 100 )
+B) Speed Sub-score (weight 25%)
+   Based on median lead response time:
+   target_fast = 5 minutes, target_slow = 60 minutes
+   speed_score = clamp( (target_slow - response_median) / (target_slow - target_fast) * 100, 0, 100 )
+C) Show & Close Sub-score (weight 25%)
+   Combine show and close performance:
+   show_target_low=0.70, show_target_high=0.90
+   close_target_low=0.60, close_target_high=0.85
+   show_score = clamp( (show_rate - show_target_low)/(show_target_high - show_target_low)*100, 0, 100 )
+   close_score = clamp( (close_rate - close_target_low)/(close_target_high - close_target_low)*100, 0, 100 )
+   stage_score = (show_score + close_score)/2
+
+Final:
+SalesHealth = round( 0.50*conv_score + 0.25*speed_score + 0.25*stage_score )
+
+Layman explanation shown on UI:
+“Sales Health Score (0–100) is a simple summary of how well your pipeline is converting and how quickly you respond. Higher scores generally mean you’re turning more leads into members with fewer delays.”
+
+BOTTLENECK DETECTION (REQUIRED)
+Compute drop-off between stages as percentages:
+- Lead → Booked drop = 1 - Set Rate
+- Booked → Show drop = 1 - Show Rate
+- Show → Member drop = 1 - Close Rate
+
+Pick the largest drop as Bottleneck Stage.
+Display a single callout card:
+“Your biggest bottleneck is: {stage}”
+Include 1 sentence explaining what it means (no recommendations yet).
+
+FUNNEL VISUAL (REQUIRED, SIMPLE)
+Show a vertical or horizontal funnel with counts and rates:
+Leads → Booked → Shows → New Members
+Under each stage, show the stage-to-stage rate.
+Keep it clean; avoid too many colors.
+
+TRENDS (REQUIRED, LIGHTWEIGHT)
+Add a trends section with 2 small charts:
+1) Leads and New Members over time (daily for <= 30 days, weekly for > 30 days)
+2) Conversion Rate trend over time (same bucketing)
+Include comparison to previous period by showing dashed line or tooltip comparison (keep simple).
+
+SOURCE BREAKDOWN (REQUIRED)
+One table or bar chart:
+- Lead source
+- Leads
+- New Members
+- Funnel Conversion (New Members/Leads)
+Sort by Leads desc.
+Allow filtering by source.
+
+COACH VIEW (OPTIONAL BUT NICE)
+If consults.coach_id exists:
+Show a small table:
+- Coach
+- Consults showed
+- New Members
+- Close Rate (New Members/Shows)
+This should be collapsed by default (“Show coach breakdown”).
+
+API ENDPOINTS (REQUIRED)
+Create endpoints that the page consumes:
+GET /api/sales-intelligence/summary?gym_id=...&start=...&end=...&compare=true
+Returns:
+- counts: leads, booked, shows, newMembers
+- rates: setRate, showRate, closeRate, funnelConversion
+- revenue: revenue, revenuePerLead
+- speed: responseMedianMin, leadToMemberMedianDays
+- composite: salesHealthScore
+- bottleneck: stage, dropPercent
+- deltas: previous period values and % change for key metrics
+
+GET /api/sales-intelligence/trends?gym_id=...&start=...&end=...&bucket=daily|weekly
+Returns:
+- time series points: date, leads, newMembers, conversionRate
+
+GET /api/sales-intelligence/by-source?gym_id=...&start=...&end=...
+Returns:
+- rows: source, leads, newMembers, conversionRate
+
+GET /api/sales-intelligence/by-coach?gym_id=...&start=...&end=...
+Returns (if coach_id exists):
+- rows: coach_id, coach_name (if available), shows, newMembers, closeRate
+
+UI LAYOUT (DO NOT OVERLOAD)
+Page layout:
+A) Header: “Sales Intelligence”
+   - Date range selector (left)
+   - Export CSV button (right) [export current tables only]
+
+B) Row 1: KPI Cards (4 cards)
+   - Leads
+   - New Members
+   - Funnel Conversion
+   - Revenue per Lead
+   Each card shows:
+   - main value
+   - small delta vs previous period (+/-)
+   - tooltip with formula
+
+C) Row 2: Funnel + Bottleneck
+   Left: Funnel visualization
+   Right: Bottleneck callout + Sales Health Score card
+   (Score card includes plain-English description)
+
+D) Row 3: Trends
+   - Chart 1: Leads & New Members
+   - Chart 2: Conversion Rate
+   Keep small, with tooltips.
+
+E) Row 4: Source Breakdown
+   - Table or bar chart + table (choose one)
+   - Filter by source
+
+F) Row 5: Details (collapsed accordion)
+   - Stage rates (Set/Show/Close)
+   - Speed metrics
+   - Coach breakdown (if available)
+
+NO STRATEGIC RECOMMENDATIONS YET
+- Do not show action lists or “what to do next” sections.
+- The page should still feel useful: show owners their numbers, their bottleneck, and trend direction.
+
+EDGE CASES
+- If Leads = 0, show “—” for rates and avoid division-by-zero.
+- If Booked = 0, Show Rate and downstream metrics become “—”.
+- If Shows = 0, Close Rate becomes “—”.
+- If first_contact_at missing, exclude from response time median. If too few data points (<5), show “Not enough data”.
+- Ensure all computations scoped to gym_id.
+
+TESTING (REQUIRED)
+Add unit tests for:
+- KPI formulas (division-by-zero)
+- Bottleneck detection logic
+- Sales Health Score calculation and clamping
+- Time bucketing for trends
+
+DELIVERABLES
+- New route/page component: SalesIntelligencePage
+- Backend endpoints listed above
+- DB migrations (if needed)
+- UI components: KPI cards, Funnel, Trend charts, Source table, Accordion details
+- Basic unit tests
+- README snippet describing the page and definitions used
+
+IMPORTANT UX RULES
+- Avoid jargon. Use tooltips for terms like Set Rate/Show Rate/Close Rate.
+- Keep top visible content to 1 screen without scrolling on laptop.
+- Use consistent decimal formatting:
+  - rates: 0–100% with 1 decimal
+  - money: currency formatting
+  - time: minutes, days
+
+Now implement.
