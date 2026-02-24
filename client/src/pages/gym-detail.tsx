@@ -2279,10 +2279,17 @@ function IntelligentChart({ title, insight, kpi, data, dataKey, projectedKey, gr
   return (
     <Card data-testid={testId}>
       <CardContent className="p-6 space-y-4">
-        <div className="space-y-2">
-          <h3 className="font-semibold text-sm">{title}</h3>
-          <KpiBadge kpi={kpi} />
-          <InsightHeader insight={insight} />
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-2 min-w-0">
+            <h3 className="font-semibold text-sm">{title}</h3>
+            <InsightHeader insight={insight} />
+          </div>
+          {kpi && (
+            <div className="flex flex-col items-end flex-shrink-0">
+              <span className="text-2xl font-bold font-mono tracking-tight" data-testid={`${testId}-value`}>{kpi.currentValue}</span>
+              <KpiBadge kpi={kpi} />
+            </div>
+          )}
         </div>
         <div className="h-56">
           <ResponsiveContainer width="100%" height="100%">
@@ -2313,10 +2320,17 @@ function IntelligentChurnChart({ insight, kpi, data, testId }: { insight?: Trend
   return (
     <Card data-testid={testId}>
       <CardContent className="p-6 space-y-4">
-        <div className="space-y-2">
-          <h3 className="font-semibold text-sm">Churn Rate (%)</h3>
-          <KpiBadge kpi={kpi} />
-          <InsightHeader insight={insight} />
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-2 min-w-0">
+            <h3 className="font-semibold text-sm">Churn Rate (%)</h3>
+            <InsightHeader insight={insight} />
+          </div>
+          {kpi && (
+            <div className="flex flex-col items-end flex-shrink-0">
+              <span className="text-2xl font-bold font-mono tracking-tight" data-testid={`${testId}-value`}>{kpi.currentValue}</span>
+              <KpiBadge kpi={kpi} />
+            </div>
+          )}
         </div>
         <div className="h-56">
           <ResponsiveContainer width="100%" height="100%">
