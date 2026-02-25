@@ -56,7 +56,6 @@ import {
   Clock,
   MessageSquare,
   X,
-  Plug,
   Download,
   Printer,
   CheckCircle2,
@@ -280,7 +279,7 @@ export function GymPageShell({ gym, children, actions }: { gym: Gym; children: R
   );
 }
 
-export { ReportView, TrendsView, MembersView, RecomputeButton, GymNotFound, GymDetailSkeleton };
+export { ReportView, TrendsView, MembersView, GymNotFound, GymDetailSkeleton };
 
 export default function GymDetail() {
   const [, params] = useRoute("/gyms/:id");
@@ -294,57 +293,9 @@ export default function GymDetail() {
   return (
     <GymPageShell
       gym={gym}
-      actions={
-        <>
-          <Link href={`/gyms/${gym.id}/wodify`}>
-            <Button data-testid="button-wodify-integration">
-              <Plug className="w-4 h-4 mr-1" />
-              Wodify
-            </Button>
-          </Link>
-          <Link href={`/gyms/${gym.id}/import`}>
-            <Button data-testid="button-import-csv">
-              <Upload className="w-4 h-4 mr-1" />
-              Import CSV
-            </Button>
-          </Link>
-          <RecomputeButton gymId={gym.id} />
-        </>
-      }
     >
       <ReportView gymId={gym.id} />
     </GymPageShell>
-  );
-}
-
-function RecomputeButton({ gymId }: { gymId: string }) {
-  const { toast } = useToast();
-  const mutation = useMutation({
-    mutationFn: () => apiRequest("POST", `/api/gyms/${gymId}/recompute`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/gyms", gymId] });
-      toast({ title: "Metrics recomputed", description: "All monthly metrics have been refreshed." });
-    },
-    onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        toast({ title: "Unauthorized", description: "Logging in again...", variant: "destructive" });
-        setTimeout(() => { window.location.href = "/api/login"; }, 500);
-        return;
-      }
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  return (
-    <Button
-      variant="outline"
-      onClick={() => mutation.mutate()}
-      disabled={mutation.isPending}
-      data-testid="button-recompute"
-    >
-      <RefreshCw className={`w-4 h-4 mr-1 ${mutation.isPending ? "animate-spin" : ""}`} />
-      {mutation.isPending ? "Computing..." : "Recompute"}
-    </Button>
   );
 }
 

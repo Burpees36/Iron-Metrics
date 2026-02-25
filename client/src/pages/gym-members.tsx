@@ -1,7 +1,5 @@
-import { useRoute, Link } from "wouter";
-import { Button } from "@/components/ui/button";
-import { Upload } from "lucide-react";
-import { useGymData, GymPageShell, MembersView, RecomputeButton, GymNotFound, GymDetailSkeleton } from "./gym-detail";
+import { useRoute } from "wouter";
+import { useGymData, GymPageShell, MembersView, GymNotFound, GymDetailSkeleton } from "./gym-detail";
 
 export default function GymMembers() {
   const [, params] = useRoute("/gyms/:id/members");
@@ -13,20 +11,7 @@ export default function GymMembers() {
   if (!gym) return <GymNotFound />;
 
   return (
-    <GymPageShell
-      gym={gym}
-      actions={
-        <>
-          <Link href={`/gyms/${gym.id}/import`}>
-            <Button data-testid="button-import-csv">
-              <Upload className="w-4 h-4 mr-1" />
-              Import CSV
-            </Button>
-          </Link>
-          <RecomputeButton gymId={gym.id} />
-        </>
-      }
-    >
+    <GymPageShell gym={gym}>
       <MembersView gymId={gym.id} />
     </GymPageShell>
   );

@@ -1,5 +1,5 @@
 import { useRoute } from "wouter";
-import { useGymData, GymPageShell, TrendsView, RecomputeButton, GymNotFound, GymDetailSkeleton } from "./gym-detail";
+import { useGymData, GymPageShell, TrendsView, GymNotFound, GymDetailSkeleton } from "./gym-detail";
 
 export default function GymTrends() {
   const [, params] = useRoute("/gyms/:id/trends");
@@ -13,7 +13,6 @@ export default function GymTrends() {
   return (
     <GymPageShell
       gym={gym}
-      actions={<RecomputeButton gymId={gym.id} />}
     >
       <TrendsView gymId={gym.id} />
     </GymPageShell>

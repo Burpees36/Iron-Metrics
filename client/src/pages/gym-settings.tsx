@@ -18,7 +18,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Settings, Save, Upload, Plug, ChevronRight } from "lucide-react";
+import { Settings, Save, Upload, Plug, RefreshCw, ChevronRight } from "lucide-react";
 import { Link } from "wouter";
 import { useGymData, GymPageShell, GymNotFound, GymDetailSkeleton, PageHeader } from "./gym-detail";
 
@@ -52,6 +52,22 @@ export default function GymSettings() {
       });
     }
   }, [gym]);
+
+  const recomputeMutation = useMutation({
+    mutationFn: () => apiRequest("POST", `/api/gyms/${gymId}/recompute`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/gyms", gymId] });
+      toast({ title: "Metrics recomputed", description: "All monthly metrics have been refreshed." });
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        toast({ title: "Unauthorized", description: "Logging in again...", variant: "destructive" });
+        setTimeout(() => { window.location.href = "/api/login"; }, 500);
+        return;
+      }
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
 
   const mutation = useMutation({
     mutationFn: async (values: FormValues) => {
@@ -172,6 +188,24 @@ export default function GymSettings() {
                 </CardContent>
               </Card>
             </Link>
+            <Card
+              className="hover-elevate transition-all duration-300 cursor-pointer group"
+              data-testid="button-recompute"
+              onClick={() => recomputeMutation.mutate()}
+            >
+              <CardContent className="p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-md bg-primary/10">
+                    <RefreshCw className={`w-4 h-4 text-primary ${recomputeMutation.isPending ? "animate-spin" : ""}`} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">{recomputeMutation.isPending ? "Computing..." : "Recompute Metrics"}</p>
+                    <p className="text-xs text-muted-foreground">Refresh all stability metrics, retention scores, and strategic recommendations.</p>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>

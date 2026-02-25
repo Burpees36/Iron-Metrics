@@ -1,5 +1,5 @@
 import { useRoute } from "wouter";
-import { useGymData, GymPageShell, RecomputeButton, GymNotFound, GymDetailSkeleton } from "./gym-detail";
+import { useGymData, GymPageShell, GymNotFound, GymDetailSkeleton } from "./gym-detail";
 import { usePredictiveData, FuturePlanningView, PredictiveSkeleton } from "./predictive-intelligence";
 
 export default function GymPlanning() {
@@ -15,7 +15,6 @@ export default function GymPlanning() {
   return (
     <GymPageShell
       gym={gym}
-      actions={<RecomputeButton gymId={gym.id} />}
     >
       {predLoading ? (
         <PredictiveSkeleton />
