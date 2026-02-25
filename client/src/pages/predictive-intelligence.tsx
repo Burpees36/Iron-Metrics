@@ -15,6 +15,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/auth-utils";
+import { PageHeader } from "./gym-detail";
 import {
   Brain, AlertTriangle, TrendingDown, TrendingUp, Users, DollarSign,
   Shield, ShieldAlert, ShieldCheck, Target, Zap, FileText, BarChart3,
@@ -661,13 +662,15 @@ function StrategicBriefView({ gymId, periodStart, brief, recommendationExecution
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2 animate-fade-in-up">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight" data-testid="text-brief-title">Strategic Intelligence Brief</h2>
-          <p className="text-sm text-muted-foreground">{dateStr}</p>
-        </div>
+        <PageHeader
+          title="AI Strategy Plays"
+          subtitle="Your personalized game plan. Each recommendation is ranked by revenue impact, confidence, and urgency — so you always know where to spend your energy."
+          howTo="Start with the Recommended Focus card. Check off action items as you complete them. The remaining plays are ranked by impact — work down the list when you're ready."
+          icon={Zap}
+        />
         <Badge variant="outline" className="text-xs">
           <Zap className="w-3 h-3 mr-1" />
-          Algorithmic Intelligence
+          {dateStr}
         </Badge>
       </div>
 
@@ -988,6 +991,12 @@ function MemberRiskView({ predictions, gymId }: { predictions: PredictiveIntelli
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title="Member Intelligence"
+        subtitle="Every member in your gym, classified by engagement level. Know who's thriving, who's drifting, and who needs a conversation this week — before they cancel."
+        howTo="Filter by engagement class to focus on specific groups. Click any member to see their full profile, risk signals, and recommended outreach. Start with Ghost and At-Risk."
+        icon={Brain}
+      />
       <div data-testid="text-risk-directive">
         <p className="text-sm leading-relaxed">{directiveSummary}</p>
       </div>
@@ -1230,6 +1239,12 @@ function FuturePlanningView({ cohorts, scenario, gymName, recommendations, membe
 
   return (
     <div className="space-y-8">
+      <PageHeader
+        title="Future Planning"
+        subtitle="See where your revenue is heading under different scenarios. Model what happens if churn rises, stays flat, or improves — and understand which members drive the most financial risk."
+        howTo="Review the scenario cards to understand your range of outcomes. Use the cohort breakdown to see which member groups carry the most risk. Scroll down for churn sensitivity modeling."
+        icon={Target}
+      />
       <div className="space-y-3">
         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
           <DollarSign className="w-3.5 h-3.5" /> Where Your Revenue Is Heading

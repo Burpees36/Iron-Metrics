@@ -1,7 +1,7 @@
 import { useRoute } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
-import { useGymData, GymPageShell, GymNotFound, GymDetailSkeleton } from "./gym-detail";
+import { useGymData, GymPageShell, GymNotFound, GymDetailSkeleton, PageHeader } from "./gym-detail";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -477,8 +477,14 @@ export default function SalesIntelligence() {
       }
     >
       <div className="space-y-6">
+        <PageHeader
+          title="Sales Intelligence"
+          subtitle="Your sales pipeline from first contact to signed member. See where leads are getting stuck, how fast you're responding, and which sources bring the best members."
+          howTo="Check the funnel for your biggest drop-off point — that's your bottleneck. Use the source breakdown to double down on what's working and cut what isn't."
+          icon={TrendingUp}
+        />
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <h2 className="text-lg font-semibold tracking-tight" data-testid="page-title-sales">Sales Intelligence</h2>
+          <div />
           <div className="flex gap-1" data-testid="date-range-selector-sales">
             {presets.map((p) => (
               <Button

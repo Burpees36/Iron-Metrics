@@ -19,7 +19,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Settings, Save } from "lucide-react";
-import { useGymData, GymPageShell, GymNotFound, GymDetailSkeleton } from "./gym-detail";
+import { useGymData, GymPageShell, GymNotFound, GymDetailSkeleton, PageHeader } from "./gym-detail";
 
 const formSchema = z.object({
   name: z.string().min(1, "Gym name is required").max(100),
@@ -80,12 +80,12 @@ export default function GymSettings() {
   return (
     <GymPageShell gym={gym}>
       <div className="max-w-lg space-y-6 animate-fade-in-up">
-        <div className="flex items-center gap-2">
-          <Settings className="w-4 h-4 text-muted-foreground" />
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground" data-testid="text-settings-heading">
-            Gym Settings
-          </h2>
-        </div>
+        <PageHeader
+          title="Settings"
+          subtitle="Update your gym's name and location. These details appear across all pages and in exported reports."
+          howTo="Edit the fields below and hit save. Changes take effect immediately across the platform."
+          icon={Settings}
+        />
 
         <Card>
           <CardContent className="p-6">

@@ -239,6 +239,21 @@ export function useGymData(gymId: string | undefined) {
   });
 }
 
+export function PageHeader({ title, subtitle, howTo, icon: Icon }: { title: string; subtitle: string; howTo: string; icon: typeof Activity }) {
+  return (
+    <div className="space-y-1.5 animate-fade-in-up" data-testid="page-header">
+      <div className="flex items-center gap-2.5">
+        <div className="p-1.5 rounded-lg bg-primary/10">
+          <Icon className="w-4 h-4 text-primary" />
+        </div>
+        <h2 className="text-lg font-bold tracking-tight" data-testid="text-page-title">{title}</h2>
+      </div>
+      <p className="text-sm text-muted-foreground leading-relaxed" data-testid="text-page-subtitle">{subtitle}</p>
+      <p className="text-xs text-muted-foreground/70 italic" data-testid="text-page-howto">{howTo}</p>
+    </div>
+  );
+}
+
 export function GymPageShell({ gym, children, actions }: { gym: Gym; children: React.ReactNode; actions?: React.ReactNode }) {
   return (
     <div className="p-4 sm:p-8 max-w-6xl mx-auto space-y-6 sm:space-y-8">
@@ -605,6 +620,13 @@ function ReportView({ gymId }: { gymId: string }) {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title="Command Center"
+        subtitle="The pulse of your gym in one view. See where you stand on retention, revenue, sales, and community engagement — and know exactly what to focus on this week."
+        howTo="Start with the stability score, scan the four pillars for anything off-track, then read your weekly focus directive."
+        icon={Gauge}
+      />
+
       {/* ── Section 1: Stability Verdict ── */}
       <Card className={`${rsiColor.bg} border ${rsiColor.border} animate-fade-in-up`} data-testid="section-stability-verdict">
         <CardContent className="p-5 sm:p-6">
@@ -1906,6 +1928,12 @@ function TrendsView({ gymId }: { gymId: string }) {
 
   return (
     <div className={`space-y-8 rounded-lg transition-colors duration-700 ${dynamicBg}`} style={{ background: dynamicBg ? undefined : "linear-gradient(135deg, hsl(var(--background)) 0%, hsl(215 18% 12% / 0.03) 100%)" }}>
+      <PageHeader
+        title="Reports"
+        subtitle="Your gym's performance over time. Track retention stability, revenue trajectory, churn patterns, and growth momentum — all in one place."
+        howTo="Use the date range filters to zoom in on specific periods. Watch for trend lines diverging from targets — that's where to dig deeper."
+        icon={BarChart3}
+      />
       <div className="flex items-center justify-end gap-1" data-testid="date-range-selector">
         {dateRanges.map((r) => (
           <Button
