@@ -1600,30 +1600,6 @@ function buildFallbackChecklist(rec: BriefRecommendation, leverKeywords: string[
 
 function scopeAuditRecommendations(recommendations: BriefRecommendation[]): void {
   for (const rec of recommendations) {
-    const bannedTerms = SCOPE_BANNED_KEYWORDS[rec.category] || [];
-    const leverKeywords = getLeverKeywords(rec);
-
-    rec.executionChecklist = rec.executionChecklist.filter((item) => {
-      const lower = item.toLowerCase();
-      const violatesCategoryScope = bannedTerms.some((term) => lower.includes(term.toLowerCase()));
-      const violatesTopicScope = CROSS_LEVER_BLOCKED_TOPICS.some((topic) => lower.includes(topic) && !allowsBlockedTopic(rec, topic));
-      const offLever = !isSameLeverItem(item, leverKeywords);
-      return !violatesCategoryScope && !violatesTopicScope && !offLever;
-    });
-
-    if (rec.executionChecklist.length < 4) {
-      const fallback = buildFallbackChecklist(rec, leverKeywords);
-      rec.executionChecklist = [...rec.executionChecklist, ...fallback.filter((item) => !rec.executionChecklist.includes(item))];
-    }
-
-    if (rec.executionChecklist.length > 6) {
-      rec.executionChecklist = rec.executionChecklist.slice(0, 6);
-    }
-
-    while (rec.executionChecklist.length < 4) {
-      rec.executionChecklist.push(`Run one additional ${rec.interventionType.toLowerCase()} step this week and log the result.`);
-    }
-
     rec.detail = trimToWordLimit(removeBlockedTopicContent(rec.detail, rec), 119);
     if (!rec.detail || rec.detail.trim().length === 0) {
       rec.detail = `Focus on ${rec.interventionType.toLowerCase()} this month. Track progress weekly and adjust based on results.`;
@@ -1810,11 +1786,11 @@ function generateStrategicBrief(
       crossfitContext: "Pillar 1: Retention",
       timeframe,
       executionChecklist: [
-        "Identify every member under 90 days — this is your onboarding touchpoint cohort",
-        "Week 2 onboarding touchpoint: Coach check-in after class — personal, not automated",
-        "Day 30 onboarding touchpoint: Goal confirmation — 'What do you want to achieve here?'",
-        "Day 60 onboarding touchpoint: Progress conversation — 'Here's what I've noticed you improving at'",
-        "Day 90 onboarding touchpoint: Milestone celebration — acknowledge their first quarter",
+        "Identify every member under 90 days — this is your onboarding cohort",
+        "Week 2: Coach check-in after class — personal, not automated",
+        "Day 30: Goal confirmation — 'What do you want to achieve here?'",
+        "Day 60: Progress conversation — 'Here's what I've noticed you improving at'",
+        "Day 90: Milestone celebration — acknowledge their first quarter",
       ],
       interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: gymArm * monthsRemaining,
     });
@@ -1842,11 +1818,11 @@ function generateStrategicBrief(
       crossfitContext: "Pillar 1: Retention",
       timeframe,
       executionChecklist: [
-        "Pull the list of members showing engagement decline — these need a check-in",
-        "Personal check-in text from head coach within 48 hours",
-        "Schedule an engagement check-in conversation (even 5 min after class) within 7 days",
-        "During the check-in, learn their friction point and prescribe a fix",
-        "Log each check-in outcome (returned, booked, no response) to track engagement recovery",
+        "Pull the list of members showing attendance decline.",
+        "Personal text from head coach within 48 hours.",
+        "Schedule a goal review (even a 5-minute chat after class) within 7 days.",
+        "Learn what their friction point is and prescribe a fix.",
+        "Log outreach outcome (returned, booked, no response) to track recovery rate.",
       ],
       interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: gymArm * monthsRemaining,
     });
@@ -1874,10 +1850,10 @@ function generateStrategicBrief(
       crossfitContext: "Pillar 1: Retention",
       timeframe,
       executionChecklist: [
-        "Identify members under 120 days showing drift — these are skill milestone program candidates",
-        "Define 3 skill milestones per member: movement skill, benchmark WOD, community moment",
-        "Coach sets skill milestones in first week: 'By day 90, let's get your first [goal]'",
-        "Track milestone completion in the program — celebrate publicly when achieved",
+        "Identify members under 120 days showing drift — these are milestone candidates",
+        "Define 3 milestones per member: movement skill, benchmark WOD, community moment",
+        "Coach sets milestones in first week: 'By day 90, let's get your first [goal]'",
+        "Track milestone completion — celebrate publicly when achieved",
       ],
       interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: gymArm * monthsRemaining,
     });
@@ -1905,11 +1881,11 @@ function generateStrategicBrief(
       crossfitContext: "Pillar 1: Retention",
       timeframe,
       executionChecklist: [
-        "Pull every 'drifter' or 'at-risk' member — these are your attendance recovery sprint targets",
-        "Personal text from their coach to start recovery: 'Hey [name], missed you — everything OK?'",
-        "Offer a specific attendance recovery plan (date, class time, goal review)",
-        "Follow up within 48 hours of their return to reinforce the attendance recovery",
-        "No response after 3 days: phone call from head coach or owner to complete the recovery sprint",
+        "Pull every 'drifter' or 'at-risk' member from the Member Risk tab",
+        "Personal text from their coach: 'Hey [name], missed you — everything OK?'",
+        "Offer a specific return plan (date, class time, goal review)",
+        "Follow up within 48 hours of their return and acknowledge it.",
+        "No response after 3 days: phone call from head coach or owner",
       ],
       interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: gymArm * monthsRemaining,
     });
@@ -1938,11 +1914,11 @@ function generateStrategicBrief(
       crossfitContext: "Pillar 2: Acquisition",
       timeframe,
       executionChecklist: [
-        "Define a 2-week referral sprint window and have coaches activate participation",
-        "Set a clear referral incentive: free month, gear credit, or public recognition",
-        "Personal referral ask to every core member: 'Who's one person you'd want to work out with?'",
-        "Follow up with every referral lead within 24 hours of first visit",
-        "Track referral activation source for every new signup",
+        "Define a 2-week referral window and have coaches advocate for members to participate.",
+        "Set clear incentive: free month, gear credit, or public recognition",
+        "Personal ask to every core member: 'Who's one person you'd want to work out with?'",
+        "Follow up with every referred lead within 24 hours of first visit",
+        "Track referral source for every new signup",
       ],
       interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: 1.0, avgLtvRemaining: gymArm * 6,
     });
@@ -1969,10 +1945,10 @@ function generateStrategicBrief(
       crossfitContext: "Pillar 2: Acquisition",
       timeframe,
       executionChecklist: [
-        "Build the Bring-A-Friend system: create coach conversation scripts so it runs consistently",
-        "Schedule a monthly Bring-A-Friend week — same week each month, make it a system",
-        "Track every Bring-A-Friend guest: name, who invited them, did they return, did they sign up",
-        "Follow up with every friend within 24 hours: personal text from the coach who met them",
+        "Create conversation scripts for coaches to improve retention odds and make this into a system — not something that is a one-off.",
+        "Schedule a monthly 'Bring Your Person' week — same week each month",
+        "Track every guest: name, who invited them, did they return, did they sign up",
+        "Follow up within 24 hours: personal text from the coach who met them",
       ],
       interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: 1.0, avgLtvRemaining: gymArm * 6,
     });
@@ -1999,11 +1975,11 @@ function generateStrategicBrief(
       crossfitContext: "Pillar 2: Acquisition",
       timeframe,
       executionChecklist: [
-        "Create a weekly social proof content calendar (member spotlight, transformations, PRs, testimonials)",
-        "Respond to all inbound leads same-day — social proof drives inquiries, speed closes them",
-        "Ask 3 long-time members for a short 'Why I stay' testimonial as social proof",
-        "Film PR celebrations and post as proof of results with member permission",
-        "Track which social proof content types generate the most inbound inquiries",
+        "Create a weekly content calendar with daily themes (member/coach spotlight, transformations, PRs, testimonials).",
+        "Respond to all inbound leads same-day using chat follow-up process",
+        "Ask 3 long time members for a short 'Why I stay' testimonial",
+        "Film PR celebrations and post with member permission",
+        "Track which content types generate the most inbound inquiries",
       ],
       interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: 1.0, avgLtvRemaining: gymArm * 6,
     });
@@ -2030,10 +2006,10 @@ function generateStrategicBrief(
       crossfitContext: "Pillar 2: Acquisition",
       timeframe,
       executionChecklist: [
-        "List 5 local organizations for partnership activation (businesses, schools, first responders)",
-        "Activate the first partnership with a free class or hosted community workout",
-        "Convert every partnership lead into a scheduled No-Sweat Intro immediately",
-        "Track which local partnerships generate actual signups to focus activation efforts",
+        "List 5 local organizations to partner with (businesses, schools, first responders)",
+        "Offer a free class or hosted community workout.",
+        "Convert interest into a scheduled No-Sweat Intro immediately.",
+        "Track which partnerships generate actual signups",
       ],
       interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: 1.0, avgLtvRemaining: gymArm * 6,
     });
@@ -2067,17 +2043,17 @@ function generateStrategicBrief(
       crossfitContext: "Pillar 3: Community Depth",
       timeframe,
       executionChecklist: isOpenSeason ? [
-        "Activate gym-wide Open registration — set a participation goal for the event",
-        "Run Friday Night Lights as the activation event: heats, judges, scorecards, energy",
-        "Create intramural teams to activate friendly competition within the event",
-        "Post member Open stories as event activation content — celebrate effort, not just scores",
-        "Plan a post-Open celebration event for everyone who participated",
+        "Encourage every member to register for the Open (gym-wide participation goal)",
+        "Run Friday Night Lights with heats, judges, scorecards, palpable energy.",
+        "Create intramural teams for friendly competition within the gym",
+        "Post member Open stories celebrating effort, not just scores",
+        "Plan a post-Open celebration for everyone who participated",
       ] : [
-        "Schedule one major activation event per quarter: in-house comp, Hero WOD, holiday throwdown",
-        "Make every event inclusive — scaled divisions so every member can participate",
-        "Mix newer and experienced members in event teams and heats",
-        "Track event activation: which members participate vs. don't, follow up with non-participants",
-        "Capture event videos and pictures to use for media content the following week",
+        "Schedule one major event per quarter: in-house comp, Hero WOD, holiday throwdown.",
+        "Make events inclusive — scaled divisions so every member can participate",
+        "Mix newer and experienced members in teams and heats",
+        "Track which members participate vs. don't and follow up with non-participants",
+        "Take videos and pictures to use for media content the following week."
       ],
       interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: gymArm * monthsRemaining,
     });
@@ -2105,11 +2081,11 @@ function generateStrategicBrief(
       crossfitContext: "Pillar 3: Community Depth",
       timeframe,
       executionChecklist: [
-        "Schedule one monthly community event (potluck, BBQ, game night) to establish cadence",
-        "Alternate the monthly cadence between social community events and partner/team workouts",
-        "Create a recurring monthly 'Community Night' on the same day each month",
-        "Assign one staff member responsible for community event turnout and reminders",
-        "Track community event attendance vs. regular class attendance to measure cadence impact",
+        "Schedule one community event per month (potluck, BBQ, game night)",
+        "Alternate between social events and partner/team workouts",
+        "Create a recurring 'Community Night' on the same day each month",
+        "Assign one staff member responsible for turnout and reminders",
+        "Track attendance at community events vs. regular class attendance",
       ],
       interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: gymArm * monthsRemaining,
     });
@@ -2139,10 +2115,10 @@ function generateStrategicBrief(
       timeframe,
       executionChecklist: [
         "Design a 4-6 week nutrition challenge with accountability pods of 4-6 members",
-        "Pre-plan weekly nutrition education topics for the challenge ('How to track macros', 'Meal prep hacks')",
-        "Run a weekly nutrition challenge check-in (10 min before/after class) to keep accountability high",
-        "Create a shared nutrition challenge progress board visible to the whole gym",
-        "Celebrate nutrition challenge completion and publish transformation stories",
+        "Pre-plan weekly education topics ('How to track macros', 'Meal prep hacks')",
+        "Run weekly group check-in (10 min before/after class)",
+        "Create shared progress tracking visible to the whole gym",
+        "Celebrate completion and publish transformation stories.",
       ],
       interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: retentionLift, avgLtvRemaining: gymArm * 6,
     });
@@ -2172,11 +2148,11 @@ function generateStrategicBrief(
       crossfitContext: "Pillar 4: Coaching Quality",
       timeframe,
       executionChecklist: [
-        "Create coaching SOPs for class delivery consistency (whiteboard brief structure, scaling flow, priorities)",
-        "Shadow each coach once per month as part of the coaching consistency audit",
-        "After each audit shadow, meet with the coach on coaching strengths and areas to improve",
-        "Audit whether every coach connects individually with at least 3 members per class",
-        "Hold monthly coaching development meetings focused on one consistency improvement area",
+        "Create SOPs for class delivery (whiteboard brief structure, scaling flow, coaching priorities)",
+        "Shadow each coach once per month and observe class experience.",
+        "After shadowing, have a follow up meeting with the coach going over things they did well and what they can improve.",
+        "Verify every coach connects individually with at least 3 members per class",
+        "Hold monthly coaching development meetings focused on one improvement area",
       ],
       interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: gymArm * monthsRemaining,
     });
@@ -2204,10 +2180,10 @@ function generateStrategicBrief(
       crossfitContext: "Pillar 4: Coaching Quality",
       timeframe,
       executionChecklist: [
-        "Audit programming for clear strength cycles and visible skill progressions",
-        "Audit the class experience: scaling consistency across all coaches and time slots",
-        "Survey 5-10 members as part of the experience audit: 'What's one thing we could improve?'",
-        "Hold a monthly programming audit and review meeting with coaching staff",
+        "Review programming for clear strength cycles and visible skill progressions.",
+        "Audit scaling consistency across all coaches and classes",
+        "Survey 5-10 members: 'What's one thing we could improve about class?'",
+        "Hold monthly programming review meeting with coaching staff",
       ],
       interventionScore, expectedRevenueImpact, confidenceWeight: confidence, urgencyFactor: urgency, membersAffected: membersAff, churnReductionEstimate: baselineLift, avgLtvRemaining: gymArm * monthsRemaining,
     });
