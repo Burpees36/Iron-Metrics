@@ -18,7 +18,8 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Settings, Save } from "lucide-react";
+import { Settings, Save, Upload, Plug, ChevronRight } from "lucide-react";
+import { Link } from "wouter";
 import { useGymData, GymPageShell, GymNotFound, GymDetailSkeleton, PageHeader } from "./gym-detail";
 
 const formSchema = z.object({
@@ -79,11 +80,11 @@ export default function GymSettings() {
 
   return (
     <GymPageShell gym={gym}>
-      <div className="max-w-lg space-y-6 animate-fade-in-up">
+      <div className="max-w-lg space-y-8 animate-fade-in-up">
         <PageHeader
           title="Settings"
-          subtitle="Update your gym's name and location. These details appear across all pages and in exported reports."
-          howTo="Edit the fields below and hit save. Changes take effect immediately across the platform."
+          subtitle="Manage your gym details, import member data, and connect your gym management platform."
+          howTo="Edit your gym info below, or use the data tools to import members or sync with Wodify."
           icon={Settings}
         />
 
@@ -135,6 +136,44 @@ export default function GymSettings() {
             Created {new Date(gym.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
           </p>
         )}
+
+        <div className="space-y-3 pt-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Data & Integrations</p>
+          <div className="space-y-2">
+            <Link href={`/gyms/${gymId}/import`}>
+              <Card className="hover-elevate transition-all duration-300 cursor-pointer group" data-testid="link-csv-import">
+                <CardContent className="p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-md bg-primary/10">
+                      <Upload className="w-4 h-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">Import Members (CSV)</p>
+                      <p className="text-xs text-muted-foreground">Upload a roster from Wodify, PushPress, Zen Planner, or any spreadsheet.</p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                </CardContent>
+              </Card>
+            </Link>
+            <Link href={`/gyms/${gymId}/wodify`}>
+              <Card className="hover-elevate transition-all duration-300 cursor-pointer group" data-testid="link-wodify-integration">
+                <CardContent className="p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-md bg-primary/10">
+                      <Plug className="w-4 h-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">Wodify Integration</p>
+                      <p className="text-xs text-muted-foreground">Connect directly to Wodify for automatic data sync — attendance, memberships, and more.</p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                </CardContent>
+              </Card>
+            </Link>
+          </div>
+        </div>
       </div>
     </GymPageShell>
   );

@@ -678,13 +678,6 @@ function StrategicBriefView({ gymId, periodStart, brief, recommendationExecution
         <StabilityVerdictBar level={brief.stabilityLevel} verdict={brief.stabilityVerdict} />
       </div>
 
-      <Card className="animate-fade-in-up animation-delay-200 hover-elevate transition-all duration-300" data-testid="card-executive-summary">
-        <CardContent className="pt-6">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">Executive Summary</p>
-          <p className="text-sm leading-relaxed">{brief.executiveSummary}</p>
-        </CardContent>
-      </Card>
-
       {brief.cohortAlert && (
         <Card className="border-amber-500/30 animate-fade-in-up animation-delay-300 hover-elevate transition-all duration-300" data-testid="card-cohort-alert">
           <CardContent className="pt-4 pb-3 flex items-start gap-3">
@@ -1372,22 +1365,6 @@ function FuturePlanningView({ cohorts, scenario, gymName, recommendations, membe
         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
           <Shield className="w-3.5 h-3.5" /> Planning Ahead
         </h3>
-
-        <Card className="hover-elevate transition-all duration-300" data-testid="card-break-even">
-          <CardContent className="pt-5 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Financial Safety Check</p>
-              <Badge variant="outline" className={riskColors[scenario.cashFlowRiskLevel]}>
-                {(scenario.breakEvenRisk * 100).toFixed(0)}% risk
-              </Badge>
-            </div>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              {scenario.breakEvenRisk > 0.3
-                ? "There is a meaningful chance revenue could dip below what you need to keep the lights on. Focus on reducing cancellations now to narrow the gap between your best and worst case scenarios."
-                : "Your revenue should stay above sustainable levels across all scenarios. Keep doing what you're doing while watching for early warning signs."}
-            </p>
-          </CardContent>
-        </Card>
 
         {scenario.scenarioInsights.length > 0 && (
           <Card data-testid="card-scenario-insights">
