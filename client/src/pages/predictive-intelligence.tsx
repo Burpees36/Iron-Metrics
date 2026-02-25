@@ -682,23 +682,6 @@ function StrategicBriefView({ gymId, periodStart, brief, recommendationExecution
         </CardContent>
       </Card>
 
-      {brief.focusRecommendation && (
-        <FocusRecommendationHero rec={brief.focusRecommendation} />
-      )}
-
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 animate-fade-in-up animation-delay-300" data-testid="grid-key-metrics">
-        {brief.keyMetrics.map((km) => (
-          <Card key={km.label} className="hover-elevate transition-all duration-300">
-            <CardContent className="pt-4 pb-3 px-3 text-center">
-              <p className="text-xs text-muted-foreground mb-1">{km.label}</p>
-              <p className={`text-lg font-bold ${km.status === "good" ? "text-primary" : km.status === "warning" ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"}`}>
-                {km.value}
-              </p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
       {brief.cohortAlert && (
         <Card className="border-amber-500/30 animate-fade-in-up animation-delay-300 hover-elevate transition-all duration-300" data-testid="card-cohort-alert">
           <CardContent className="pt-4 pb-3 flex items-start gap-3">
@@ -713,91 +696,115 @@ function StrategicBriefView({ gymId, periodStart, brief, recommendationExecution
 
       <div className="space-y-4 animate-fade-in-up animation-delay-400" data-testid="section-recommendations">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Strategic Recommendations</h3>
-        {brief.recommendations.map((rec, i) => (
-          <Card key={i} className="hover-elevate transition-all duration-300" data-testid={`card-recommendation-${i}`}>
-            <CardContent className="pt-5 space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge
-                    variant={rec.priority === "critical" ? "destructive" : "secondary"}
-                    className={rec.priority === "high" ? "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30" : ""}
-                  >
-                    {rec.priority}
-                  </Badge>
-                  <span className="text-xs text-muted-foreground">{rec.category}</span>
-                  {rec.crossfitContext && (
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal text-muted-foreground border-muted-foreground/20">
-                      {rec.crossfitContext}
-                    </Badge>
-                  )}
-                </div>
-                <span className="text-xs text-muted-foreground">{rec.timeframe}</span>
-              </div>
-              <p className="text-sm font-medium">{rec.headline}</p>
-              <p className="text-sm text-muted-foreground leading-relaxed">{rec.detail}</p>
-
-              {rec.executionChecklist && rec.executionChecklist.length > 0 && (
-                <div className="pt-3 border-t space-y-2" data-testid={`checklist-recommendation-${i}`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      Execution Checklist
-                    </p>
-                    {executionByHeadline.get(rec.headline) && (
-                      <Badge variant="outline" className="text-[10px]">
-                        Strength {(executionByHeadline.get(rec.headline)!.executionStrength * 100).toFixed(0)}%
+        {brief.recommendations.map((rec, i) => {
+          const isFocus = i === 0;
+          const card = executionByHeadline.get(rec.headline);
+          return (
+            <Card
+              key={i}
+              className={`hover-elevate transition-all duration-300 ${isFocus ? "border-blue-500/30" : ""}`}
+              data-testid={isFocus ? "card-focus-recommendation" : `card-recommendation-${i}`}
+            >
+              <CardContent className="pt-5 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {isFocus && <Target className="w-4 h-4 text-blue-500" />}
+                    {isFocus ? (
+                      <span className="text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">Recommended Focus</span>
+                    ) : (
+                      <Badge
+                        variant={rec.priority === "critical" ? "destructive" : "secondary"}
+                        className={rec.priority === "high" ? "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30" : ""}
+                      >
+                        {rec.priority}
+                      </Badge>
+                    )}
+                    <span className="text-xs text-muted-foreground">{rec.category}</span>
+                    {rec.crossfitContext && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal text-muted-foreground border-muted-foreground/20">
+                        {rec.crossfitContext}
                       </Badge>
                     )}
                   </div>
-                  <div className="space-y-1.5 pl-1">
-                    {rec.executionChecklist.map((item, j) => {
-                      const card = executionByHeadline.get(rec.headline);
-                      const checklistItem = card?.checklist.find((entry: { itemId: string; text: string; checked: boolean }) => entry.text === item);
-                      const checked = checklistItem?.checked ?? false;
-                      return (
-                        <button
-                          key={j}
-                          type="button"
-                          className="flex items-start gap-2 group w-full text-left"
-                          data-testid={`checklist-item-${i}-${j}`}
-                          onClick={() => {
-                            if (!card || !checklistItem) return;
-                            toggleChecklistMutation.mutate({ recommendationId: card.id, itemId: checklistItem.itemId, checked: !checked });
-                          }}
-                        >
-                          {checked ? <Check className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-primary" /> : <Circle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-muted-foreground/50" />}
-                          <span className={`text-xs leading-relaxed ${checked ? "text-foreground" : "text-muted-foreground"}`}>{item}</span>
-                        </button>
-                      );
-                    })}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">{rec.timeframe}</span>
+                    {isFocus && (
+                      <Badge variant="outline" className="text-xs text-blue-600 dark:text-blue-400 border-blue-500/30" data-testid="badge-focus-score">
+                        Score: {rec.interventionScore.toLocaleString()}
+                      </Badge>
+                    )}
                   </div>
                 </div>
-              )}
 
-              <div className="grid sm:grid-cols-2 gap-3 pt-2 border-t">
-                <div>
-                  <p className="text-xs font-medium text-primary mb-1">Revenue Impact</p>
-                  <p className="text-xs text-muted-foreground">{rec.revenueImpact}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-1">Action</p>
-                  <p className="text-xs text-muted-foreground">{rec.interventionType}</p>
-                </div>
-              </div>
+                {isFocus && (
+                  <p className="text-xs text-muted-foreground italic">If you only do one thing this month — do this.</p>
+                )}
 
-              {rec.executionStandard && (
-                <div className="pt-2" data-testid={`execution-standard-${i}`}>
-                  <p className="text-xs text-muted-foreground">
-                    <span className="font-semibold text-foreground">Execution Standard: </span>
-                    {rec.executionStandard}
-                  </p>
-                </div>
-              )}
+                <p className="text-sm font-medium">{rec.headline}</p>
+                <p className="text-sm text-muted-foreground leading-relaxed">{rec.detail}</p>
 
-              <ScoreBreakdown rec={rec} />
-            </CardContent>
-          </Card>
-        ))}
+                {rec.executionChecklist && rec.executionChecklist.length > 0 && (
+                  <div className="pt-3 border-t space-y-2" data-testid={`checklist-recommendation-${i}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Execution Checklist
+                      </p>
+                      {card && (
+                        <Badge variant="outline" className="text-[10px]">
+                          Strength {(card.executionStrength * 100).toFixed(0)}%
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="space-y-1.5 pl-1">
+                      {rec.executionChecklist.map((item, j) => {
+                        const checklistItem = card?.checklist.find((entry: { itemId: string; text: string; checked: boolean }) => entry.text === item);
+                        const checked = checklistItem?.checked ?? false;
+                        return (
+                          <button
+                            key={j}
+                            type="button"
+                            className="flex items-start gap-2 group w-full text-left"
+                            data-testid={`checklist-item-${i}-${j}`}
+                            onClick={() => {
+                              if (!card || !checklistItem) return;
+                              toggleChecklistMutation.mutate({ recommendationId: card.id, itemId: checklistItem.itemId, checked: !checked });
+                            }}
+                          >
+                            {checked ? <Check className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-primary" /> : <Circle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-muted-foreground/50" />}
+                            <span className={`text-xs leading-relaxed ${checked ? "text-foreground" : "text-muted-foreground"}`}>{item}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid sm:grid-cols-2 gap-3 pt-2 border-t">
+                  <div>
+                    <p className="text-xs font-medium text-primary mb-1">Revenue Impact</p>
+                    <p className="text-xs text-muted-foreground">{rec.revenueImpact}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-1">Action</p>
+                    <p className="text-xs text-muted-foreground">{rec.interventionType}</p>
+                  </div>
+                </div>
+
+                {rec.executionStandard && (
+                  <div className="pt-2" data-testid={`execution-standard-${i}`}>
+                    <p className="text-xs text-muted-foreground">
+                      <span className="font-semibold text-foreground">Execution Standard: </span>
+                      {rec.executionStandard}
+                    </p>
+                  </div>
+                )}
+
+                <ScoreBreakdown rec={rec} />
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       <OwnerActionsCard gymId={gymId} periodStart={periodStart} />
