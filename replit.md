@@ -34,6 +34,7 @@ Iron Metrics includes a Stability Command Center dashboard with key financial an
 -   **Predictive Intelligence Stack**: Provides member-level churn probability, cohort analysis, revenue scenarios, and strategic recommendations.
 -   **Ranked Intervention Engine**: Mathematically scores recommendations based on expected revenue impact, confidence, and urgency, surfacing top priorities.
 -   **Sales Intelligence**: Offers a dedicated page with sales funnel analytics, lead tracking, conversion rates, and bottleneck detection.
+-   **Resources Library**: A curated collection of gym operations playbooks (onboarding, nutrition challenges, referral systems, coaching development, etc.) organized by category with expandable phases and actionable steps. Located at `/gyms/:id/resources`.
 -   **Attendance-Based Disengagement Detection**: Identifies at-risk members using attendance data, with fallback to contact-based detection.
 -   **Robust Data Ingestion System**: A multi-step CSV import wizard with intelligent column auto-detection, validation, and idempotent upsert.
 -   **Wodify Integration**: Direct API connection for data synchronization, including backfill and incremental sync.

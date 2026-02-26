@@ -29,6 +29,7 @@ import {
   Target,
   Settings,
   DollarSign,
+  BookOpen,
 } from "lucide-react";
 
 export function AppSidebar() {
@@ -54,6 +55,7 @@ export function AppSidebar() {
     { href: `/gyms/${activeGymId}/member-risk`, label: "Member Intelligence", icon: Brain },
     { href: `/gyms/${activeGymId}/sales`, label: "Sales Intelligence", icon: DollarSign },
     { href: `/gyms/${activeGymId}/planning`, label: "Future Planning", icon: Target },
+    { href: `/gyms/${activeGymId}/resources`, label: "Resources", icon: BookOpen },
     { href: `/gyms/${activeGymId}/settings`, label: "Settings", icon: Settings },
   ] : [];
 
