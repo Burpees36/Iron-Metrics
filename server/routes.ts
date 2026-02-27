@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
+import { setupAuth, registerAuthRoutes, isAuthenticated, isDemoUser, demoReadOnlyGuard, DEMO_USER_ID, DEMO_GYM_ID } from "./replit_integrations/auth";
 import { parseMembersCsv, previewCsv, parseAllRows, computeFileHash, type ColumnMapping } from "./csv-parser";
 import { recomputeAllMetrics, computeMonthlyMetrics, generateMetricReports, generateForecast, generateTrendIntelligence } from "./metrics";
 import { generatePredictiveIntelligence } from "./predictive";
@@ -17,6 +17,11 @@ import { computeSalesSummary, computeTrends, computeBySource, computeByCoach } f
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
+function checkGymAccess(req: any, gym: { ownerId: string; id: string }): boolean {
+  if (isDemoUser(req) && gym.id === DEMO_GYM_ID) return true;
+  return gym.ownerId === req.user.claims.sub;
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -24,8 +29,23 @@ export async function registerRoutes(
   await setupAuth(app);
   registerAuthRoutes(app);
 
+  app.post("/api/demo", (req: any, res, next) => {
+    const demoUser = {
+      claims: { sub: DEMO_USER_ID, email: "demo@ironmetrics.app", first_name: "Demo", last_name: "User" },
+      expires_at: Math.floor(Date.now() / 1000) + 86400 * 365,
+    };
+    req.login(demoUser, (err: any) => {
+      if (err) return next(err);
+      res.json({ ok: true });
+    });
+  });
+
   app.get("/api/gyms", isAuthenticated, async (req: any, res) => {
     try {
+      if (isDemoUser(req)) {
+        const demoGym = await storage.getGym(DEMO_GYM_ID);
+        return res.json(demoGym ? [demoGym] : []);
+      }
       const userId = req.user.claims.sub;
       const gyms = await storage.getGymsByOwner(userId);
       res.json(gyms);
@@ -39,7 +59,7 @@ export async function registerRoutes(
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
       res.json(gym);
     } catch (error) {
       console.error("Error fetching gym:", error);
@@ -47,7 +67,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/gyms", isAuthenticated, async (req: any, res) => {
+  app.post("/api/gyms", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const parsed = insertGymSchema.parse({ ...req.body, ownerId: userId });
@@ -63,7 +83,7 @@ export async function registerRoutes(
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
       const members = await storage.getMembersByGym(req.params.id);
       res.json(members);
     } catch (error) {
@@ -76,7 +96,7 @@ export async function registerRoutes(
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const members = await storage.getMembersByGym(req.params.id);
       const contacts = await storage.getLatestContacts(req.params.id);
@@ -197,7 +217,7 @@ export async function registerRoutes(
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
       const contacts = await storage.getContactsForMember(req.params.memberId);
       res.json(contacts);
     } catch (error) {
@@ -206,11 +226,11 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/gyms/:id/import/preview", isAuthenticated, upload.single("file"), async (req: any, res) => {
+  app.post("/api/gyms/:id/import/preview", isAuthenticated, demoReadOnlyGuard, upload.single("file"), async (req: any, res) => {
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
@@ -236,11 +256,11 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/gyms/:id/import/commit", isAuthenticated, upload.single("file"), async (req: any, res) => {
+  app.post("/api/gyms/:id/import/commit", isAuthenticated, demoReadOnlyGuard, upload.single("file"), async (req: any, res) => {
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
@@ -361,11 +381,11 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/gyms/:id/import/members", isAuthenticated, upload.single("file"), async (req: any, res) => {
+  app.post("/api/gyms/:id/import/members", isAuthenticated, demoReadOnlyGuard, upload.single("file"), async (req: any, res) => {
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
@@ -409,7 +429,7 @@ export async function registerRoutes(
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const jobs = await storage.getImportJobsByGym(req.params.id);
       const sanitized = jobs.map(j => ({
@@ -435,7 +455,7 @@ export async function registerRoutes(
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const job = await storage.getImportJob(req.params.jobId);
       if (!job || job.gymId !== req.params.id) return res.status(404).json({ message: "Import job not found" });
@@ -464,7 +484,7 @@ export async function registerRoutes(
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const month = req.query.month as string;
       if (!month) return res.status(400).json({ message: "month query parameter required (YYYY-MM-DD)" });
@@ -489,7 +509,7 @@ export async function registerRoutes(
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const metrics = await storage.getAllMonthlyMetrics(req.params.id);
       res.json(metrics);
@@ -503,7 +523,7 @@ export async function registerRoutes(
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const month = req.query.month as string;
       if (!month) return res.status(400).json({ message: "month query parameter required (YYYY-MM-DD)" });
@@ -681,11 +701,11 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/gyms/:id/members/:memberId/contact", isAuthenticated, async (req: any, res) => {
+  app.post("/api/gyms/:id/members/:memberId/contact", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const contact = await storage.logContact({
         memberId: req.params.memberId,
@@ -703,7 +723,7 @@ export async function registerRoutes(
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const member = await storage.getMemberById(req.params.memberId);
       if (!member || member.gymId !== req.params.id) return res.status(404).json({ message: "Member not found" });
@@ -763,11 +783,11 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/gyms/:id", isAuthenticated, async (req: any, res) => {
+  app.put("/api/gyms/:id", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const { name, location } = req.body;
       const updates: any = {};
@@ -786,7 +806,7 @@ export async function registerRoutes(
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const membersList = await storage.getMembersByGym(req.params.id);
       const contacts = await storage.getLatestContacts(req.params.id);
@@ -825,7 +845,7 @@ export async function registerRoutes(
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const monthDate = (req.query.month as string) || new Date().toISOString().slice(0, 7) + "-01";
       const metrics = await storage.getMonthlyMetrics(req.params.id, monthDate);
@@ -858,7 +878,7 @@ export async function registerRoutes(
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const alerts: { id: string; type: string; severity: "info" | "warning" | "critical"; title: string; detail: string; timestamp: string }[] = [];
       const now = new Date();
@@ -959,7 +979,7 @@ export async function registerRoutes(
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const metrics = await storage.getAllMonthlyMetrics(req.params.id);
       const intelligence = generateTrendIntelligence(metrics);
@@ -974,7 +994,7 @@ export async function registerRoutes(
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const intelligence = await generatePredictiveIntelligence(req.params.id);
       const periodStart = getPeriodStart();
@@ -1009,7 +1029,7 @@ export async function registerRoutes(
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const periodStart = typeof req.query.periodStart === "string" ? req.query.periodStart : getPeriodStart();
       const cards = await getRecommendationExecutionState(req.params.id, periodStart);
@@ -1020,11 +1040,11 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/gyms/:id/recommendations/:recommendationId/checklist/:itemId", isAuthenticated, async (req: any, res) => {
+  app.post("/api/gyms/:id/recommendations/:recommendationId/checklist/:itemId", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       await toggleChecklistItem(req.params.id, req.params.recommendationId, req.params.itemId, Boolean(req.body.checked), req.body.note);
       const cards = await getRecommendationExecutionState(req.params.id, typeof req.body.periodStart === "string" ? req.body.periodStart : getPeriodStart());
@@ -1035,11 +1055,11 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/gyms/:id/recommendations/actions", isAuthenticated, async (req: any, res) => {
+  app.post("/api/gyms/:id/recommendations/actions", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const text = String(req.body.text || "").trim();
       if (!text) return res.status(400).json({ message: "Action text is required" });
@@ -1057,7 +1077,7 @@ export async function registerRoutes(
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const limit = Math.min(Number(req.query.limit) || 50, 200);
       const offset = Math.max(Number(req.query.offset) || 0, 0);
@@ -1069,11 +1089,11 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/gyms/:id/recompute", isAuthenticated, async (req: any, res) => {
+  app.post("/api/gyms/:id/recompute", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       await recomputeAllMetrics(req.params.id);
       res.json({ message: "Metrics recomputed" });
@@ -1083,11 +1103,11 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/gyms/:id/wodify/test", isAuthenticated, async (req: any, res) => {
+  app.post("/api/gyms/:id/wodify/test", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const { apiKey } = req.body;
       if (!apiKey || typeof apiKey !== "string") {
@@ -1102,11 +1122,11 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/gyms/:id/wodify/connect", isAuthenticated, async (req: any, res) => {
+  app.post("/api/gyms/:id/wodify/connect", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const { apiKey, locationName, programName } = req.body;
       if (!apiKey || typeof apiKey !== "string") {
@@ -1145,11 +1165,11 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/gyms/:id/wodify/disconnect", isAuthenticated, async (req: any, res) => {
+  app.delete("/api/gyms/:id/wodify/disconnect", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       await storage.deleteWodifyConnection(req.params.id);
       res.json({ message: "Wodify disconnected successfully" });
@@ -1163,7 +1183,7 @@ export async function registerRoutes(
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const connection = await storage.getWodifyConnection(req.params.id);
       if (!connection) {
@@ -1191,11 +1211,11 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/gyms/:id/wodify/sync", isAuthenticated, async (req: any, res) => {
+  app.post("/api/gyms/:id/wodify/sync", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const runType = req.body?.runType === "backfill" ? "backfill" : "incremental";
 
@@ -1214,7 +1234,7 @@ export async function registerRoutes(
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const limit = Math.min(Number(req.query.limit) || 20, 100);
       const syncRuns = await storage.getWodifySyncRuns(req.params.id, limit);
@@ -1235,7 +1255,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/knowledge/sources", isAuthenticated, async (req: any, res) => {
+  app.post("/api/knowledge/sources", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
     try {
       const parsed = insertKnowledgeSourceSchema.parse(req.body);
       const source = await storage.createKnowledgeSource(parsed);
@@ -1246,7 +1266,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/knowledge/sources/:id", isAuthenticated, async (req: any, res) => {
+  app.delete("/api/knowledge/sources/:id", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
     try {
       await storage.deleteKnowledgeSource(req.params.id);
       res.json({ message: "Source deleted" });
@@ -1256,7 +1276,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/knowledge/sources/:id/ingest", isAuthenticated, async (req: any, res) => {
+  app.post("/api/knowledge/sources/:id/ingest", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
     try {
       const source = await storage.getKnowledgeSource(req.params.id);
       if (!source) return res.status(404).json({ message: "Source not found" });
@@ -1318,7 +1338,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/knowledge/search", isAuthenticated, async (req: any, res) => {
+  app.post("/api/knowledge/search", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
     try {
       const { query, tags, limit } = req.body;
       if (!query || typeof query !== "string") {
@@ -1336,7 +1356,7 @@ export async function registerRoutes(
     res.json(TAXONOMY_TAGS);
   });
 
-  app.post("/api/knowledge/seed", isAuthenticated, async (_req: any, res) => {
+  app.post("/api/knowledge/seed", isAuthenticated, demoReadOnlyGuard, async (_req: any, res) => {
     try {
       res.json({ message: "Seeding started" });
       seedKnowledgeBase().then(result => {
@@ -1365,7 +1385,7 @@ export async function registerRoutes(
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const periodStart = typeof req.query.periodStart === "string" ? req.query.periodStart : getPeriodStart();
       const audits = await storage.getRecommendationAudits(req.params.id, periodStart);
@@ -1396,7 +1416,7 @@ export async function registerRoutes(
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const { start, end, prevStart, prevEnd } = parseDateRange(req);
       const [leadsArr, consultsArr, membershipsArr, paymentsArr, prevLeads, prevConsults, prevMemberships, prevPayments] = await Promise.all([
@@ -1422,7 +1442,7 @@ export async function registerRoutes(
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const { start, end } = parseDateRange(req);
       const bucket = req.query.bucket === "weekly" ? "weekly" : "daily" as const;
@@ -1443,7 +1463,7 @@ export async function registerRoutes(
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const { start, end } = parseDateRange(req);
       const [leadsArr, membershipsArr] = await Promise.all([
@@ -1463,7 +1483,7 @@ export async function registerRoutes(
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const { start, end } = parseDateRange(req);
       const [consultsArr, membershipsArr] = await Promise.all([
@@ -1479,11 +1499,11 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/gyms/:id/leads", isAuthenticated, async (req: any, res) => {
+  app.post("/api/gyms/:id/leads", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const data = insertLeadSchema.parse({ ...req.body, gymId: req.params.id });
       const lead = await storage.createLead(data);
@@ -1494,11 +1514,11 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/gyms/:id/consults", isAuthenticated, async (req: any, res) => {
+  app.post("/api/gyms/:id/consults", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const data = insertConsultSchema.parse({ ...req.body, gymId: req.params.id });
       const consult = await storage.createConsult(data);
@@ -1509,11 +1529,11 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/gyms/:id/sales-memberships", isAuthenticated, async (req: any, res) => {
+  app.post("/api/gyms/:id/sales-memberships", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
     try {
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (gym.ownerId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const data = insertSalesMembershipSchema.parse({ ...req.body, gymId: req.params.id });
       const membership = await storage.createSalesMembership(data);

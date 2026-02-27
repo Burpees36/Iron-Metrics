@@ -38,6 +38,7 @@ Iron Metrics includes a Stability Command Center dashboard with key financial an
 -   **Attendance-Based Disengagement Detection**: Identifies at-risk members using attendance data, with fallback to contact-based detection.
 -   **Robust Data Ingestion System**: A multi-step CSV import wizard with intelligent column auto-detection, validation, and idempotent upsert.
 -   **Wodify Integration**: Direct API connection for data synchronization, including backfill and incremental sync.
+-   **Demo Mode**: Unauthenticated visitors can click "Try Demo" on the landing page to explore the full app with real sample data (read-only). Demo users see a persistent banner and cannot modify any data. Backend uses `isDemoUser()` check and `demoReadOnlyGuard` middleware. Demo gym ID: `f2d3ff6b-ced8-4735-847e-4f65b4cad721`.
 
 ### Intelligence Philosophy
 All insights are presented as Iron Metrics intelligence, embedding coaching concepts without external attribution. Strategic briefs are limited to the top 3 ranked recommendations, focusing on distinct execution categories with concise checklists and action items. Language is direct and gym-owner-friendly, avoiding jargon. Recommendations are validated against the project's core objectives: improving financial stability, retention clarity, reducing owner stress, and strengthening community longevity.

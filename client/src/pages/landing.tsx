@@ -9,7 +9,9 @@ import {
   ArrowDown,
   ArrowUp,
   CheckCircle2,
+  Eye,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface GymScenario {
   name: string;
@@ -91,7 +93,23 @@ function getVerdictColor(level: string) {
 export default function LandingPage() {
   const [activeIdx, setActiveIdx] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const queryClient = useQueryClient();
+
+  const startDemo = async () => {
+    setDemoLoading(true);
+    try {
+      const res = await fetch("/api/demo", { method: "POST", credentials: "include" });
+      if (res.ok) {
+        await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      } else {
+        setDemoLoading(false);
+      }
+    } catch {
+      setDemoLoading(false);
+    }
+  };
 
   useEffect(() => {
     return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
@@ -161,6 +179,17 @@ export default function LandingPage() {
                     <ArrowRight className="w-4 h-4 ml-1" />
                   </Button>
                 </a>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="pl-[32px] pr-[32px] pt-[16px] pb-[16px]"
+                  data-testid="button-try-demo"
+                  onClick={startDemo}
+                  disabled={demoLoading}
+                >
+                  {demoLoading ? "Loading..." : "Try Demo"}
+                  {!demoLoading && <Eye className="w-4 h-4 ml-1" />}
+                </Button>
               </div>
               <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground animate-fade-in-up animation-delay-400">
                 <span className="flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5 text-primary" /> Import your CSV</span>

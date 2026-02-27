@@ -1,12 +1,19 @@
 import type { Express } from "express";
 import { authStorage } from "./storage";
-import { isAuthenticated } from "./replitAuth";
+import { isAuthenticated, isDemoUser, DEMO_USER_ID } from "./replitAuth";
 
-// Register auth-specific routes
 export function registerAuthRoutes(app: Express): void {
-  // Get current authenticated user
   app.get("/api/auth/user", isAuthenticated, async (req: any, res) => {
     try {
+      if (isDemoUser(req)) {
+        return res.json({
+          id: DEMO_USER_ID,
+          email: "demo@ironmetrics.app",
+          firstName: "Demo",
+          lastName: "User",
+          profileImageUrl: null,
+        });
+      }
       const userId = req.user.claims.sub;
       const user = await authStorage.getUser(userId);
       res.json(user);

@@ -28,7 +28,20 @@ import SalesIntelligence from "@/pages/sales-intelligence";
 import { NotificationBell } from "@/components/notification-bell";
 
 
+function DemoBanner() {
+  return (
+    <div className="bg-primary/10 border-b border-primary/25 px-4 py-2 text-center text-sm" data-testid="banner-demo">
+      <span className="text-muted-foreground">You're viewing a demo with sample data — everything is read-only.</span>
+      {" "}
+      <a href="/api/login" className="text-primary font-medium hover:underline" data-testid="link-demo-signup">
+        Create Your Account
+      </a>
+    </div>
+  );
+}
+
 function AuthenticatedApp() {
+  const { isDemo } = useAuth();
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
@@ -39,6 +52,7 @@ function AuthenticatedApp() {
       <div className="flex h-screen w-full">
         <AppSidebar />
         <div className="flex flex-col flex-1 min-w-0">
+          {isDemo && <DemoBanner />}
           <header className="flex items-center justify-between gap-4 p-2 border-b border-border/50 sticky top-0 z-40 bg-background/70 backdrop-blur-md">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
             <div className="flex items-center gap-1">

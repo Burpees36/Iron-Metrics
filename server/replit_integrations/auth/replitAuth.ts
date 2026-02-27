@@ -130,8 +130,26 @@ export async function setupAuth(app: Express) {
   });
 }
 
+export const DEMO_USER_ID = "demo-user";
+export const DEMO_GYM_ID = "f2d3ff6b-ced8-4735-847e-4f65b4cad721";
+
+export function isDemoUser(req: any): boolean {
+  return req.user?.claims?.sub === DEMO_USER_ID;
+}
+
+export const demoReadOnlyGuard: RequestHandler = (req: any, res, next) => {
+  if (isDemoUser(req)) {
+    return res.status(403).json({ message: "Demo mode is read-only" });
+  }
+  next();
+};
+
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
   const user = req.user as any;
+
+  if (isDemoUser(req)) {
+    return next();
+  }
 
   if (!req.isAuthenticated() || !user.expires_at) {
     return res.status(401).json({ message: "Unauthorized" });
