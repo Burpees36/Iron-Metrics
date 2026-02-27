@@ -1,5 +1,6 @@
 import { db } from "./db";
 import { gyms, members, gymMonthlyMetrics } from "@shared/schema";
+import { users } from "@shared/models/auth";
 import { eq } from "drizzle-orm";
 import { DEMO_GYM_ID, DEMO_USER_ID } from "./replit_integrations/auth";
 import { recomputeAllMetrics } from "./metrics";
@@ -17,6 +18,13 @@ export async function ensureDemoData(): Promise<void> {
   }
 
   console.log("[DEMO] Seeding demo gym data...");
+
+  await db.insert(users).values({
+    id: DEMO_USER_ID,
+    email: "demo@ironmetrics.app",
+    firstName: "Demo",
+    lastName: "User",
+  }).onConflictDoNothing();
 
   await db.insert(gyms).values({
     id: DEMO_GYM_ID,
