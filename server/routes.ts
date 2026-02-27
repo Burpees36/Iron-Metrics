@@ -14,6 +14,7 @@ import { ingestSource, reprocessDocument, TAXONOMY_TAGS } from "./knowledge-inge
 import { searchKnowledge } from "./knowledge-retrieval";
 import { seedKnowledgeBase } from "./seed-knowledge";
 import { computeSalesSummary, computeTrends, computeBySource, computeByCoach } from "./sales-intelligence";
+import { ensureDemoData } from "./demo-seed";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -29,7 +30,12 @@ export async function registerRoutes(
   await setupAuth(app);
   registerAuthRoutes(app);
 
-  app.post("/api/demo", (req: any, res, next) => {
+  app.post("/api/demo", async (req: any, res, next) => {
+    try {
+      await ensureDemoData();
+    } catch (e) {
+      console.error("[DEMO] Seed error:", e);
+    }
     const demoUser = {
       claims: { sub: DEMO_USER_ID, email: "demo@ironmetrics.app", first_name: "Demo", last_name: "User" },
       expires_at: Math.floor(Date.now() / 1000) + 86400 * 365,
