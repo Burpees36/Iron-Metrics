@@ -1,0 +1,289 @@
+Sprint 2 Objective
+
+Implement a robust CSV import system for sales data that allows gyms to:
+
+Upload historical lead data
+
+Map columns to system fields
+
+Preview data before import
+
+Prevent duplicates
+
+Track import history
+
+Re-import monthly without chaos
+
+See dashboard update immediately
+
+The result: A gym can upload their last 6–24 months of lead/sales history and immediately see meaningful analytics.
+
+✅ Functional Requirements
+1️⃣ CSV Upload Flow
+
+Create a guided import flow:
+
+Step 1: Upload CSV
+Step 2: Map Columns
+Step 3: Preview & Validate
+Step 4: Confirm Import
+
+Requirements:
+
+Accept CSV only
+
+Max file size limit
+
+Validate format before proceeding
+
+Show total rows detected
+
+2️⃣ Column Mapping Interface
+
+User must be able to map spreadsheet columns to required system fields:
+
+Required:
+
+Lead created date
+
+Source
+
+Stage or outcome
+
+Assigned coach (optional but recommended)
+
+Optional:
+
+Sale date
+
+Sale price
+
+Consult date
+
+Loss reason
+
+Notes
+
+Features:
+
+Auto-detect common column names
+
+Allow saving mapping for future imports
+
+Allow skipping columns
+
+3️⃣ Preview + Validation Layer
+
+Before import:
+
+Show preview of first 20 rows
+
+Show warnings:
+
+Missing required fields
+
+Invalid dates
+
+Negative sale price
+
+Unknown stage names
+
+Highlight rows that will fail
+
+Allow user to proceed with valid rows only
+
+No silent failures.
+
+4️⃣ Deduplication Logic
+
+Must prevent duplicate leads.
+
+Implement matching rules based on:
+
+Same contact + same created date
+
+OR same contact + same consult date
+
+OR user-confirmed duplicate on preview
+
+Behavior:
+
+If duplicate found:
+
+Option to skip
+
+Option to update existing record
+
+Option to create anyway (advanced mode)
+
+Log dedupe decisions.
+
+5️⃣ Stage Normalization
+
+Gyms use messy stage names like:
+
+“NSI”
+
+“Intro”
+
+“Trial”
+
+“Closed”
+
+“Signed”
+
+Implement stage translation layer:
+
+User maps spreadsheet stage → system stage.
+
+Persist mapping per gym.
+
+6️⃣ Import Audit Log
+
+Create an Import History panel showing:
+
+File name
+
+Import date
+
+Rows processed
+
+Rows created
+
+Rows updated
+
+Rows skipped
+
+Errors encountered
+
+User who imported
+
+Allow viewing details of each import.
+
+This is critical for trust.
+
+7️⃣ Data Normalization Rules
+
+During import:
+
+Standardize source names
+
+Standardize coach names
+
+Convert all dates to system timezone
+
+Trim whitespace
+
+Normalize capitalization
+
+Prevent dirty data from polluting analytics.
+
+8️⃣ Performance Safeguards
+
+Process large files in batches
+
+Prevent blocking main thread
+
+Provide loading state
+
+Prevent double submissions
+
+Timeout protection
+
+Must handle 5,000+ rows safely.
+
+9️⃣ Dashboard Recalculation
+
+After import:
+
+Automatically refresh cached analytics
+
+Recalculate funnel metrics
+
+Recalculate coach breakdown
+
+Recalculate source conversion
+
+Recalculate sales health score
+
+No manual refresh required.
+
+🧠 Technical Expectations
+
+Do not rewrite analytics engine.
+
+Extend ingestion layer cleanly.
+
+Maintain strict multi-tenant isolation.
+
+Validate all inputs server-side.
+
+Log all import actions.
+
+Add tests for:
+
+Duplicate detection
+
+Stage normalization
+
+Partial failure handling
+
+Large file import stability
+
+🚦 Out of Scope (Do Not Build Yet)
+
+Automated recurring imports
+
+CRM connectors
+
+Webhooks
+
+Follow-up task automation
+
+Data quality score (Sprint 3)
+
+Scheduled jobs
+
+🏁 Definition of Done
+
+Sprint 2 is complete when:
+
+A gym can upload 12 months of historical sales data.
+
+Duplicates are prevented or clearly handled.
+
+Invalid rows are reported clearly.
+
+Import history is visible.
+
+Dashboard reflects imported data accurately.
+
+No analytics inconsistencies occur.
+
+🧩 After Sprint 2
+
+You now have:
+
+Manual in-app tracking
+
+Historical data ingestion
+
+Reliable deduplication
+
+Clean normalization
+
+Audit trail
+
+At this point, you can confidently onboard paying gyms.
+
+Sprint 3 will be about:
+
+Data Quality Score
+
+Follow-up intelligence
+
+Automation prompts
+
+CRM integration seams
+
+Scheduled imports

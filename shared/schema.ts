@@ -99,6 +99,8 @@ export const importJobs = pgTable("import_jobs", {
   errors: text("errors"),
   createdAt: timestamp("created_at").defaultNow(),
   completedAt: timestamp("completed_at"),
+  type: text("type").notNull().default("members"),
+  stageMapping: jsonb("stage_mapping"),
 }, (table) => [
   index("idx_import_jobs_gym").on(table.gymId),
   index("idx_import_jobs_hash").on(table.fileHash),

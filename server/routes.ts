@@ -15,6 +15,7 @@ import { searchKnowledge } from "./knowledge-retrieval";
 import { seedKnowledgeBase } from "./seed-knowledge";
 import { computeSalesSummary, computeTrends, computeBySource, computeByCoach } from "./sales-intelligence";
 import { ensureDemoData } from "./demo-seed";
+import { previewLeadCsv, parseAllLeadRows, computeFileHash as computeLeadFileHash, type LeadColumnMapping } from "./lead-csv-parser";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -1700,6 +1701,295 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error transitioning lead stage:", error);
       res.status(500).json({ message: "Failed to transition lead stage" });
+    }
+  });
+
+  app.post("/api/gyms/:id/leads/import/preview", isAuthenticated, demoReadOnlyGuard, upload.single("file"), async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+      const csvText = req.file.buffer.toString("utf-8");
+      const fileHash = computeLeadFileHash(csvText);
+
+      let customMapping: Partial<LeadColumnMapping> | undefined;
+      if (req.body.mapping) {
+        try { customMapping = JSON.parse(req.body.mapping); } catch {}
+      }
+
+      let stageMapping: Record<string, string> | undefined;
+      if (req.body.stageMapping) {
+        try { stageMapping = JSON.parse(req.body.stageMapping); } catch {}
+      }
+
+      const preview = previewLeadCsv(csvText, customMapping, stageMapping);
+
+      const existingJobs = await storage.getImportJobsByGym(req.params.id);
+      const duplicateJob = existingJobs.find(j => j.fileHash === fileHash && j.status === "completed");
+
+      res.json({
+        ...preview,
+        fileHash,
+        isDuplicate: !!duplicateJob,
+        duplicateJobId: duplicateJob?.id || null,
+        duplicateDate: duplicateJob?.completedAt || null,
+      });
+    } catch (error: any) {
+      console.error("Error previewing lead CSV:", error);
+      res.status(500).json({ message: error.message || "Failed to preview CSV" });
+    }
+  });
+
+  app.post("/api/gyms/:id/leads/import/commit", isAuthenticated, demoReadOnlyGuard, upload.single("file"), async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+      const csvText = req.file.buffer.toString("utf-8");
+      const fileHash = computeLeadFileHash(csvText);
+
+      let mapping: LeadColumnMapping;
+      try { mapping = JSON.parse(req.body.mapping); } catch {
+        return res.status(400).json({ message: "Invalid column mapping" });
+      }
+
+      let stageMapping: Record<string, string> | undefined;
+      if (req.body.stageMapping) {
+        try { stageMapping = JSON.parse(req.body.stageMapping); } catch {}
+      }
+
+      const duplicateMode = req.body.duplicateMode || "skip";
+
+      const job = await storage.createImportJob({
+        gymId: req.params.id,
+        uploadedBy: req.user?.claims?.sub || "unknown",
+        filename: req.file.originalname || "leads.csv",
+        fileHash,
+        rawCsv: csvText.slice(0, 50000),
+        columnMapping: JSON.stringify(mapping),
+        status: "processing",
+        type: "leads",
+        stageMapping: stageMapping || null,
+      });
+
+      const { leads: parsedLeads, errors, totalRows, validRows, errorRows } = parseAllLeadRows(csvText, mapping, stageMapping);
+
+      const existingLeads = await storage.getLeadsByGymAllTime(req.params.id);
+
+      let importedCount = 0;
+      let updatedCount = 0;
+      let skippedCount = 0;
+      const importErrors: any[] = [];
+      const BATCH_SIZE = 100;
+      const seenInFile = new Set<string>();
+
+      function matchesLead(parsed: any, existing: { email: string | null; name: string | null; createdAt: Date | string; consultDate?: Date | string | null }) {
+        const existingDate = new Date(existing.createdAt).toISOString().slice(0, 10);
+        const existingConsultDate = existing.consultDate ? new Date(existing.consultDate).toISOString().slice(0, 10) : null;
+
+        if (parsed.email && existing.email && parsed.email === existing.email) {
+          if (existingDate === parsed.createdDate) return true;
+          if (parsed.consultDate && existingConsultDate && parsed.consultDate === existingConsultDate) return true;
+        }
+        if (parsed.name && existing.name && parsed.name.toLowerCase() === existing.name.toLowerCase()) {
+          if (existingDate === parsed.createdDate) return true;
+          if (parsed.consultDate && existingConsultDate && parsed.consultDate === existingConsultDate) return true;
+        }
+        return false;
+      }
+
+      for (let batch = 0; batch < parsedLeads.length; batch += BATCH_SIZE) {
+        const chunk = parsedLeads.slice(batch, batch + BATCH_SIZE);
+
+        for (const parsed of chunk) {
+          try {
+            const fileKey = `${(parsed.email || "").toLowerCase()}|${(parsed.name || "").toLowerCase()}|${parsed.createdDate}`;
+            if (seenInFile.has(fileKey)) {
+              skippedCount++;
+              continue;
+            }
+            seenInFile.add(fileKey);
+
+            const existingMatch = existingLeads.find(existing => matchesLead(parsed, existing));
+            const isDuplicate = !!existingMatch;
+
+            if (isDuplicate && duplicateMode === "skip") {
+              skippedCount++;
+              continue;
+            }
+
+            if (isDuplicate && duplicateMode === "update" && existingMatch) {
+              const updates: Record<string, any> = { status: parsed.stage, source: parsed.source };
+              if (parsed.name) updates.name = parsed.name;
+              if (parsed.email) updates.email = parsed.email;
+              if (parsed.phone) updates.phone = parsed.phone;
+              if (parsed.coachId) updates.coachId = parsed.coachId;
+              if (parsed.notes) updates.notes = parsed.notes;
+              if (parsed.salePrice) updates.salePrice = parsed.salePrice;
+              if (parsed.lostReason) updates.lostReason = parsed.lostReason;
+              if (parsed.consultDate) {
+                updates.consultDate = new Date(parsed.consultDate);
+                updates.bookedAt = new Date(parsed.consultDate);
+              }
+              if (parsed.stage === "showed" || parsed.stage === "won") {
+                updates.showedAt = parsed.consultDate ? new Date(parsed.consultDate) : new Date(parsed.createdDate);
+              }
+              if (parsed.stage === "won") {
+                updates.wonAt = parsed.saleDate ? new Date(parsed.saleDate) : new Date();
+                updates.salePrice = parsed.salePrice || "0";
+              }
+              if (parsed.stage === "lost") {
+                updates.lostAt = new Date();
+                updates.lostReason = parsed.lostReason || "other";
+              }
+              await storage.updateLead(existingMatch.id, updates);
+              updatedCount++;
+              continue;
+            }
+
+            const createdAt = new Date(parsed.createdDate);
+            const leadData: any = {
+              gymId: req.params.id,
+              name: parsed.name,
+              email: parsed.email,
+              phone: parsed.phone,
+              source: parsed.source,
+              status: parsed.stage,
+              coachId: parsed.coachId,
+              notes: parsed.notes,
+              createdAt,
+            };
+
+            if (["booked", "showed", "won"].includes(parsed.stage)) {
+              leadData.bookedAt = parsed.consultDate ? new Date(parsed.consultDate) : new Date(createdAt.getTime() + 86400000);
+              leadData.consultDate = parsed.consultDate ? new Date(parsed.consultDate) : new Date(createdAt.getTime() + 3 * 86400000);
+            }
+            if (["showed", "won"].includes(parsed.stage)) {
+              leadData.showedAt = parsed.consultDate ? new Date(parsed.consultDate) : new Date(createdAt.getTime() + 3 * 86400000);
+            }
+            if (parsed.stage === "won") {
+              leadData.wonAt = parsed.saleDate ? new Date(parsed.saleDate) : new Date(createdAt.getTime() + 4 * 86400000);
+              leadData.salePrice = parsed.salePrice || "0";
+            }
+            if (parsed.stage === "lost") {
+              leadData.lostAt = new Date(createdAt.getTime() + 5 * 86400000);
+              leadData.lostReason = parsed.lostReason || "other";
+            }
+
+            const lead = await storage.createLead(leadData);
+
+            if (["booked", "showed", "won"].includes(parsed.stage)) {
+              const consultData: any = {
+                gymId: req.params.id,
+                leadId: lead.id,
+                bookedAt: leadData.bookedAt,
+                scheduledFor: leadData.consultDate,
+                coachId: parsed.coachId || undefined,
+              };
+              if (["showed", "won"].includes(parsed.stage)) {
+                consultData.showedAt = leadData.showedAt;
+              }
+              await storage.createConsult(consultData);
+            }
+
+            if (parsed.stage === "won" && parsed.salePrice) {
+              const membership = await storage.createSalesMembership({
+                gymId: req.params.id,
+                leadId: lead.id,
+                startedAt: leadData.wonAt,
+                priceMonthly: parsed.salePrice,
+                status: "active",
+              });
+              await storage.createPayment({
+                gymId: req.params.id,
+                membershipId: membership.id,
+                amount: parsed.salePrice,
+                paidAt: leadData.wonAt,
+              });
+            }
+
+            importedCount++;
+          } catch (rowErr: any) {
+            importErrors.push({ message: rowErr.message, lead: parsed.name || parsed.email || "unknown" });
+          }
+        }
+      }
+
+      await storage.updateImportJob(job.id, {
+        status: "completed",
+        totalRows,
+        importedCount,
+        updatedCount,
+        skippedCount,
+        errorCount: errorRows + importErrors.length,
+        errors: JSON.stringify([...errors.slice(0, 100), ...importErrors.slice(0, 100)]),
+        completedAt: new Date(),
+      });
+
+      res.json({
+        jobId: job.id,
+        imported: importedCount,
+        updated: updatedCount,
+        skipped: skippedCount,
+        errorCount: errorRows + importErrors.length,
+        errors: [...errors.slice(0, 50), ...importErrors.slice(0, 50)],
+        totalRows,
+        validRows,
+      });
+    } catch (error: any) {
+      console.error("Error committing lead import:", error);
+      res.status(500).json({ message: error.message || "Failed to import leads" });
+    }
+  });
+
+  app.get("/api/gyms/:id/leads/imports", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const allJobs = await storage.getImportJobsByGym(req.params.id);
+      const leadJobs = allJobs.filter(j => j.type === "leads");
+      res.json(leadJobs.map(j => ({
+        id: j.id,
+        filename: j.filename,
+        status: j.status,
+        totalRows: j.totalRows,
+        importedCount: j.importedCount,
+        updatedCount: j.updatedCount,
+        skippedCount: j.skippedCount,
+        errorCount: j.errorCount,
+        createdAt: j.createdAt,
+        completedAt: j.completedAt,
+        uploadedBy: j.uploadedBy,
+      })));
+    } catch (error) {
+      console.error("Error fetching lead import history:", error);
+      res.status(500).json({ message: "Failed to fetch import history" });
+    }
+  });
+
+  app.get("/api/gyms/:id/leads/imports/:jobId", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const allJobs = await storage.getImportJobsByGym(req.params.id);
+      const job = allJobs.find(j => j.id === req.params.jobId);
+      if (!job) return res.status(404).json({ message: "Import job not found" });
+
+      res.json({
+        ...job,
+        errors: job.errors ? JSON.parse(job.errors) : [],
+      });
+    } catch (error) {
+      console.error("Error fetching import job:", error);
+      res.status(500).json({ message: "Failed to fetch import job" });
     }
   });
 

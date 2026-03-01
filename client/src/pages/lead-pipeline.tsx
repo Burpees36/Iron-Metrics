@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams } from "wouter";
+import { useParams, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -39,6 +39,7 @@ import {
   ChevronRight,
   UserPlus,
   Clock,
+  Upload,
 } from "lucide-react";
 
 const SOURCES = ["Referral", "Facebook", "Instagram", "Google", "Walk-in", "Website", "Other"];
@@ -205,10 +206,18 @@ export default function LeadPipeline() {
           <h1 className="text-2xl font-bold tracking-tight" data-testid="heading-pipeline">Lead Pipeline</h1>
           <p className="text-sm text-muted-foreground mt-1">Track every lead from first contact to member.</p>
         </div>
-        <Button onClick={() => setAddOpen(true)} data-testid="button-add-lead">
-          <Plus className="w-4 h-4 mr-2" />
-          Add Lead
-        </Button>
+        <div className="flex gap-2">
+          <Link href={`/gyms/${gymId}/leads/import`}>
+            <Button variant="outline" data-testid="button-import-leads">
+              <Upload className="w-4 h-4 mr-2" />
+              Import CSV
+            </Button>
+          </Link>
+          <Button onClick={() => setAddOpen(true)} data-testid="button-add-lead">
+            <Plus className="w-4 h-4 mr-2" />
+            Add Lead
+          </Button>
+        </div>
       </div>
 
       {isEmpty ? (
