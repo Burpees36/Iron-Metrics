@@ -112,6 +112,7 @@ export interface IStorage {
 
   createConsult(consult: InsertConsult): Promise<Consult>;
   getConsultsByGym(gymId: string, start: Date, end: Date): Promise<Consult[]>;
+  getConsultsByGymAllTime(gymId: string): Promise<Consult[]>;
   updateConsult(id: string, updates: Partial<Consult>): Promise<Consult>;
 
   createSalesMembership(membership: InsertSalesMembership): Promise<SalesMembership>;
@@ -712,6 +713,10 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(consults).where(
       and(eq(consults.gymId, gymId), gte(consults.bookedAt, start), lte(consults.bookedAt, end))
     ).orderBy(desc(consults.bookedAt));
+  }
+
+  async getConsultsByGymAllTime(gymId: string): Promise<Consult[]> {
+    return db.select().from(consults).where(eq(consults.gymId, gymId)).orderBy(desc(consults.bookedAt));
   }
 
   async updateConsult(id: string, updates: Partial<Consult>): Promise<Consult> {

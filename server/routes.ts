@@ -13,7 +13,8 @@ import { runWodifySync } from "./wodify-sync";
 import { ingestSource, reprocessDocument, TAXONOMY_TAGS } from "./knowledge-ingestion";
 import { searchKnowledge } from "./knowledge-retrieval";
 import { seedKnowledgeBase } from "./seed-knowledge";
-import { computeSalesSummary, computeTrends, computeBySource, computeByCoach } from "./sales-intelligence";
+import { computeSalesSummary, computeTrends, computeBySource, computeByCoach, computeLeadAging } from "./sales-intelligence";
+import { getCachedSummary, setCachedSummary, invalidateGymCache, getRecalcStatus, initSalesCache } from "./sales-cache";
 import { ensureDemoData } from "./demo-seed";
 import { previewLeadCsv, parseAllLeadRows, computeFileHash as computeLeadFileHash, type LeadColumnMapping } from "./lead-csv-parser";
 
@@ -1419,6 +1420,16 @@ export async function registerRoutes(
     return { start, end, prevStart, prevEnd };
   }
 
+  initSalesCache(storage);
+
+  app.get("/api/gyms/:id/sales-intelligence/recalc-status", isAuthenticated, async (req: any, res) => {
+    try {
+      res.json(getRecalcStatus());
+    } catch (error) {
+      res.status(500).json({ message: "Failed to get recalc status" });
+    }
+  });
+
   app.get("/api/gyms/:id/sales-intelligence/summary", isAuthenticated, async (req: any, res) => {
     try {
       const gym = await storage.getGym(req.params.id);
@@ -1426,6 +1437,12 @@ export async function registerRoutes(
       if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const { start, end, prevStart, prevEnd } = parseDateRange(req);
+
+      const cached = getCachedSummary(req.params.id, start.toISOString(), end.toISOString());
+      if (cached) {
+        return res.json(cached);
+      }
+
       const [leadsArr, consultsArr, membershipsArr, paymentsArr, prevLeads, prevConsults, prevMemberships, prevPayments] = await Promise.all([
         storage.getLeadsByGym(req.params.id, start, end),
         storage.getConsultsByGym(req.params.id, start, end),
@@ -1438,6 +1455,7 @@ export async function registerRoutes(
       ]);
 
       const summary = computeSalesSummary(leadsArr, consultsArr, membershipsArr, paymentsArr, prevLeads, prevConsults, prevMemberships, prevPayments);
+      setCachedSummary(req.params.id, start.toISOString(), end.toISOString(), summary);
       res.json(summary);
     } catch (error) {
       console.error("Error computing sales summary:", error);
@@ -1506,6 +1524,61 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/gyms/:id/sales-intelligence/stale-leads", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const threshold = parseInt(req.query.threshold as string) || 7;
+      const allLeads = await storage.getLeadsByGymAllTime(req.params.id);
+      const allConsults = await storage.getConsultsByGymAllTime(req.params.id);
+
+      const aging = computeLeadAging(allLeads, allConsults, threshold);
+      res.json(aging);
+    } catch (error) {
+      console.error("Error computing stale leads:", error);
+      res.status(500).json({ message: "Failed to compute stale leads" });
+    }
+  });
+
+  app.patch("/api/gyms/:id/leads/:leadId/follow-up", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const lead = await storage.getLeadById(req.params.leadId);
+      if (!lead || lead.gymId !== req.params.id) return res.status(404).json({ message: "Lead not found" });
+
+      const { lastContactAt, nextActionDate, followUpNotes } = req.body;
+      if (lastContactAt !== undefined && lastContactAt !== null && isNaN(new Date(lastContactAt).getTime())) {
+        return res.status(400).json({ message: "Invalid lastContactAt date" });
+      }
+      if (nextActionDate !== undefined && nextActionDate !== null && isNaN(new Date(nextActionDate).getTime())) {
+        return res.status(400).json({ message: "Invalid nextActionDate date" });
+      }
+      if (followUpNotes !== undefined && followUpNotes !== null && typeof followUpNotes !== "string") {
+        return res.status(400).json({ message: "followUpNotes must be a string" });
+      }
+      if (typeof followUpNotes === "string" && followUpNotes.length > 1000) {
+        return res.status(400).json({ message: "followUpNotes must be 1000 characters or less" });
+      }
+
+      const updates: Record<string, any> = {};
+      if (lastContactAt !== undefined) updates.lastContactAt = lastContactAt ? new Date(lastContactAt) : null;
+      if (nextActionDate !== undefined) updates.nextActionDate = nextActionDate ? new Date(nextActionDate) : null;
+      if (followUpNotes !== undefined) updates.followUpNotes = followUpNotes;
+
+      const updatedLead = await storage.updateLead(req.params.leadId, updates);
+      invalidateGymCache(req.params.id);
+      res.json(updatedLead);
+    } catch (error) {
+      console.error("Error updating follow-up:", error);
+      res.status(500).json({ message: "Failed to update follow-up" });
+    }
+  });
+
   app.post("/api/gyms/:id/leads", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
     try {
       const gym = await storage.getGym(req.params.id);
@@ -1514,6 +1587,7 @@ export async function registerRoutes(
 
       const data = insertLeadSchema.parse({ ...req.body, gymId: req.params.id });
       const lead = await storage.createLead(data);
+      invalidateGymCache(req.params.id);
       res.json(lead);
     } catch (error) {
       console.error("Error creating lead:", error);
@@ -1697,6 +1771,7 @@ export async function registerRoutes(
       }
 
       const updated = await storage.updateLead(req.params.leadId, updates);
+      invalidateGymCache(req.params.id);
       res.json(updated);
     } catch (error) {
       console.error("Error transitioning lead stage:", error);
@@ -1929,6 +2004,8 @@ export async function registerRoutes(
         errors: JSON.stringify([...errors.slice(0, 100), ...importErrors.slice(0, 100)]),
         completedAt: new Date(),
       });
+
+      invalidateGymCache(req.params.id);
 
       res.json({
         jobId: job.id,

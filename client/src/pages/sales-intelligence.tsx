@@ -1,11 +1,17 @@
 import { useRoute } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { useGymData, GymPageShell, GymNotFound, GymDetailSkeleton, PageHeader } from "./gym-detail";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import {
   Collapsible,
   CollapsibleContent,
@@ -23,6 +29,14 @@ import {
   Info,
   Zap,
   Target,
+  Clock,
+  Phone,
+  Mail,
+  ShieldCheck,
+  Activity,
+  CalendarClock,
+  MessageSquare,
+  CheckCircle2,
 } from "lucide-react";
 import {
   LineChart,
@@ -78,14 +92,44 @@ function getDateRange(preset: DatePreset): { start: string; end: string; label: 
   return { start: start.toISOString(), end, label };
 }
 
+interface HealthBreakdownItem {
+  factor: string;
+  score: number;
+  weight: number;
+  contribution: number;
+  description: string;
+}
+
+interface DataQualityFactor {
+  name: string;
+  value: number;
+  description: string;
+}
+
+interface DataQualityScore {
+  score: number;
+  status: "Excellent" | "Good" | "Needs Attention" | "Critical";
+  factors: DataQualityFactor[];
+}
+
 interface SalesSummary {
   counts: { leads: number; booked: number; shows: number; newMembers: number };
   rates: { setRate: number | null; showRate: number | null; closeRate: number | null; funnelConversion: number | null };
   revenue: { total: number; revenuePerLead: number | null };
   speed: { responseMedianMin: number | null; leadToMemberMedianDays: number | null };
-  composite: { salesHealthScore: number; conversionSubScore: number; speedSubScore: number; stageSubScore: number };
+  composite: {
+    salesHealthScore: number;
+    conversionSubScore: number;
+    speedSubScore: number;
+    stageSubScore: number;
+    dataQualitySubScore: number;
+    leadAgingSubScore: number;
+    funnelBalanceSubScore: number;
+    breakdown: HealthBreakdownItem[];
+  };
   bottleneck: { stage: string; dropPercent: number; explanation: string } | null;
   deltas: Record<string, number | null>;
+  dataQuality: DataQualityScore;
 }
 
 interface TrendPoint {
@@ -107,6 +151,32 @@ interface CoachRow {
   shows: number;
   newMembers: number;
   closeRate: number | null;
+}
+
+interface StaleLead {
+  id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  source: string;
+  status: string;
+  createdAt: string;
+  daysSinceCreated: number;
+  daysSinceLastContact: number | null;
+  lastContactAt: string | null;
+  nextActionDate: string | null;
+  followUpNotes: string | null;
+  coachId: string | null;
+  category: "untouched" | "booked_not_confirmed" | "no_show_recovery" | "stale";
+}
+
+interface LeadAgingSummary {
+  staleLeads: StaleLead[];
+  totalStale: number;
+  untouchedCount: number;
+  bookedNotConfirmedCount: number;
+  noShowRecoveryCount: number;
+  generalStaleCount: number;
 }
 
 function DeltaBadge({ value, inverted }: { value: number | null; inverted?: boolean }) {
@@ -234,11 +304,19 @@ function getScoreColor(score: number) {
   return { text: "text-red-500", bg: "bg-red-500", ring: "ring-red-500/20" };
 }
 
+function getQualityStatusColor(status: DataQualityScore["status"]) {
+  if (status === "Excellent") return "text-emerald-500 bg-emerald-500/10 border-emerald-500/20";
+  if (status === "Good") return "text-blue-500 bg-blue-500/10 border-blue-500/20";
+  if (status === "Needs Attention") return "text-amber-500 bg-amber-500/10 border-amber-500/20";
+  return "text-red-500 bg-red-500/10 border-red-500/20";
+}
+
 function getStrategicDirective(score: number, composite: SalesSummary["composite"], bottleneck: SalesSummary["bottleneck"]): string {
   if (score >= 80) return "Pipeline is strong. Protect your speed advantage and maintain coaching consistency through the close.";
   if (score >= 65) {
     if (composite.speedSubScore < 50) return "Your conversion is solid but speed is costing you. Leads contacted within 5 minutes close at 4x the rate. Tighten response time.";
     if (composite.stageSubScore < 50) return "Leads are entering the funnel but dropping off at the consultation stage. Review your show-up process and closing conversation.";
+    if (composite.dataQualitySubScore < 50) return "Pipeline mechanics are sound but data gaps are hiding problems. Fill in missing sources, coaches, and outcomes to sharpen your insights.";
     return "Good foundation. Focus on the weakest sub-score to unlock the next tier of performance.";
   }
   if (score >= 40) {
@@ -250,13 +328,17 @@ function getStrategicDirective(score: number, composite: SalesSummary["composite
   return "Pipeline needs foundational work. Prioritize speed-to-lead and a structured follow-up system before optimizing downstream stages.";
 }
 
-function SalesHealthCard({ composite, bottleneck }: { composite: SalesSummary["composite"]; bottleneck: SalesSummary["bottleneck"] }) {
+function SalesHealthCard({ composite, bottleneck, onExpand }: {
+  composite: SalesSummary["composite"];
+  bottleneck: SalesSummary["bottleneck"];
+  onExpand: () => void;
+}) {
   const score = composite.salesHealthScore;
   const colors = getScoreColor(score);
   const directive = getStrategicDirective(score, composite, bottleneck);
 
   return (
-    <Card className={`ring-1 ${colors.ring}`} data-testid="health-score-card">
+    <Card className={`ring-1 ${colors.ring} cursor-pointer transition-all hover:ring-2`} data-testid="health-score-card" onClick={onExpand}>
       <CardContent className="p-5 space-y-4">
         <div className="flex items-start justify-between">
           <div>
@@ -274,8 +356,384 @@ function SalesHealthCard({ composite, bottleneck }: { composite: SalesSummary["c
         <div className={`rounded-lg p-3 border ${score >= 65 ? "border-emerald-500/15 bg-emerald-500/5" : score >= 40 ? "border-amber-500/15 bg-amber-500/5" : "border-red-500/15 bg-red-500/5"}`}>
           <p className="text-xs leading-relaxed font-medium" data-testid="health-directive">{directive}</p>
         </div>
+
+        <p className="text-[10px] text-muted-foreground text-center">Click to see score breakdown</p>
       </CardContent>
     </Card>
+  );
+}
+
+function HealthBreakdownDialog({ open, onClose, composite }: {
+  open: boolean;
+  onClose: () => void;
+  composite: SalesSummary["composite"];
+}) {
+  const breakdown = composite.breakdown || [];
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-lg" data-testid="dialog-health-breakdown">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Target className="w-5 h-5" />
+            Sales Health Score Breakdown
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="flex items-baseline gap-2 mb-4">
+            <span className={`text-3xl font-bold ${getScoreColor(composite.salesHealthScore).text}`}>
+              {composite.salesHealthScore}
+            </span>
+            <span className="text-sm text-muted-foreground">/ 100</span>
+          </div>
+          {breakdown.map((item) => {
+            const barColor = item.score >= 75 ? "bg-emerald-500" : item.score >= 50 ? "bg-amber-500" : "bg-red-500";
+            return (
+              <div key={item.factor} className="space-y-1" data-testid={`breakdown-${item.factor.toLowerCase().replace(/\s+/g, "-")}`}>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium">{item.factor}</span>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="tabular-nums font-semibold text-foreground">{item.score}</span>
+                    <span>× {(item.weight * 100).toFixed(0)}%</span>
+                    <span className="font-semibold text-foreground">= {item.contribution}</span>
+                  </div>
+                </div>
+                <div className="h-1.5 rounded-full bg-muted/40 overflow-hidden">
+                  <div className={`h-full rounded-full ${barColor} transition-all duration-500`} style={{ width: `${item.score}%` }} />
+                </div>
+                <p className="text-[11px] text-muted-foreground">{item.description}</p>
+              </div>
+            );
+          })}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={onClose} data-testid="button-close-breakdown">Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DataQualityCard({ dataQuality }: { dataQuality: DataQualityScore }) {
+  const [expanded, setExpanded] = useState(false);
+  const statusColor = getQualityStatusColor(dataQuality.status);
+
+  return (
+    <Card data-testid="data-quality-card">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-muted-foreground" />
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Data Quality</p>
+              <Tooltip>
+                <TooltipTrigger>
+                  <Info className="w-3 h-3 text-muted-foreground/50 inline ml-1" />
+                </TooltipTrigger>
+                <TooltipContent className="text-xs max-w-[220px]">Score based on completeness and consistency of your sales data.</TooltipContent>
+              </Tooltip>
+            </div>
+          </div>
+          <div className="text-right">
+            <span className={`text-2xl font-bold tabular-nums ${getScoreColor(dataQuality.score).text}`} data-testid="data-quality-score">
+              {dataQuality.score}
+            </span>
+            <Badge variant="outline" className={`ml-2 text-[10px] ${statusColor}`} data-testid="data-quality-status">
+              {dataQuality.status}
+            </Badge>
+          </div>
+        </div>
+
+        {dataQuality.score < 65 && (
+          <div className="rounded-lg p-2.5 border border-amber-500/15 bg-amber-500/5">
+            <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+              Data gaps are limiting your insights. Review the factors below to improve accuracy.
+            </p>
+          </div>
+        )}
+
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="w-full flex items-center justify-between text-xs text-muted-foreground hover:text-foreground transition-colors"
+          data-testid="toggle-data-quality-details"
+        >
+          <span className="font-medium">{expanded ? "Hide" : "Show"} details</span>
+          {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+        </button>
+
+        {expanded && (
+          <div className="space-y-2 pt-1">
+            {dataQuality.factors.map((factor) => {
+              const barColor = factor.value >= 80 ? "bg-emerald-500" : factor.value >= 50 ? "bg-amber-500" : "bg-red-500";
+              return (
+                <div key={factor.name} data-testid={`quality-factor-${factor.name.toLowerCase().replace(/\s+/g, "-")}`}>
+                  <div className="flex items-center justify-between text-xs mb-0.5">
+                    <span className="font-medium">{factor.name}</span>
+                    <span className="tabular-nums font-semibold">{factor.value}%</span>
+                  </div>
+                  <div className="h-1 rounded-full bg-muted/40 overflow-hidden">
+                    <div className={`h-full rounded-full ${barColor} transition-all duration-500`} style={{ width: `${factor.value}%` }} />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">{factor.description}</p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function getCategoryLabel(category: StaleLead["category"]): string {
+  switch (category) {
+    case "untouched": return "Untouched";
+    case "booked_not_confirmed": return "Unconfirmed";
+    case "no_show_recovery": return "No-Show Recovery";
+    case "stale": return "Stale";
+  }
+}
+
+function getCategoryColor(category: StaleLead["category"]): string {
+  switch (category) {
+    case "untouched": return "text-red-500 bg-red-500/10 border-red-500/20";
+    case "booked_not_confirmed": return "text-amber-500 bg-amber-500/10 border-amber-500/20";
+    case "no_show_recovery": return "text-orange-500 bg-orange-500/10 border-orange-500/20";
+    case "stale": return "text-muted-foreground bg-muted/30 border-border";
+  }
+}
+
+function StaleLeadsSection({ gymId }: { gymId: string }) {
+  const [filter, setFilter] = useState<StaleLead["category"] | "all">("all");
+  const [followUpLead, setFollowUpLead] = useState<StaleLead | null>(null);
+  const { toast } = useToast();
+
+  const { data: aging, isLoading } = useQuery<LeadAgingSummary>({
+    queryKey: ["/api/gyms", gymId, "sales-intelligence", "stale-leads"],
+    queryFn: async () => {
+      const res = await fetch(`/api/gyms/${gymId}/sales-intelligence/stale-leads?threshold=7`);
+      if (!res.ok) throw new Error("Failed to fetch stale leads");
+      return res.json();
+    },
+    enabled: !!gymId,
+  });
+
+  const followUpMutation = useMutation({
+    mutationFn: async ({ leadId, data }: { leadId: string; data: any }) => {
+      return apiRequest("PATCH", `/api/gyms/${gymId}/leads/${leadId}/follow-up`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/gyms", gymId, "sales-intelligence", "stale-leads"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/gyms", gymId, "sales-intelligence", "summary"] });
+      setFollowUpLead(null);
+      toast({ title: "Follow-up updated" });
+    },
+    onError: () => {
+      toast({ title: "Failed to update follow-up", variant: "destructive" });
+    },
+  });
+
+  if (isLoading) {
+    return <Card><CardContent className="p-5"><Skeleton className="h-20 w-full" /></CardContent></Card>;
+  }
+
+  if (!aging || aging.totalStale === 0) {
+    return (
+      <Card data-testid="stale-leads-empty">
+        <CardContent className="p-5 text-center">
+          <CheckCircle2 className="w-6 h-6 mx-auto text-emerald-500 mb-2" />
+          <p className="text-sm font-medium">No stale leads</p>
+          <p className="text-xs text-muted-foreground">All active leads are being worked within 7 days.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const filteredLeads = filter === "all" ? aging.staleLeads : aging.staleLeads.filter(l => l.category === filter);
+
+  const categoryFilters: { key: StaleLead["category"] | "all"; label: string; count: number }[] = [
+    { key: "all", label: "All", count: aging.totalStale },
+    { key: "untouched", label: "Untouched", count: aging.untouchedCount },
+    { key: "booked_not_confirmed", label: "Unconfirmed", count: aging.bookedNotConfirmedCount },
+    { key: "no_show_recovery", label: "No-Show", count: aging.noShowRecoveryCount },
+    { key: "stale", label: "Stale", count: aging.generalStaleCount },
+  ].filter(f => f.count > 0 || f.key === "all");
+
+  return (
+    <>
+      <Card data-testid="stale-leads-section">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-amber-500" />
+              <CardTitle className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Stale Leads</CardTitle>
+              <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-500/20" data-testid="stale-count-badge">
+                {aging.totalStale}
+              </Badge>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex gap-1 flex-wrap" data-testid="stale-lead-filters">
+            {categoryFilters.map(f => (
+              <Button
+                key={f.key}
+                variant={filter === f.key ? "default" : "outline"}
+                size="sm"
+                className="text-[10px] h-6 px-2"
+                onClick={() => setFilter(f.key)}
+                data-testid={`filter-stale-${f.key}`}
+              >
+                {f.label} ({f.count})
+              </Button>
+            ))}
+          </div>
+
+          <div className="space-y-1.5 max-h-[320px] overflow-y-auto">
+            {filteredLeads.slice(0, 20).map((lead) => (
+              <div
+                key={lead.id}
+                className="flex items-center justify-between p-2.5 rounded-lg border bg-card hover:bg-muted/30 transition-colors"
+                data-testid={`stale-lead-${lead.id}`}
+              >
+                <div className="flex-1 min-w-0 space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium truncate">{lead.name || "Unknown"}</span>
+                    <Badge variant="outline" className={`text-[9px] ${getCategoryColor(lead.category)}`}>
+                      {getCategoryLabel(lead.category)}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                    {lead.email && (
+                      <span className="flex items-center gap-0.5"><Mail className="w-2.5 h-2.5" />{lead.email}</span>
+                    )}
+                    {lead.phone && (
+                      <span className="flex items-center gap-0.5"><Phone className="w-2.5 h-2.5" />{lead.phone}</span>
+                    )}
+                    <span>{lead.daysSinceCreated}d old</span>
+                    {lead.daysSinceLastContact !== null && <span>Last contact: {lead.daysSinceLastContact}d ago</span>}
+                  </div>
+                  {lead.followUpNotes && (
+                    <p className="text-[10px] text-muted-foreground/80 truncate">
+                      <MessageSquare className="w-2.5 h-2.5 inline mr-0.5" />{lead.followUpNotes}
+                    </p>
+                  )}
+                  {lead.nextActionDate && (
+                    <p className="text-[10px] text-amber-600 dark:text-amber-400">
+                      <CalendarClock className="w-2.5 h-2.5 inline mr-0.5" />
+                      Next action: {new Date(lead.nextActionDate).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs h-7 shrink-0"
+                  onClick={() => setFollowUpLead(lead)}
+                  data-testid={`button-followup-${lead.id}`}
+                >
+                  <Activity className="w-3 h-3 mr-1" />
+                  Follow Up
+                </Button>
+              </div>
+            ))}
+            {filteredLeads.length > 20 && (
+              <p className="text-xs text-center text-muted-foreground pt-2">
+                Showing 20 of {filteredLeads.length} leads
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <FollowUpDialog
+        lead={followUpLead}
+        onClose={() => setFollowUpLead(null)}
+        onSave={(leadId, data) => followUpMutation.mutate({ leadId, data })}
+        isPending={followUpMutation.isPending}
+      />
+    </>
+  );
+}
+
+function FollowUpDialog({ lead, onClose, onSave, isPending }: {
+  lead: StaleLead | null;
+  onClose: () => void;
+  onSave: (leadId: string, data: any) => void;
+  isPending: boolean;
+}) {
+  const [lastContact, setLastContact] = useState("");
+  const [nextAction, setNextAction] = useState("");
+  const [notes, setNotes] = useState("");
+
+  const resetForm = () => {
+    if (lead) {
+      setLastContact(lead.lastContactAt ? new Date(lead.lastContactAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10));
+      setNextAction(lead.nextActionDate ? new Date(lead.nextActionDate).toISOString().slice(0, 10) : "");
+      setNotes(lead.followUpNotes || "");
+    }
+  };
+
+  const isOpen = !!lead;
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); else resetForm(); }}>
+      <DialogContent className="max-w-sm" data-testid="dialog-follow-up">
+        <DialogHeader>
+          <DialogTitle className="text-base">Update Follow-Up</DialogTitle>
+          {lead && <p className="text-sm text-muted-foreground">{lead.name || lead.email || "Lead"}</p>}
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Last Contact Date</label>
+            <Input
+              type="date"
+              value={lastContact}
+              onChange={(e) => setLastContact(e.target.value)}
+              data-testid="input-last-contact"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Next Action Date (optional)</label>
+            <Input
+              type="date"
+              value={nextAction}
+              onChange={(e) => setNextAction(e.target.value)}
+              data-testid="input-next-action"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Notes</label>
+            <Textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Left voicemail, will try again Thursday..."
+              rows={2}
+              data-testid="input-follow-up-notes"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={onClose} data-testid="button-cancel-followup">Cancel</Button>
+          <Button
+            size="sm"
+            disabled={isPending}
+            onClick={() => {
+              if (lead) {
+                onSave(lead.id, {
+                  lastContactAt: lastContact || null,
+                  nextActionDate: nextAction || null,
+                  followUpNotes: notes || null,
+                });
+              }
+            }}
+            data-testid="button-save-followup"
+          >
+            {isPending ? "Saving..." : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -401,6 +859,8 @@ export default function SalesIntelligence() {
   const [preset, setPreset] = useState<DatePreset>("90d");
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [coachOpen, setCoachOpen] = useState(false);
+  const [healthBreakdownOpen, setHealthBreakdownOpen] = useState(false);
+  const [staleLeadsOpen, setStaleLeadsOpen] = useState(false);
 
   const { data: gym, isLoading: gymLoading } = useGymData(gymId);
   const dateRange = useMemo(() => getDateRange(preset), [preset]);
@@ -581,7 +1041,11 @@ export default function SalesIntelligence() {
               </div>
 
               <div className="space-y-4">
-                <SalesHealthCard composite={summary.composite} bottleneck={summary.bottleneck} />
+                <SalesHealthCard
+                  composite={summary.composite}
+                  bottleneck={summary.bottleneck}
+                  onExpand={() => setHealthBreakdownOpen(true)}
+                />
 
                 {summary.bottleneck && (
                   <Card className="border-amber-500/20" data-testid="bottleneck-card">
@@ -595,8 +1059,25 @@ export default function SalesIntelligence() {
                     </CardContent>
                   </Card>
                 )}
+
+                <DataQualityCard dataQuality={summary.dataQuality} />
               </div>
             </div>
+
+            <Collapsible open={staleLeadsOpen} onOpenChange={setStaleLeadsOpen}>
+              <CollapsibleTrigger asChild>
+                <button className="w-full flex items-center justify-between text-xs font-medium text-muted-foreground hover:text-foreground transition-colors py-2 px-1" data-testid="toggle-stale-leads">
+                  <span className="uppercase tracking-[0.12em] flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5" />
+                    Stale Leads & Follow-Up
+                  </span>
+                  {staleLeadsOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pt-1">
+                {gymId && <StaleLeadsSection gymId={gymId} />}
+              </CollapsibleContent>
+            </Collapsible>
 
             {trends && trends.length > 1 && (
               <Card data-testid="chart-leads-members">
@@ -713,6 +1194,14 @@ export default function SalesIntelligence() {
                 )}
               </CollapsibleContent>
             </Collapsible>
+
+            {summary && (
+              <HealthBreakdownDialog
+                open={healthBreakdownOpen}
+                onClose={() => setHealthBreakdownOpen(false)}
+                composite={summary.composite}
+              />
+            )}
           </>
         )}
       </div>

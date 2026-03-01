@@ -26,6 +26,10 @@ export interface SalesSummary {
     conversionSubScore: number;
     speedSubScore: number;
     stageSubScore: number;
+    dataQualitySubScore: number;
+    leadAgingSubScore: number;
+    funnelBalanceSubScore: number;
+    breakdown: HealthBreakdownItem[];
   };
   bottleneck: {
     stage: string;
@@ -42,6 +46,53 @@ export interface SalesSummary {
     closeRate: number | null;
     responseMedianMin: number | null;
   };
+  dataQuality: DataQualityScore;
+}
+
+export interface HealthBreakdownItem {
+  factor: string;
+  score: number;
+  weight: number;
+  contribution: number;
+  description: string;
+}
+
+export interface DataQualityScore {
+  score: number;
+  status: "Excellent" | "Good" | "Needs Attention" | "Critical";
+  factors: DataQualityFactor[];
+}
+
+export interface DataQualityFactor {
+  name: string;
+  value: number;
+  description: string;
+}
+
+export interface StaleLead {
+  id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  source: string;
+  status: string;
+  createdAt: Date | string;
+  daysSinceCreated: number;
+  daysSinceLastContact: number | null;
+  lastContactAt: Date | string | null;
+  nextActionDate: Date | string | null;
+  followUpNotes: string | null;
+  coachId: string | null;
+  category: "untouched" | "booked_not_confirmed" | "no_show_recovery" | "stale";
+}
+
+export interface LeadAgingSummary {
+  staleLeads: StaleLead[];
+  totalStale: number;
+  untouchedCount: number;
+  bookedNotConfirmedCount: number;
+  noShowRecoveryCount: number;
+  generalStaleCount: number;
 }
 
 export interface TrendPoint {
@@ -154,11 +205,119 @@ function computeSpeed(leadsArr: Lead[], membershipsArr: SalesMembership[]) {
   };
 }
 
+function computeDataQualityScore(
+  leadsArr: Lead[],
+  consultsArr: Consult[],
+  membershipsArr: SalesMembership[]
+): DataQualityScore {
+  if (leadsArr.length === 0) {
+    return { score: 100, status: "Excellent", factors: [] };
+  }
+
+  const withSource = leadsArr.filter(l => l.source && l.source !== "Unknown").length;
+  const sourcePercent = Math.round((withSource / leadsArr.length) * 100);
+
+  const withCoach = leadsArr.filter(l => l.coachId).length;
+  const coachPercent = Math.round((withCoach / leadsArr.length) * 100);
+
+  const consultsWithOutcome = consultsArr.filter(c => c.showedAt || c.noShowAt).length;
+  const outcomePercent = consultsArr.length > 0 ? Math.round((consultsWithOutcome / consultsArr.length) * 100) : 0;
+
+  const wonLeads = leadsArr.filter(l => l.status === "won");
+  const wonWithPrice = wonLeads.filter(l => l.salePrice && Number(l.salePrice) > 0).length;
+  const pricePercent = wonLeads.length > 0 ? Math.round((wonWithPrice / wonLeads.length) * 100) : 0;
+
+  const now = Date.now();
+  const STALE_DAYS = 14;
+  const activeLeads = leadsArr.filter(l => l.status !== "won" && l.status !== "lost");
+  const staleLeads = activeLeads.filter(l => {
+    const lastActivity = l.lastContactAt || l.showedAt || l.bookedAt || l.firstContactAt || l.createdAt;
+    const daysSince = (now - new Date(lastActivity).getTime()) / 86400000;
+    return daysSince > STALE_DAYS;
+  });
+  const stalePercent = activeLeads.length > 0 ? Math.round((staleLeads.length / activeLeads.length) * 100) : 0;
+
+  const emails = leadsArr.filter(l => l.email).map(l => l.email!.toLowerCase());
+  const uniqueEmails = new Set(emails);
+  const duplicateCount = emails.length - uniqueEmails.size;
+  const dupPercent = leadsArr.length > 0 ? Math.round((duplicateCount / leadsArr.length) * 100) : 0;
+
+  const VALID_TRANSITIONS: Record<string, string[]> = {
+    new: ["booked", "lost"],
+    booked: ["showed", "lost"],
+    showed: ["won", "lost"],
+  };
+  let invalidTransitions = 0;
+  for (const lead of leadsArr) {
+    if (lead.status === "won" && !lead.showedAt && !lead.bookedAt) invalidTransitions++;
+    if (lead.status === "showed" && !lead.bookedAt) invalidTransitions++;
+  }
+  const invalidPercent = leadsArr.length > 0 ? Math.round((invalidTransitions / leadsArr.length) * 100) : 0;
+
+  const factors: DataQualityFactor[] = [
+    { name: "Source Coverage", value: sourcePercent, description: `${withSource}/${leadsArr.length} leads have an assigned source` },
+    { name: "Coach Coverage", value: coachPercent, description: `${withCoach}/${leadsArr.length} leads have an assigned coach` },
+    { name: "Consult Outcomes", value: outcomePercent, description: `${consultsWithOutcome}/${consultsArr.length} consults have a recorded outcome` },
+    { name: "Won Deal Pricing", value: pricePercent, description: `${wonWithPrice}/${wonLeads.length} won deals have a recorded price` },
+    { name: "Lead Freshness", value: 100 - stalePercent, description: `${staleLeads.length} leads stuck for 14+ days (${stalePercent}% of active)` },
+    { name: "Duplicate Rate", value: 100 - dupPercent, description: `${duplicateCount} potential duplicate leads detected` },
+    { name: "Transition Integrity", value: 100 - invalidPercent, description: `${invalidTransitions} leads with skipped pipeline stages` },
+  ];
+
+  const weights = [0.20, 0.15, 0.15, 0.15, 0.15, 0.10, 0.10];
+  const rawScore = factors.reduce((sum, f, i) => sum + f.value * weights[i], 0);
+  const score = Math.round(rawScore);
+
+  let status: DataQualityScore["status"];
+  if (score >= 85) status = "Excellent";
+  else if (score >= 65) status = "Good";
+  else if (score >= 40) status = "Needs Attention";
+  else status = "Critical";
+
+  return { score, status, factors };
+}
+
+function computeLeadAgingScore(leadsArr: Lead[]): number {
+  const now = Date.now();
+  const STALE_DAYS = 14;
+  const activeLeads = leadsArr.filter(l => l.status !== "won" && l.status !== "lost");
+  if (activeLeads.length === 0) return 100;
+
+  const staleCount = activeLeads.filter(l => {
+    const lastActivity = l.lastContactAt || l.showedAt || l.bookedAt || l.firstContactAt || l.createdAt;
+    return (now - new Date(lastActivity).getTime()) / 86400000 > STALE_DAYS;
+  }).length;
+
+  const freshPercent = 1 - (staleCount / activeLeads.length);
+  return Math.round(clamp(freshPercent * 100, 0, 100));
+}
+
+function computeFunnelBalanceScore(counts: ReturnType<typeof computeCounts>): number {
+  if (counts.leads === 0) return 50;
+
+  const setRate = counts.booked / counts.leads;
+  const showRate = counts.booked > 0 ? counts.shows / counts.booked : 0;
+  const closeRate = counts.shows > 0 ? counts.newMembers / counts.shows : 0;
+
+  const rates = [setRate, showRate, closeRate].filter(r => r > 0);
+  if (rates.length < 2) return 50;
+
+  const avg = rates.reduce((a, b) => a + b, 0) / rates.length;
+  const variance = rates.reduce((sum, r) => sum + Math.pow(r - avg, 2), 0) / rates.length;
+  const cv = avg > 0 ? Math.sqrt(variance) / avg : 1;
+
+  return Math.round(clamp((1 - cv) * 100, 0, 100));
+}
+
 function computeSalesHealthScore(
   funnelConversion: number | null,
   responseMedianMin: number | null,
   showRate: number | null,
-  closeRate: number | null
+  closeRate: number | null,
+  dataQualityScore: number,
+  leadAgingScore: number,
+  funnelBalanceScore: number,
+  counts: ReturnType<typeof computeCounts>
 ) {
   const targetConvLow = 0.20, targetConvHigh = 0.40;
   const conv = funnelConversion ?? 0;
@@ -172,17 +331,37 @@ function computeSalesHealthScore(
   const closeTargetLow = 0.60, closeTargetHigh = 0.85;
   const sr = showRate ?? 0;
   const cr = closeRate ?? 0;
-  const showScore = clamp((sr - showTargetLow) / (showTargetHigh - showTargetLow) * 100, 0, 100);
-  const closeScore = clamp((cr - closeTargetLow) / (closeTargetHigh - closeTargetLow) * 100, 0, 100);
-  const stageScore = (showScore + closeScore) / 2;
+  const showScoreVal = clamp((sr - showTargetLow) / (showTargetHigh - showTargetLow) * 100, 0, 100);
+  const closeScoreVal = clamp((cr - closeTargetLow) / (closeTargetHigh - closeTargetLow) * 100, 0, 100);
+  const stageScore = (showScoreVal + closeScoreVal) / 2;
 
-  const salesHealth = Math.round(0.50 * convScore + 0.25 * speedScore + 0.25 * stageScore);
+  const rawBreakdown = [
+    { factor: "Conversion Rates", score: convScore, weight: 0.30, description: `Funnel conversion at ${conv ? (conv * 100).toFixed(1) : 0}% (target: 20-40%)` },
+    { factor: "Speed to Lead", score: speedScore, weight: 0.15, description: `Median response time: ${respMedian < 60 ? Math.round(respMedian) + " min" : "60+ min"} (target: <5 min)` },
+    { factor: "Stage Efficiency", score: stageScore, weight: 0.15, description: `Show rate: ${sr ? (sr * 100).toFixed(0) : 0}%, Close rate: ${cr ? (cr * 100).toFixed(0) : 0}%` },
+    { factor: "Data Quality", score: dataQualityScore, weight: 0.15, description: `Completeness and consistency of your pipeline data` },
+    { factor: "Lead Freshness", score: leadAgingScore, weight: 0.15, description: `${100 - leadAgingScore}% of active leads are stale (14+ days untouched)` },
+    { factor: "Funnel Balance", score: funnelBalanceScore, weight: 0.10, description: `Consistency across pipeline stages (low variance = balanced)` },
+  ];
+
+  const preciseTotal = rawBreakdown.reduce((sum, b) => sum + b.score * b.weight, 0);
+  const salesHealth = Math.round(clamp(preciseTotal, 0, 100));
+
+  const breakdown: HealthBreakdownItem[] = rawBreakdown.map(b => ({
+    ...b,
+    score: Math.round(b.score),
+    contribution: Math.round(b.score * b.weight),
+  }));
 
   return {
-    salesHealthScore: salesHealth,
+    salesHealthScore: Math.round(clamp(salesHealth, 0, 100)),
     conversionSubScore: Math.round(convScore),
     speedSubScore: Math.round(speedScore),
     stageSubScore: Math.round(stageScore),
+    dataQualitySubScore: dataQualityScore,
+    leadAgingSubScore: leadAgingScore,
+    funnelBalanceSubScore: funnelBalanceScore,
+    breakdown,
   };
 }
 
@@ -250,7 +429,13 @@ export function computeSalesSummary(
   const rates = computeRates(counts);
   const revenue = computeRevenue(membershipsArr, paymentsArr, counts.leads);
   const speed = computeSpeed(leadsArr, membershipsArr);
-  const composite = computeSalesHealthScore(rates.funnelConversion, speed.responseMedianMin, rates.showRate, rates.closeRate);
+  const dataQuality = computeDataQualityScore(leadsArr, consultsArr, membershipsArr);
+  const leadAgingScore = computeLeadAgingScore(leadsArr);
+  const funnelBalanceScore = computeFunnelBalanceScore(counts);
+  const composite = computeSalesHealthScore(
+    rates.funnelConversion, speed.responseMedianMin, rates.showRate, rates.closeRate,
+    dataQuality.score, leadAgingScore, funnelBalanceScore, counts
+  );
   const bottleneck = computeBottleneck(counts);
 
   const prevCounts = computeCounts(prevLeads, prevConsults, prevMemberships);
@@ -262,7 +447,7 @@ export function computeSalesSummary(
     { counts: prevCounts, rates: prevRates, revenue: prevRevenue, speed: prevSpeed }
   );
 
-  return { counts, rates, revenue, speed, composite, bottleneck, deltas };
+  return { counts, rates, revenue, speed, composite, bottleneck, deltas, dataQuality };
 }
 
 export function computeTrends(
@@ -373,4 +558,75 @@ export function computeByCoach(
       closeRate: data.shows > 0 ? round2(data.newMembers / data.shows) : null,
     }))
     .sort((a, b) => b.shows - a.shows);
+}
+
+export function computeLeadAging(
+  leadsArr: Lead[],
+  consultsArr: Consult[],
+  staleDaysThreshold: number = 7
+): LeadAgingSummary {
+  const now = Date.now();
+  const activeLeads = leadsArr.filter(l => l.status !== "won" && l.status !== "lost");
+  const consultByLead = new Map<string, Consult>();
+  for (const c of consultsArr) {
+    if (c.leadId) consultByLead.set(c.leadId, c);
+  }
+
+  const staleLeads: StaleLead[] = [];
+
+  for (const lead of activeLeads) {
+    const lastActivity = lead.lastContactAt || lead.showedAt || lead.bookedAt || lead.firstContactAt || lead.createdAt;
+    const daysSinceCreated = Math.floor((now - new Date(lead.createdAt).getTime()) / 86400000);
+    const daysSinceLastContact = lastActivity ? Math.floor((now - new Date(lastActivity).getTime()) / 86400000) : null;
+    const consult = consultByLead.get(lead.id);
+
+    let category: StaleLead["category"] | null = null;
+
+    if (lead.status === "new" && daysSinceCreated >= staleDaysThreshold && !lead.firstContactAt && !lead.lastContactAt) {
+      category = "untouched";
+    } else if (lead.status === "booked" && consult && !consult.showedAt && !consult.noShowAt) {
+      const scheduledFor = consult.scheduledFor ? new Date(consult.scheduledFor) : null;
+      if (scheduledFor && scheduledFor.getTime() < now) {
+        category = "booked_not_confirmed";
+      } else if (daysSinceLastContact !== null && daysSinceLastContact >= staleDaysThreshold) {
+        category = "booked_not_confirmed";
+      }
+    } else if (consult && consult.noShowAt && lead.status !== "lost") {
+      category = "no_show_recovery";
+    } else if (daysSinceLastContact !== null && daysSinceLastContact >= staleDaysThreshold) {
+      category = "stale";
+    } else if (daysSinceCreated >= staleDaysThreshold && !lead.firstContactAt) {
+      category = "stale";
+    }
+
+    if (category) {
+      staleLeads.push({
+        id: lead.id,
+        name: lead.name,
+        email: lead.email,
+        phone: lead.phone,
+        source: lead.source,
+        status: lead.status,
+        createdAt: lead.createdAt,
+        daysSinceCreated,
+        daysSinceLastContact,
+        lastContactAt: lead.lastContactAt,
+        nextActionDate: lead.nextActionDate,
+        followUpNotes: lead.followUpNotes,
+        coachId: lead.coachId,
+        category,
+      });
+    }
+  }
+
+  staleLeads.sort((a, b) => (b.daysSinceCreated) - (a.daysSinceCreated));
+
+  return {
+    staleLeads,
+    totalStale: staleLeads.length,
+    untouchedCount: staleLeads.filter(l => l.category === "untouched").length,
+    bookedNotConfirmedCount: staleLeads.filter(l => l.category === "booked_not_confirmed").length,
+    noShowRecoveryCount: staleLeads.filter(l => l.category === "no_show_recovery").length,
+    generalStaleCount: staleLeads.filter(l => l.category === "stale").length,
+  };
 }

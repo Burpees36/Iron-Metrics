@@ -419,6 +419,9 @@ export const leads = pgTable("leads", {
   bookedAt: timestamp("booked_at"),
   consultDate: timestamp("consult_date"),
   showedAt: timestamp("showed_at"),
+  lastContactAt: timestamp("last_contact_at"),
+  nextActionDate: timestamp("next_action_date"),
+  followUpNotes: text("follow_up_notes"),
 }, (table) => [
   index("idx_leads_gym").on(table.gymId),
   index("idx_leads_created").on(table.createdAt),
