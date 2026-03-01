@@ -1,0 +1,254 @@
+Sprint 1 Objective
+
+Implement a complete in-app lead management system that:
+
+Allows users to manually create leads
+
+Allows moving leads through pipeline stages
+
+Allows logging consult outcomes
+
+Allows marking leads as won or lost
+
+Automatically updates the Sales Intelligence dashboard
+
+Handles permissions properly
+
+Does not break existing analytics
+
+The result: A gym owner can track their entire funnel directly inside the app.
+
+✅ Functional Requirements
+1️⃣ Lead Capture
+
+Create a clean, fast “Add Lead” interface with:
+
+Source selection (customizable list)
+
+Optional name
+
+Optional contact info
+
+Assigned coach
+
+Notes
+
+Created date (default now)
+
+The form must:
+
+Validate required fields
+
+Save immediately
+
+Appear in the pipeline view after creation
+
+2️⃣ Pipeline UI
+
+Create a visual pipeline view with stages:
+
+New
+
+Booked
+
+Showed
+
+Won
+
+Lost
+
+Requirements:
+
+Leads appear grouped by stage
+
+User can move a lead to a new stage (click action or drag)
+
+Stage changes persist immediately
+
+Moving to:
+
+“Booked” requires consult date
+
+“Showed” marks consult attended
+
+“Won” requires sale price
+
+“Lost” requires selecting a reason
+
+No heavy animations needed. Clean and stable.
+
+3️⃣ Consult Logging
+
+When a lead is moved to Booked:
+
+Prompt for consult date
+
+Store scheduled date
+
+Allow marking as “Showed” later
+
+When marked Showed:
+
+Timestamp it
+
+Update analytics automatically
+
+4️⃣ Close Outcome
+
+When moved to Won:
+
+Prompt for membership price
+
+Record sale date
+
+Attribute to assigned coach
+
+When moved to Lost:
+
+Require reason (dropdown)
+
+Price
+
+Not ready
+
+No show
+
+Chose competitor
+
+Other
+
+5️⃣ Dashboard Connection
+
+The existing Sales Intelligence page must:
+
+Recalculate automatically
+
+Reflect funnel counts accurately
+
+Reflect source breakdown
+
+Reflect coach breakdown
+
+Reflect conversion rates
+
+Reflect sales health score
+
+No manual refresh required.
+
+6️⃣ Permissions
+
+Enforce:
+
+Gym owner sees all leads
+
+Coaches see only leads assigned to them
+
+Admin can manage source list and stage labels
+
+Must follow existing multi-tenant enforcement.
+
+7️⃣ Data Integrity Rules
+
+Implement validation rules:
+
+A lead cannot be Won without being Booked
+
+A lead cannot be Showed without being Booked
+
+Sale price must be positive
+
+Created date cannot be in the future
+
+Stage transitions must follow logical order
+
+8️⃣ Empty State UX
+
+If no leads exist:
+
+Show a clean onboarding message:
+
+“Start tracking your leads in 60 seconds.”
+
+With:
+
+Add Lead button
+
+Short 3-step explanation of how funnel works
+
+No blank dashboards.
+
+🧠 Technical Expectations
+
+Do not change existing analytics formulas.
+
+Do not refactor the entire backend.
+
+Extend current sales models minimally.
+
+Ensure queries remain performant.
+
+Add unit tests for:
+
+Stage transitions
+
+Conversion calculations
+
+Permission enforcement
+
+📦 Deliverables
+
+Sprint is complete when:
+
+A gym can create leads
+
+Move them through full funnel
+
+See analytics update correctly
+
+No crashes
+
+No data inconsistencies
+
+Clean UX
+
+No placeholder hacks
+
+🚦 Out of Scope (Do Not Build Yet)
+
+CSV import
+
+CRM integrations
+
+Automation rules
+
+Follow-up reminders
+
+Email/text sending
+
+Advanced filtering
+
+Data quality score
+
+Those belong in Sprint 2.
+
+🏁 Definition of Done
+
+The module is considered production-ready for manual use when:
+
+A gym owner can track 100+ leads without UI lag.
+
+Funnel rates calculate correctly.
+
+Coach attribution works.
+
+The dashboard matches the raw data.
+
+The system prevents invalid state transitions.
+
+If you'd like, next we can:
+
+Write Sprint 2 (CSV import + data integrity layer)
+
+Or tighten this sprint further into explicit acceptance criteria for engineering discipline
+
+Your move.
