@@ -33,7 +33,8 @@ Iron Metrics includes a Stability Command Center dashboard with key financial an
 -   **Lifetime Value Engine (LTVE)**: Calculates LTV and models revenue impact of churn changes.
 -   **Predictive Intelligence Stack**: Provides member-level churn probability, cohort analysis, revenue scenarios, and strategic recommendations.
 -   **Ranked Intervention Engine**: Mathematically scores recommendations based on expected revenue impact, confidence, and urgency, surfacing top priorities.
--   **Sales Intelligence**: Offers a dedicated page with sales funnel analytics, lead tracking, conversion rates, and bottleneck detection.
+-   **Sales Intelligence**: Offers a dedicated page with sales funnel analytics, lead tracking, conversion rates, and bottleneck detection. Automatically reflects pipeline data.
+-   **Lead Pipeline**: A CRM-style Kanban board at `/gyms/:id/pipeline` with 5 stages (New, Booked, Showed, Won, Lost). Supports creating leads, stage transitions with validation dialogs (consult date for booking, sale price for won, reason for lost), and auto-creates consult/membership/payment records. Won leads automatically populate Sales Intelligence. Demo mode includes 20 seeded leads across all stages.
 -   **Resources Library**: A curated collection of gym operations playbooks (onboarding, nutrition challenges, referral systems, coaching development, etc.) organized by category with expandable phases and actionable steps. Located at `/gyms/:id/resources`.
 -   **Attendance-Based Disengagement Detection**: Identifies at-risk members using attendance data, with fallback to contact-based detection.
 -   **Robust Data Ingestion System**: A multi-step CSV import wizard with intelligent column auto-detection, validation, and idempotent upsert.

@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { gyms, members, gymMonthlyMetrics } from "@shared/schema";
+import { gyms, members, gymMonthlyMetrics, leads, consults, salesMemberships, payments } from "@shared/schema";
 import { users } from "@shared/models/auth";
 import { eq } from "drizzle-orm";
 import { DEMO_GYM_ID, DEMO_USER_ID } from "./replit_integrations/auth";
@@ -41,6 +41,13 @@ export async function ensureDemoData(): Promise<void> {
   }
 
   console.log(`[DEMO] Seeded ${memberData.length} members`);
+
+  try {
+    await seedDemoLeads(DEMO_GYM_ID);
+    console.log("[DEMO] Lead pipeline data seeded");
+  } catch (e) {
+    console.error("[DEMO] Lead seeding error (non-fatal):", e);
+  }
 
   try {
     await recomputeAllMetrics(DEMO_GYM_ID);
@@ -145,4 +152,109 @@ function generateDemoMembers(gymId: string, now: Date) {
   }
 
   return result;
+}
+
+async function seedDemoLeads(gymId: string) {
+  const now = new Date();
+  const coaches = ["Coach Mike", "Coach Sarah", "Coach Alex"];
+  const sources = ["Referral", "Facebook", "Instagram", "Google", "Walk-in", "Website"];
+
+  const demoLeads: Array<{
+    name: string; email: string; phone: string; source: string;
+    coachId: string; notes: string; status: string;
+    daysAgo: number; consultDaysOffset?: number; salePrice?: string;
+    lostReason?: string;
+  }> = [
+    { name: "Tom Bradley", email: "tom.b@example.com", phone: "(555) 100-0001", source: "Referral", coachId: coaches[0], notes: "Referred by member Jake", status: "new", daysAgo: 2 },
+    { name: "Lisa Chen", email: "lisa.c@example.com", phone: "(555) 100-0002", source: "Facebook", coachId: coaches[1], notes: "Saw Facebook ad", status: "new", daysAgo: 1 },
+    { name: "Marcus Wright", email: "marcus.w@example.com", phone: "(555) 100-0003", source: "Walk-in", coachId: coaches[2], notes: "Walked in during open gym", status: "new", daysAgo: 3 },
+    { name: "Jenny Park", email: "jenny.p@example.com", phone: "(555) 100-0004", source: "Instagram", coachId: coaches[0], notes: "DM inquiry", status: "new", daysAgo: 0 },
+    { name: "Carlos Rivera", email: "carlos.r@example.com", phone: "(555) 100-0005", source: "Google", coachId: coaches[1], notes: "Found via Google search", status: "new", daysAgo: 4 },
+
+    { name: "Diana Foster", email: "diana.f@example.com", phone: "(555) 200-0001", source: "Referral", coachId: coaches[0], notes: "Friend of Sarah J.", status: "booked", daysAgo: 8, consultDaysOffset: 3 },
+    { name: "Kevin O'Brien", email: "kevin.o@example.com", phone: "(555) 200-0002", source: "Website", coachId: coaches[1], notes: "Signed up through website form", status: "booked", daysAgo: 6, consultDaysOffset: 2 },
+    { name: "Priya Sharma", email: "priya.s@example.com", phone: "(555) 200-0003", source: "Facebook", coachId: coaches[2], notes: "Responded to January challenge post", status: "booked", daysAgo: 5, consultDaysOffset: 1 },
+    { name: "James Mitchell", email: "james.m@example.com", phone: "(555) 200-0004", source: "Referral", coachId: coaches[0], notes: "Referred by member Nate", status: "booked", daysAgo: 7, consultDaysOffset: 4 },
+
+    { name: "Rachel Adams", email: "rachel.a@example.com", phone: "(555) 300-0001", source: "Walk-in", coachId: coaches[1], notes: "Came for free trial class", status: "showed", daysAgo: 12, consultDaysOffset: 5 },
+    { name: "Derek Kim", email: "derek.k@example.com", phone: "(555) 300-0002", source: "Referral", coachId: coaches[2], notes: "Enjoyed consult, deciding", status: "showed", daysAgo: 10, consultDaysOffset: 4 },
+    { name: "Amanda Wells", email: "amanda.w@example.com", phone: "(555) 300-0003", source: "Google", coachId: coaches[0], notes: "Very interested, comparing options", status: "showed", daysAgo: 14, consultDaysOffset: 6 },
+
+    { name: "Brian Taylor", email: "brian.t@example.com", phone: "(555) 400-0001", source: "Referral", coachId: coaches[0], notes: "Signed up immediately after consult", status: "won", daysAgo: 30, consultDaysOffset: 7, salePrice: "199.00" },
+    { name: "Megan Scott", email: "megan.s@example.com", phone: "(555) 400-0002", source: "Facebook", coachId: coaches[1], notes: "Great fit for community", status: "won", daysAgo: 25, consultDaysOffset: 5, salePrice: "179.00" },
+    { name: "Jason Lee", email: "jason.l@example.com", phone: "(555) 400-0003", source: "Walk-in", coachId: coaches[2], notes: "Started with fundamentals", status: "won", daysAgo: 20, consultDaysOffset: 4, salePrice: "219.00" },
+    { name: "Courtney Hall", email: "courtney.h@example.com", phone: "(555) 400-0004", source: "Instagram", coachId: coaches[0], notes: "Loved the atmosphere", status: "won", daysAgo: 18, consultDaysOffset: 3, salePrice: "189.00" },
+    { name: "Tyler Brooks", email: "tyler.b@example.com", phone: "(555) 400-0005", source: "Referral", coachId: coaches[1], notes: "Referred by 2 existing members", status: "won", daysAgo: 15, consultDaysOffset: 6, salePrice: "249.00" },
+
+    { name: "Nicole Perez", email: "nicole.p@example.com", phone: "(555) 500-0001", source: "Google", coachId: coaches[2], notes: "Too far from home", status: "lost", daysAgo: 22, lostReason: "chose_competitor" },
+    { name: "Ryan Cooper", email: "ryan.c@example.com", phone: "(555) 500-0002", source: "Facebook", coachId: coaches[0], notes: "Budget concerns", status: "lost", daysAgo: 19, lostReason: "price" },
+    { name: "Stephanie Evans", email: "stephanie.e@example.com", phone: "(555) 500-0003", source: "Walk-in", coachId: coaches[1], notes: "No-showed twice", status: "lost", daysAgo: 16, lostReason: "no_show" },
+  ];
+
+  for (const dl of demoLeads) {
+    const createdAt = new Date(now.getTime() - dl.daysAgo * 86400000);
+    const leadData: any = {
+      gymId,
+      name: dl.name,
+      email: dl.email,
+      phone: dl.phone,
+      source: dl.source,
+      coachId: dl.coachId,
+      notes: dl.notes,
+      status: dl.status,
+      createdAt,
+    };
+
+    if (dl.status === "booked" || dl.status === "showed" || dl.status === "won") {
+      leadData.bookedAt = new Date(createdAt.getTime() + 86400000);
+      leadData.consultDate = new Date(createdAt.getTime() + (dl.consultDaysOffset || 3) * 86400000);
+    }
+
+    if (dl.status === "showed" || dl.status === "won") {
+      leadData.showedAt = new Date(createdAt.getTime() + (dl.consultDaysOffset || 3) * 86400000);
+    }
+
+    if (dl.status === "won") {
+      leadData.wonAt = new Date(createdAt.getTime() + ((dl.consultDaysOffset || 3) + 1) * 86400000);
+      leadData.salePrice = dl.salePrice;
+    }
+
+    if (dl.status === "lost") {
+      leadData.lostAt = new Date(createdAt.getTime() + 5 * 86400000);
+      leadData.lostReason = dl.lostReason;
+    }
+
+    const [lead] = await db.insert(leads).values(leadData).returning();
+
+    if (dl.status === "booked" || dl.status === "showed" || dl.status === "won") {
+      const consultData: any = {
+        gymId,
+        leadId: lead.id,
+        bookedAt: leadData.bookedAt,
+        scheduledFor: leadData.consultDate,
+        coachId: dl.coachId,
+      };
+      if (dl.status === "showed" || dl.status === "won") {
+        consultData.showedAt = leadData.showedAt;
+      }
+      await db.insert(consults).values(consultData);
+    }
+
+    if (dl.status === "won" && dl.salePrice) {
+      const [membership] = await db.insert(salesMemberships).values({
+        gymId,
+        leadId: lead.id,
+        startedAt: leadData.wonAt,
+        priceMonthly: dl.salePrice,
+        status: "active",
+      }).returning();
+
+      await db.insert(payments).values({
+        gymId,
+        membershipId: membership.id,
+        amount: dl.salePrice,
+        paidAt: leadData.wonAt,
+      });
+    }
+  }
 }

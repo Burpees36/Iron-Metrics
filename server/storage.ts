@@ -107,9 +107,12 @@ export interface IStorage {
   createLead(lead: InsertLead): Promise<Lead>;
   getLeadsByGym(gymId: string, start: Date, end: Date): Promise<Lead[]>;
   getLeadById(id: string): Promise<Lead | undefined>;
+  updateLead(id: string, updates: Partial<Lead>): Promise<Lead>;
+  getLeadsByGymAllTime(gymId: string): Promise<Lead[]>;
 
   createConsult(consult: InsertConsult): Promise<Consult>;
   getConsultsByGym(gymId: string, start: Date, end: Date): Promise<Consult[]>;
+  updateConsult(id: string, updates: Partial<Consult>): Promise<Consult>;
 
   createSalesMembership(membership: InsertSalesMembership): Promise<SalesMembership>;
   getSalesMembershipsByGym(gymId: string, start: Date, end: Date): Promise<SalesMembership[]>;
@@ -691,6 +694,15 @@ export class DatabaseStorage implements IStorage {
     return lead;
   }
 
+  async updateLead(id: string, updates: Partial<Lead>): Promise<Lead> {
+    const [updated] = await db.update(leads).set(updates).where(eq(leads.id, id)).returning();
+    return updated;
+  }
+
+  async getLeadsByGymAllTime(gymId: string): Promise<Lead[]> {
+    return db.select().from(leads).where(eq(leads.gymId, gymId)).orderBy(desc(leads.createdAt));
+  }
+
   async createConsult(consult: InsertConsult): Promise<Consult> {
     const [created] = await db.insert(consults).values(consult).returning();
     return created;
@@ -700,6 +712,11 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(consults).where(
       and(eq(consults.gymId, gymId), gte(consults.bookedAt, start), lte(consults.bookedAt, end))
     ).orderBy(desc(consults.bookedAt));
+  }
+
+  async updateConsult(id: string, updates: Partial<Consult>): Promise<Consult> {
+    const [updated] = await db.update(consults).set(updates).where(eq(consults.id, id)).returning();
+    return updated;
   }
 
   async createSalesMembership(membership: InsertSalesMembership): Promise<SalesMembership> {

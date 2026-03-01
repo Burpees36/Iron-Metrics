@@ -30,6 +30,7 @@ import {
   Settings,
   DollarSign,
   BookOpen,
+  GitBranchPlus,
 } from "lucide-react";
 
 export function AppSidebar() {
@@ -53,6 +54,7 @@ export function AppSidebar() {
     { href: `/gyms/${activeGymId}/trends`, label: "Reports", icon: BarChart3 },
     { href: `/gyms/${activeGymId}/strategy`, label: "AI Strategy Plays", icon: FileText },
     { href: `/gyms/${activeGymId}/member-risk`, label: "Member Intelligence", icon: Brain },
+    { href: `/gyms/${activeGymId}/pipeline`, label: "Lead Pipeline", icon: GitBranchPlus },
     { href: `/gyms/${activeGymId}/sales`, label: "Sales Intelligence", icon: DollarSign },
     { href: `/gyms/${activeGymId}/planning`, label: "Future Planning", icon: Target },
     { href: `/gyms/${activeGymId}/resources`, label: "Resources", icon: BookOpen },

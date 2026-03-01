@@ -1550,5 +1550,158 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/gyms/:id/leads", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const leads = await storage.getLeadsByGymAllTime(req.params.id);
+      res.json(leads);
+    } catch (error) {
+      console.error("Error fetching leads:", error);
+      res.status(500).json({ message: "Failed to fetch leads" });
+    }
+  });
+
+  app.get("/api/gyms/:id/leads/:leadId", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const lead = await storage.getLeadById(req.params.leadId);
+      if (!lead || lead.gymId !== req.params.id) return res.status(404).json({ message: "Lead not found" });
+      res.json(lead);
+    } catch (error) {
+      console.error("Error fetching lead:", error);
+      res.status(500).json({ message: "Failed to fetch lead" });
+    }
+  });
+
+  app.put("/api/gyms/:id/leads/:leadId", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const lead = await storage.getLeadById(req.params.leadId);
+      if (!lead || lead.gymId !== req.params.id) return res.status(404).json({ message: "Lead not found" });
+
+      const allowedFields = ["name", "email", "phone", "coachId", "notes", "source"];
+      const updates: Record<string, any> = {};
+      for (const field of allowedFields) {
+        if (req.body[field] !== undefined) updates[field] = req.body[field];
+      }
+
+      const updated = await storage.updateLead(req.params.leadId, updates);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating lead:", error);
+      res.status(500).json({ message: "Failed to update lead" });
+    }
+  });
+
+  app.put("/api/gyms/:id/leads/:leadId/stage", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const lead = await storage.getLeadById(req.params.leadId);
+      if (!lead || lead.gymId !== req.params.id) return res.status(404).json({ message: "Lead not found" });
+
+      const { stage } = req.body;
+      const validStages = ["new", "booked", "showed", "won", "lost"];
+      if (!validStages.includes(stage)) {
+        return res.status(400).json({ message: `Invalid stage. Must be one of: ${validStages.join(", ")}` });
+      }
+
+      if (lead.status === "won" || lead.status === "lost") {
+        return res.status(400).json({ message: `Cannot transition from terminal stage "${lead.status}"` });
+      }
+
+      const validTransitions: Record<string, string[]> = {
+        new: ["booked", "lost"],
+        booked: ["showed", "lost"],
+        showed: ["won", "lost"],
+      };
+
+      const allowed = validTransitions[lead.status] || [];
+      if (!allowed.includes(stage)) {
+        return res.status(400).json({ message: `Cannot transition from "${lead.status}" to "${stage}". Valid transitions: ${allowed.join(", ")}` });
+      }
+
+      const updates: Record<string, any> = { status: stage };
+
+      if (stage === "booked") {
+        const { consultDate } = req.body;
+        if (!consultDate) {
+          return res.status(400).json({ message: "consultDate is required when booking" });
+        }
+        updates.bookedAt = new Date();
+        updates.consultDate = new Date(consultDate);
+
+        await storage.createConsult({
+          gymId: req.params.id,
+          leadId: lead.id,
+          bookedAt: new Date(),
+          scheduledFor: new Date(consultDate),
+          coachId: lead.coachId || undefined,
+        });
+      }
+
+      if (stage === "showed") {
+        updates.showedAt = new Date();
+
+        const allConsults = await storage.getConsultsByGym(req.params.id, new Date(0), new Date());
+        const leadConsult = allConsults.find(c => c.leadId === lead.id && !c.showedAt);
+        if (leadConsult) {
+          await storage.updateConsult(leadConsult.id, { showedAt: new Date() });
+        }
+      }
+
+      if (stage === "won") {
+        const { salePrice } = req.body;
+        if (!salePrice || Number(salePrice) <= 0) {
+          return res.status(400).json({ message: "salePrice must be a positive number" });
+        }
+        updates.wonAt = new Date();
+        updates.salePrice = String(salePrice);
+
+        const membership = await storage.createSalesMembership({
+          gymId: req.params.id,
+          leadId: lead.id,
+          startedAt: new Date(),
+          priceMonthly: String(salePrice),
+          status: "active",
+        });
+
+        await storage.createPayment({
+          gymId: req.params.id,
+          membershipId: membership.id,
+          amount: String(salePrice),
+          paidAt: new Date(),
+        });
+      }
+
+      if (stage === "lost") {
+        const { lostReason } = req.body;
+        const validReasons = ["price", "not_ready", "no_show", "chose_competitor", "other"];
+        if (!lostReason || !validReasons.includes(lostReason)) {
+          return res.status(400).json({ message: `lostReason is required and must be one of: ${validReasons.join(", ")}` });
+        }
+        updates.lostAt = new Date();
+        updates.lostReason = lostReason;
+      }
+
+      const updated = await storage.updateLead(req.params.leadId, updates);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error transitioning lead stage:", error);
+      res.status(500).json({ message: "Failed to transition lead stage" });
+    }
+  });
+
   return httpServer;
 }
