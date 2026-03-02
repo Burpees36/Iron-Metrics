@@ -1,0 +1,498 @@
+import { useRoute, Link, useLocation } from "wouter";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useState, useEffect, useMemo } from "react";
+import { useGymData, GymPageShell, GymNotFound, GymDetailSkeleton, PageHeader } from "./gym-detail";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
+  Zap,
+  Shield,
+  Users,
+  DollarSign,
+  Heart,
+  UserCheck,
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  CheckCircle2,
+  Clock,
+  History,
+  AlertTriangle,
+  FileText,
+  Clipboard,
+  Mail,
+  MessageSquare,
+  User,
+  Loader2,
+  ArrowRight,
+} from "lucide-react";
+import type { OperatorOutput, OperatorPill, OperatorTaskType, AiOperatorRun } from "@shared/schema";
+import { OPERATOR_PILLS, OPERATOR_TASK_TYPES } from "@shared/schema";
+
+const PILL_CONFIG: Record<OperatorPill, { label: string; icon: typeof Shield; color: string }> = {
+  retention: { label: "Retention", icon: Shield, color: "text-emerald-400" },
+  sales: { label: "Sales", icon: DollarSign, color: "text-blue-400" },
+  coaching: { label: "Coaching", icon: UserCheck, color: "text-amber-400" },
+  community: { label: "Community", icon: Heart, color: "text-rose-400" },
+  owner: { label: "Owner Protection", icon: User, color: "text-violet-400" },
+};
+
+const TASK_ICONS: Record<string, typeof FileText> = {
+  "7-day plan": Clipboard,
+  "Member outreach drafts": Mail,
+  "Sales follow-up sequence": MessageSquare,
+  "Staff coaching note": FileText,
+  "Event plan": Users,
+};
+
+const CHANNEL_LABELS: Record<string, string> = {
+  sms: "SMS",
+  email: "Email",
+  in_person: "In-Person",
+};
+
+interface OperatorContext {
+  role: string;
+  canGenerate: boolean;
+  canViewHistory: boolean;
+  metrics: {
+    activeMembers: number | null;
+    churnRate: number | null;
+    mrr: number | null;
+    rsi: number | null;
+    avgLtv: number | null;
+    newLeads: number;
+    conversionRate: number;
+  };
+}
+
+function ContextPreview({ metrics, pill }: { metrics: OperatorContext["metrics"]; pill: OperatorPill }) {
+  const items: { label: string; value: string }[] = [];
+
+  if (pill === "retention" || pill === "owner") {
+    if (metrics.activeMembers !== null) items.push({ label: "Active Members", value: String(metrics.activeMembers) });
+    if (metrics.churnRate !== null) items.push({ label: "Churn Rate", value: `${metrics.churnRate}%` });
+    if (metrics.rsi !== null) items.push({ label: "RSI", value: String(metrics.rsi) });
+  }
+  if (pill === "sales") {
+    items.push({ label: "Recent Leads (30d)", value: String(metrics.newLeads) });
+    items.push({ label: "Conversion Rate", value: `${metrics.conversionRate}%` });
+  }
+  if (pill === "coaching" || pill === "community") {
+    if (metrics.activeMembers !== null) items.push({ label: "Active Members", value: String(metrics.activeMembers) });
+    items.push({ label: "Recent Leads", value: String(metrics.newLeads) });
+  }
+  if (metrics.mrr !== null) items.push({ label: "MRR", value: `$${Number(metrics.mrr).toLocaleString()}` });
+  if (metrics.avgLtv !== null && metrics.avgLtv > 0) items.push({ label: "Avg LTV", value: `$${Number(metrics.avgLtv).toLocaleString()}` });
+
+  if (items.length === 0) {
+    items.push({ label: "Data", value: "Import members and leads to enable context-aware generation" });
+  }
+
+  return (
+    <Card className="border-border/50" data-testid="context-preview">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+          <AlertTriangle className="w-3.5 h-3.5" />
+          Data Context Preview
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-xs text-muted-foreground mb-3">High-level metrics that will inform the generated output. No member PII is included.</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {items.map((item) => (
+            <div key={item.label} className="bg-muted/30 rounded-md px-3 py-2" data-testid={`context-metric-${item.label.toLowerCase().replace(/\s+/g, "-")}`}>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{item.label}</div>
+              <div className="text-sm font-semibold">{item.value}</div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function OutputCard({ output, index, onCopy, onMarkReviewed }: {
+  output: OperatorOutput;
+  index: number;
+  onCopy: (text: string) => void;
+  onMarkReviewed?: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  const fullText = useMemo(() => {
+    let text = `${output.headline}\n\n${output.why_it_matters}\n\nActions:\n`;
+    output.actions.forEach((a, i) => { text += `${i + 1}. ${a}\n`; });
+    if (output.drafts?.length) {
+      text += "\nDrafts:\n";
+      output.drafts.forEach((d) => { text += `\n[${CHANNEL_LABELS[d.channel] || d.channel}]\n${d.message}\n`; });
+    }
+    return text;
+  }, [output]);
+
+  return (
+    <Card className="border-border/50" data-testid={`output-card-${index}`}>
+      <CardContent className="pt-5 space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge variant="outline" className="text-[10px]" data-testid={`output-confidence-${index}`}>
+                {output.confidence_label} confidence
+              </Badge>
+              <span className="text-[10px] text-muted-foreground italic">Draft — review before sending.</span>
+            </div>
+            <h3 className="font-semibold text-base" data-testid={`output-headline-${index}`}>{output.headline}</h3>
+          </div>
+        </div>
+
+        <p className="text-sm text-muted-foreground" data-testid={`output-why-${index}`}>{output.why_it_matters}</p>
+
+        <div className="space-y-1.5">
+          {output.actions.map((action, i) => (
+            <div key={i} className="flex items-start gap-2 text-sm" data-testid={`output-action-${index}-${i}`}>
+              <CheckCircle2 className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+              <span>{action}</span>
+            </div>
+          ))}
+        </div>
+
+        {output.drafts && output.drafts.length > 0 && (
+          <Collapsible open={expanded} onOpenChange={setExpanded}>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground" data-testid={`toggle-drafts-${index}`}>
+                {expanded ? <ChevronDown className="w-4 h-4 mr-1" /> : <ChevronRight className="w-4 h-4 mr-1" />}
+                {output.drafts.length} draft{output.drafts.length > 1 ? "s" : ""} available
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-3 mt-2">
+              {output.drafts.map((draft, di) => (
+                <div key={di} className="bg-muted/30 rounded-md p-3 space-y-1" data-testid={`draft-${index}-${di}`}>
+                  <div className="flex items-center justify-between">
+                    <Badge variant="secondary" className="text-[10px]">{CHANNEL_LABELS[draft.channel] || draft.channel}</Badge>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => onCopy(draft.message)}
+                      data-testid={`copy-draft-${index}-${di}`}
+                    >
+                      <Copy className="w-3 h-3 mr-1" /> Copy
+                    </Button>
+                  </div>
+                  <p className="text-sm whitespace-pre-wrap">{draft.message}</p>
+                </div>
+              ))}
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+
+        <div className="flex items-center gap-3 pt-2 border-t border-border/30">
+          <Button variant="ghost" size="sm" onClick={() => onCopy(fullText)} data-testid={`copy-output-${index}`}>
+            <Copy className="w-3.5 h-3.5 mr-1" /> Copy All
+          </Button>
+          {onMarkReviewed && (
+            <Button variant="ghost" size="sm" onClick={onMarkReviewed} data-testid={`mark-reviewed-${index}`}>
+              <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Mark as Reviewed
+            </Button>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-1.5 pt-1">
+          {output.metrics_used.map((m) => (
+            <span key={m} className="text-[10px] bg-muted/40 text-muted-foreground px-2 py-0.5 rounded-full">{m}</span>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function HistoryTable({ runs }: { runs: AiOperatorRun[] }) {
+  if (runs.length === 0) {
+    return (
+      <div className="text-center py-8 text-muted-foreground text-sm" data-testid="history-empty">
+        No generation history yet. Run your first generation above.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2" data-testid="history-list">
+      {runs.map((run) => {
+        const pillConfig = PILL_CONFIG[run.pill as OperatorPill];
+        const PillIcon = pillConfig?.icon || Zap;
+        const outputs = (run.outputJson as OperatorOutput[]) || [];
+
+        return (
+          <Card key={run.id} className="border-border/30" data-testid={`history-run-${run.id}`}>
+            <CardContent className="py-3 px-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <PillIcon className={`w-4 h-4 flex-shrink-0 ${pillConfig?.color || "text-muted-foreground"}`} />
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium truncate">
+                      {pillConfig?.label || run.pill} — {run.taskType}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {new Date(run.createdAt).toLocaleDateString()} {new Date(run.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      {outputs.length > 0 && ` · ${outputs.length} output${outputs.length > 1 ? "s" : ""}`}
+                    </div>
+                  </div>
+                </div>
+                <Badge
+                  variant={run.status === "reviewed" ? "default" : run.status === "archived" ? "secondary" : "outline"}
+                  className="text-[10px] flex-shrink-0"
+                  data-testid={`history-status-${run.id}`}
+                >
+                  {run.status}
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+export default function AiOperator() {
+  const [, params] = useRoute("/gyms/:id/operator");
+  const gymId = params?.id;
+  const [location] = useLocation();
+  const { isDemo } = useAuth();
+  const { toast } = useToast();
+
+  const searchParams = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+  const preselectedPill = searchParams.get("pill") as OperatorPill | null;
+  const preselectedTask = searchParams.get("task") as OperatorTaskType | null;
+
+  const [selectedPill, setSelectedPill] = useState<OperatorPill>(
+    preselectedPill && OPERATOR_PILLS.includes(preselectedPill) ? preselectedPill : "retention"
+  );
+  const [selectedTask, setSelectedTask] = useState<OperatorTaskType>(
+    preselectedTask && OPERATOR_TASK_TYPES.includes(preselectedTask) ? preselectedTask : "7-day plan"
+  );
+  const [consentChecked, setConsentChecked] = useState(false);
+  const [showContext, setShowContext] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [outputs, setOutputs] = useState<OperatorOutput[]>([]);
+  const [lastRunId, setLastRunId] = useState<string | null>(null);
+
+  const { data: gym, isLoading: gymLoading } = useGymData(gymId);
+
+  const { data: context, isLoading: contextLoading } = useQuery<OperatorContext>({
+    queryKey: ["/api/gyms", gymId, "operator", "context"],
+    enabled: !!gymId,
+  });
+
+  const { data: history, isLoading: historyLoading } = useQuery<AiOperatorRun[]>({
+    queryKey: ["/api/gyms", gymId, "operator", "history"],
+    enabled: !!gymId && showHistory,
+  });
+
+  const generateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/gyms/${gymId}/operator/generate`, {
+        pill: selectedPill,
+        taskType: selectedTask,
+      });
+      return res.json();
+    },
+    onSuccess: (data: { run: AiOperatorRun; outputs: OperatorOutput[] }) => {
+      setOutputs(data.outputs);
+      setLastRunId(data.run.id);
+      setConsentChecked(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/gyms", gymId, "operator", "history"] });
+    },
+    onError: () => {
+      toast({ title: "Generation failed", description: "Something went wrong. Try again.", variant: "destructive" });
+    },
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ runId, status }: { runId: string; status: string }) => {
+      const res = await apiRequest("PATCH", `/api/gyms/${gymId}/operator/runs/${runId}`, { status });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Status updated" });
+      queryClient.invalidateQueries({ queryKey: ["/api/gyms", gymId, "operator", "history"] });
+    },
+  });
+
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      toast({ title: "Copied to clipboard" });
+    });
+  };
+
+  if (gymLoading) return <GymDetailSkeleton />;
+  if (!gym) return <GymNotFound />;
+
+  const canGen = context?.canGenerate ?? false;
+
+  return (
+    <GymPageShell gym={gym}>
+      <div className="space-y-6 max-w-4xl mx-auto">
+        <PageHeader
+          title="AI Operator"
+          subtitle="Turns your metrics into clear actions."
+          howTo="Select a focus area and task type, review the data context, then generate structured output."
+          icon={Zap}
+        />
+
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">Focus Area</label>
+            <div className="flex flex-wrap gap-2" data-testid="pill-selector">
+              {OPERATOR_PILLS.map((pill) => {
+                const config = PILL_CONFIG[pill];
+                const PillIcon = config.icon;
+                return (
+                  <Button
+                    key={pill}
+                    variant={selectedPill === pill ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setSelectedPill(pill)}
+                    className="gap-1.5"
+                    data-testid={`pill-${pill}`}
+                  >
+                    <PillIcon className={`w-3.5 h-3.5 ${selectedPill === pill ? "" : config.color}`} />
+                    {config.label}
+                  </Button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">Task Type</label>
+            <div className="flex flex-wrap gap-2" data-testid="task-selector">
+              {OPERATOR_TASK_TYPES.map((task) => {
+                const TaskIcon = TASK_ICONS[task] || FileText;
+                return (
+                  <Button
+                    key={task}
+                    variant={selectedTask === task ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setSelectedTask(task)}
+                    className="gap-1.5"
+                    data-testid={`task-${task.replace(/\s+/g, "-").toLowerCase()}`}
+                  >
+                    <TaskIcon className="w-3.5 h-3.5" />
+                    {task}
+                  </Button>
+                );
+              })}
+            </div>
+          </div>
+
+          <Collapsible open={showContext} onOpenChange={setShowContext}>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm" className="text-muted-foreground" data-testid="toggle-context-preview">
+                {showContext ? <ChevronDown className="w-4 h-4 mr-1" /> : <ChevronRight className="w-4 h-4 mr-1" />}
+                {showContext ? "Hide" : "Show"} data context
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-2">
+              {contextLoading ? (
+                <Skeleton className="h-32 w-full rounded-lg" />
+              ) : context ? (
+                <ContextPreview metrics={context.metrics} pill={selectedPill} />
+              ) : null}
+            </CollapsibleContent>
+          </Collapsible>
+
+          <div className="bg-muted/20 border border-border/30 rounded-lg p-4 space-y-3">
+            <div className="flex items-start gap-3">
+              <Checkbox
+                id="consent"
+                checked={consentChecked}
+                onCheckedChange={(v) => setConsentChecked(v === true)}
+                data-testid="checkbox-consent"
+              />
+              <label htmlFor="consent" className="text-sm text-muted-foreground leading-snug cursor-pointer">
+                I understand this is a draft and I must review before use. This is not a substitute for legal, tax, medical, or professional advice.
+              </label>
+            </div>
+
+            <Button
+              onClick={() => generateMutation.mutate()}
+              disabled={!consentChecked || generateMutation.isPending || !canGen || isDemo}
+              className="w-full sm:w-auto gap-2"
+              data-testid="button-generate"
+            >
+              {generateMutation.isPending ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</>
+              ) : (
+                <><Zap className="w-4 h-4" /> Generate</>
+              )}
+            </Button>
+
+            {isDemo && (
+              <p className="text-xs text-muted-foreground">Generation is disabled in demo mode.</p>
+            )}
+
+            {!canGen && !isDemo && (
+              <p className="text-xs text-muted-foreground">Your current role does not allow generation.</p>
+            )}
+          </div>
+        </div>
+
+        {outputs.length > 0 && (
+          <div className="space-y-4" data-testid="output-section">
+            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Generated Output</h2>
+            {outputs.map((output, i) => (
+              <OutputCard
+                key={i}
+                output={output}
+                index={i}
+                onCopy={handleCopy}
+                onMarkReviewed={
+                  lastRunId
+                    ? () => updateStatusMutation.mutate({ runId: lastRunId, status: "reviewed" })
+                    : undefined
+                }
+              />
+            ))}
+          </div>
+        )}
+
+        {(context?.canViewHistory !== false) && (
+          <div className="border-t border-border/30 pt-4">
+            <Collapsible open={showHistory} onOpenChange={setShowHistory}>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm" className="text-muted-foreground gap-1.5" data-testid="toggle-history">
+                  <History className="w-4 h-4" />
+                  {showHistory ? "Hide" : "Show"} Generation History
+                  {showHistory ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-3">
+                {historyLoading ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-14 w-full rounded-lg" />
+                    <Skeleton className="h-14 w-full rounded-lg" />
+                  </div>
+                ) : (
+                  <HistoryTable runs={history || []} />
+                )}
+              </CollapsibleContent>
+            </Collapsible>
+          </div>
+        )}
+      </div>
+    </GymPageShell>
+  );
+}

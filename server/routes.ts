@@ -17,12 +17,29 @@ import { computeSalesSummary, computeTrends, computeBySource, computeByCoach, co
 import { getCachedSummary, setCachedSummary, invalidateGymCache, getRecalcStatus, initSalesCache } from "./sales-cache";
 import { ensureDemoData } from "./demo-seed";
 import { previewLeadCsv, parseAllLeadRows, computeFileHash as computeLeadFileHash, type LeadColumnMapping } from "./lead-csv-parser";
+import { generateStubOutput, buildInputSummary } from "./ai-operator-stub";
+import { OPERATOR_PILLS, OPERATOR_TASK_TYPES, operatorOutputSchema, type OperatorPill, type OperatorTaskType, type OperatorRole } from "@shared/schema";
+import { z } from "zod";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 function checkGymAccess(req: any, gym: { ownerId: string; id: string }): boolean {
   if (isDemoUser(req) && gym.id === DEMO_GYM_ID) return true;
   return gym.ownerId === req.user.claims.sub;
+}
+
+function getOperatorRole(req: any, gym: { ownerId: string; id: string }): OperatorRole {
+  if (isDemoUser(req) && gym.id === DEMO_GYM_ID) return "gym_owner";
+  if (gym.ownerId === req.user.claims.sub) return "gym_owner";
+  return "coach_view";
+}
+
+function canGenerate(role: OperatorRole): boolean {
+  return role === "gym_owner" || role === "analyst";
+}
+
+function canViewHistory(role: OperatorRole): boolean {
+  return role === "gym_owner" || role === "analyst";
 }
 
 export async function registerRoutes(
@@ -2067,6 +2084,158 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching import job:", error);
       res.status(500).json({ message: "Failed to fetch import job" });
+    }
+  });
+
+  app.get("/api/gyms/:id/operator/context", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const role = getOperatorRole(req, gym);
+
+      const allMetrics = await storage.getAllMonthlyMetrics(gym.id);
+      const latest = allMetrics.length > 0 ? allMetrics[allMetrics.length - 1] : null;
+
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const allLeads = await storage.getLeadsByGym(gym.id, thirtyDaysAgo, now);
+
+      const wonLeads = allLeads.filter(l => l.status === "won");
+      const conversionRate = allLeads.length > 0 ? Math.round((wonLeads.length / allLeads.length) * 100) : 0;
+
+      res.json({
+        role,
+        canGenerate: canGenerate(role),
+        canViewHistory: canViewHistory(role),
+        metrics: {
+          activeMembers: latest ? latest.activeMembers : null,
+          churnRate: latest ? Number(latest.churnRate) : null,
+          mrr: latest ? Number(latest.mrr) : null,
+          rsi: latest ? latest.rsi : null,
+          avgLtv: latest ? Number(latest.ltv) : null,
+          newLeads: allLeads.length,
+          conversionRate,
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching operator context:", error);
+      res.status(500).json({ message: "Failed to fetch operator context" });
+    }
+  });
+
+  app.post("/api/gyms/:id/operator/generate", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const role = getOperatorRole(req, gym);
+      if (!canGenerate(role)) {
+        return res.status(403).json({ message: "Your role does not allow generation" });
+      }
+
+      const { pill, taskType } = req.body;
+      if (!pill || !OPERATOR_PILLS.includes(pill)) {
+        return res.status(400).json({ message: "Invalid pill. Must be one of: " + OPERATOR_PILLS.join(", ") });
+      }
+      if (!taskType || !OPERATOR_TASK_TYPES.includes(taskType)) {
+        return res.status(400).json({ message: "Invalid task type. Must be one of: " + OPERATOR_TASK_TYPES.join(", ") });
+      }
+
+      const allMetrics = await storage.getAllMonthlyMetrics(gym.id);
+      const latest = allMetrics.length > 0 ? allMetrics[allMetrics.length - 1] : null;
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const allLeads = await storage.getLeadsByGym(gym.id, thirtyDaysAgo, now);
+      const wonLeads = allLeads.filter(l => l.status === "won");
+
+      const metricsSummary = {
+        activeMembers: latest?.activeMembers ?? undefined,
+        churnRate: latest ? Number(latest.churnRate) : undefined,
+        mrr: latest ? Number(latest.mrr) : undefined,
+        rsi: latest?.rsi ?? undefined,
+        avgLtv: latest ? Number(latest.ltv) : undefined,
+        newLeads: allLeads.length,
+        conversionRate: allLeads.length > 0 ? Math.round((wonLeads.length / allLeads.length) * 100) : 0,
+      };
+
+      const rawOutputs = generateStubOutput(pill as OperatorPill, taskType as OperatorTaskType, metricsSummary);
+      const outputsSchema = z.array(operatorOutputSchema);
+      const validated = outputsSchema.safeParse(rawOutputs);
+      if (!validated.success) {
+        console.error("[ai-operator] Output validation failed:", validated.error.message);
+        return res.status(500).json({ message: "Generated output failed validation" });
+      }
+      const outputs = validated.data;
+      const inputSummary = buildInputSummary(pill as OperatorPill, taskType as OperatorTaskType, metricsSummary);
+
+      const userId = req.user.claims.sub;
+
+      const run = await storage.createAiOperatorRun({
+        gymId: gym.id,
+        createdByUserId: userId,
+        pill,
+        taskType,
+        inputSummaryJson: inputSummary,
+        outputJson: outputs,
+        status: "draft",
+        error: null,
+      });
+
+      res.json({ run, outputs });
+    } catch (error) {
+      console.error("Error generating operator output:", error);
+      res.status(500).json({ message: "Failed to generate output" });
+    }
+  });
+
+  app.get("/api/gyms/:id/operator/history", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const role = getOperatorRole(req, gym);
+      if (!canViewHistory(role)) {
+        return res.status(403).json({ message: "Your role does not allow viewing history" });
+      }
+
+      const runs = await storage.getAiOperatorRunsByGym(gym.id);
+      res.json(runs);
+    } catch (error) {
+      console.error("Error fetching operator history:", error);
+      res.status(500).json({ message: "Failed to fetch history" });
+    }
+  });
+
+  app.patch("/api/gyms/:id/operator/runs/:runId", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const role = getOperatorRole(req, gym);
+      if (!canGenerate(role)) {
+        return res.status(403).json({ message: "Your role does not allow this action" });
+      }
+
+      const run = await storage.getAiOperatorRun(req.params.runId);
+      if (!run || run.gymId !== gym.id) {
+        return res.status(404).json({ message: "Run not found" });
+      }
+
+      const { status } = req.body;
+      if (!status || !["draft", "reviewed", "archived"].includes(status)) {
+        return res.status(400).json({ message: "Invalid status. Must be one of: draft, reviewed, archived" });
+      }
+
+      const updated = await storage.updateAiOperatorRun(run.id, { status });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating operator run:", error);
+      res.status(500).json({ message: "Failed to update run" });
     }
   });
 

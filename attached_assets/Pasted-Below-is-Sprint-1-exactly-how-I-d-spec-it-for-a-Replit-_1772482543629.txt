@@ -1,0 +1,267 @@
+Below is **Sprint 1** exactly how I’d spec it for a Replit “drop-in script” build: crisp scope, UX, legal guardrails, and acceptance criteria. This sprint produces **the foundation + UI shell + policy framework**, not the full agent.
+
+---
+
+# Sprint 1 — AI Operator Foundations (Product Contract + UX Shell + Legal Guardrails)
+
+## Sprint Goal
+
+Ship the **AI Operator** as a *real product surface* (page + entry points + permissions + disclaimers + logging skeleton) with a **strict scope** and **structured output contracts**, so every future sprint builds on something legally safe and UX-clean.
+
+---
+
+## Outcomes at End of Sprint 1
+
+You will have:
+
+* A dedicated **AI Operator** page in the app
+* “Generate” flow UI (with stubbed outputs)
+* Policy + disclaimers baked into UX
+* RBAC permissions enforced
+* Audit log table + event writing wired (even before real AI is enabled)
+* Output schemas defined (JSON contracts)
+
+---
+
+# 1) Product Scope Contract (Non-negotiable)
+
+### The AI Operator IS
+
+* A **workflow assistant** that turns Iron Metrics signals into:
+
+  * action plans
+  * outreach drafts
+  * task lists
+  * scripts
+  * short playbooks
+
+### The AI Operator IS NOT
+
+* Medical advice
+* Legal advice
+* Tax advice
+* Employment-law advice
+* Guarantees of outcomes (“will reduce churn by X”)
+
+### Explicit scope boundaries (copy ready)
+
+* “Drafting assistance only. You are responsible for reviewing before use.”
+* “Not a substitute for legal, tax, medical, or professional advice.”
+* “Recommendations are based on your gym’s uploaded data; incomplete data may reduce accuracy.”
+
+**Acceptance criteria**
+
+* The scope contract exists in `/docs/ai-operator/scope.md`
+* The app displays a short disclaimer on every AI Operator output panel.
+
+---
+
+# 2) UX Deliverables (Light, calm, not chatty)
+
+## A) New Page: `/operator`
+
+**Layout (top to bottom)**
+
+1. **Header**
+
+   * Title: “AI Operator”
+   * Subtitle: “Turns your metrics into clear actions.”
+2. **Context Pill Selector**
+
+   * Retention
+   * Sales
+   * Coaching
+   * Community
+   * Owner Protection
+3. **Task Type Selector**
+
+   * “7-day plan”
+   * “Member outreach drafts”
+   * “Sales follow-up sequence”
+   * “Staff coaching note”
+   * “Event plan”
+4. **Context Preview Drawer**
+
+   * Shows what data will be used (high-level only)
+5. **Generate Button**
+6. **Output Cards**
+
+   * Each card has: title, why this matters, checklist, drafts (if any)
+7. **Actions**
+
+   * Save as Task (stub in Sprint 1 if tasks exist already)
+   * Copy
+   * Mark as Reviewed
+
+**Important UI rule**
+
+* No long paragraphs. Everything must render as:
+
+  * 1–2 sentence summary
+  * checklist
+  * optional expandable detail
+
+**Acceptance criteria**
+
+* Page exists, responsive, consistent with your design system
+* Works without AI enabled (uses stubbed generation)
+
+---
+
+## B) Entry Points (Links only in Sprint 1)
+
+Add “Generate with AI Operator” buttons that route to `/operator` with pre-selected context:
+
+* Member Risk page → “Member outreach drafts”
+* Sales page → “Follow-up sequence”
+* Owner dashboard → “30-day stabilization plan” (stub option)
+
+**Acceptance criteria**
+
+* Buttons route correctly and pre-fill operator page state via query params.
+
+---
+
+# 3) RBAC + Permissions (Must be correct early)
+
+Define permissions:
+
+* **gym_owner / admin**: can generate, view history, approve drafts
+* **analyst**: can generate, view history (no send)
+* **coach_view**: can view assigned outputs only (no generation)
+
+Even if “send” isn’t implemented, permissions must be correct now.
+
+**Acceptance criteria**
+
+* Backend checks in API routes
+* UI hides actions user can’t perform
+
+---
+
+# 4) Legal & Privacy Guardrails (Sprint 1 level)
+
+## A) Data Minimization Rules
+
+In Sprint 1, the agent context must use:
+
+* aggregated metrics
+* counts
+* segment summaries
+
+Avoid pushing raw PII into prompts by default.
+
+## B) Consent UX
+
+Add a checkbox before generation:
+
+* “I understand this is a draft and I must review before use.”
+
+## C) Safe Output Labels
+
+Every output card includes:
+
+* “Draft — review before sending.”
+
+**Acceptance criteria**
+
+* Checkbox required before “Generate”
+* Labels appear on output cards
+
+---
+
+# 5) Audit Logging Skeleton (You’ll thank yourself later)
+
+Create DB table:
+
+**`ai_operator_runs`**
+
+* `id`
+* `gym_id`
+* `created_by_user_id`
+* `created_at`
+* `pill` (retention/sales/coaching/community/owner)
+* `task_type`
+* `input_summary_json` (what metrics were used; no PII)
+* `output_json` (the structured output)
+* `status` (draft, reviewed, archived)
+* `error` (nullable)
+
+Even with stub outputs, write a record for every run.
+
+**Acceptance criteria**
+
+* DB migration exists
+* Every generate action writes a row
+* History list on `/operator/history` (simple table view)
+
+---
+
+# 6) Output Schemas (Contracts before intelligence)
+
+Define JSON schema types (shared between FE/BE):
+
+### `OperatorOutput`
+
+* `headline` (string)
+* `why_it_matters` (string, <= 240 chars)
+* `actions` (array of 4–7 checklist items)
+* `drafts` (optional)
+
+  * `channel` (sms/email/in_person)
+  * `message` (string)
+* `metrics_used` (array of short strings)
+* `confidence_label` (Low/Med/High) — **not numeric** in Sprint 1
+
+**Acceptance criteria**
+
+* Types exist in shared folder
+* UI renders outputs from JSON only (no custom hardcoding per type)
+
+---
+
+# 7) AI Integration: OFF (Stubbed)
+
+Sprint 1 does **not** call any LLM.
+
+Instead:
+
+* a deterministic stub generator returns plausible outputs based on pill + task type
+* this lets you perfect UI/UX and logging first
+
+**Acceptance criteria**
+
+* `/api/operator/generate` returns mocked `OperatorOutput[]` deterministically
+* No external calls
+
+---
+
+# Sprint 1 Checklist (What must be merged)
+
+* [ ] `/operator` page + UI components
+* [ ] Entry-point buttons from relevant pages (route + prefill)
+* [ ] RBAC enforcement for operator routes
+* [ ] Disclaimers + consent checkbox
+* [ ] `ai_operator_runs` table + migration
+* [ ] Generate endpoint (stub) + writes audit log
+* [ ] History view (basic)
+
+---
+
+# Definition of Done (Sprint 1)
+
+A gym owner can:
+
+1. Open AI Operator
+2. Choose “Retention → Member outreach drafts”
+3. See what data will be used
+4. Agree to disclaimer
+5. Click Generate
+6. Receive clean, structured output cards
+7. Save run in history
+
+Even though the “AI” is stubbed, the product surface is real.
+
+---
+
+If you want, paste your current stack assumptions (Next.js routing style + API pattern you’re using in Replit) and I’ll output a **single Replit-ready implementation prompt** that creates Sprint 1 end-to-end (DB migration + API routes + UI pages + components + types) without you hand-stitching anything.

@@ -521,3 +521,57 @@ export const ingestJobs = pgTable("ingest_jobs", {
 export const insertIngestJobSchema = createInsertSchema(ingestJobs).omit({ id: true, startedAt: true, finishedAt: true });
 export type InsertIngestJob = z.infer<typeof insertIngestJobSchema>;
 export type IngestJob = typeof ingestJobs.$inferSelect;
+
+export const aiOperatorRuns = pgTable("ai_operator_runs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gymId: varchar("gym_id").notNull().references(() => gyms.id),
+  createdByUserId: varchar("created_by_user_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  pill: text("pill").notNull(),
+  taskType: text("task_type").notNull(),
+  inputSummaryJson: jsonb("input_summary_json"),
+  outputJson: jsonb("output_json"),
+  status: text("status").notNull().default("draft"),
+  error: text("error"),
+}, (table) => [
+  index("idx_ai_operator_runs_gym").on(table.gymId),
+  index("idx_ai_operator_runs_user").on(table.createdByUserId),
+  index("idx_ai_operator_runs_created").on(table.createdAt),
+]);
+
+export const aiOperatorRunsRelations = relations(aiOperatorRuns, ({ one }) => ({
+  gym: one(gyms, { fields: [aiOperatorRuns.gymId], references: [gyms.id] }),
+}));
+
+export const insertAiOperatorRunSchema = createInsertSchema(aiOperatorRuns).omit({ id: true, createdAt: true });
+export type InsertAiOperatorRun = z.infer<typeof insertAiOperatorRunSchema>;
+export type AiOperatorRun = typeof aiOperatorRuns.$inferSelect;
+
+export const operatorOutputSchema = z.object({
+  headline: z.string(),
+  why_it_matters: z.string(),
+  actions: z.array(z.string()).min(4).max(7),
+  drafts: z.array(z.object({
+    channel: z.enum(["sms", "email", "in_person"]),
+    message: z.string(),
+  })).optional(),
+  metrics_used: z.array(z.string()),
+  confidence_label: z.enum(["Low", "Med", "High"]),
+});
+
+export type OperatorOutput = z.infer<typeof operatorOutputSchema>;
+
+export const OPERATOR_PILLS = ["retention", "sales", "coaching", "community", "owner"] as const;
+export type OperatorPill = typeof OPERATOR_PILLS[number];
+
+export const OPERATOR_TASK_TYPES = [
+  "7-day plan",
+  "Member outreach drafts",
+  "Sales follow-up sequence",
+  "Staff coaching note",
+  "Event plan",
+] as const;
+export type OperatorTaskType = typeof OPERATOR_TASK_TYPES[number];
+
+export const OPERATOR_ROLES = ["gym_owner", "analyst", "coach_view"] as const;
+export type OperatorRole = typeof OPERATOR_ROLES[number];

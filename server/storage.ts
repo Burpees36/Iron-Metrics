@@ -5,6 +5,7 @@ import {
   knowledgeSources, knowledgeDocuments, knowledgeChunks,
   recommendationChunkAudit, ingestJobs,
   leads, consults, salesMemberships, payments,
+  aiOperatorRuns,
   type Gym, type InsertGym,
   type Member, type InsertMember,
   type GymMonthlyMetrics, type InsertGymMonthlyMetrics,
@@ -23,6 +24,7 @@ import {
   type Consult, type InsertConsult,
   type SalesMembership, type InsertSalesMembership,
   type Payment, type InsertPayment,
+  type AiOperatorRun, type InsertAiOperatorRun,
 } from "@shared/schema";
 import { db } from "./db";
 import { pool } from "./db";
@@ -120,6 +122,11 @@ export interface IStorage {
 
   createPayment(payment: InsertPayment): Promise<Payment>;
   getPaymentsByGym(gymId: string, start: Date, end: Date): Promise<Payment[]>;
+
+  createAiOperatorRun(run: InsertAiOperatorRun): Promise<AiOperatorRun>;
+  getAiOperatorRun(id: string): Promise<AiOperatorRun | undefined>;
+  getAiOperatorRunsByGym(gymId: string): Promise<AiOperatorRun[]>;
+  updateAiOperatorRun(id: string, updates: Partial<AiOperatorRun>): Promise<AiOperatorRun>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -744,6 +751,27 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(payments).where(
       and(eq(payments.gymId, gymId), gte(payments.paidAt, start), lte(payments.paidAt, end))
     ).orderBy(desc(payments.paidAt));
+  }
+
+  async createAiOperatorRun(run: InsertAiOperatorRun): Promise<AiOperatorRun> {
+    const [created] = await db.insert(aiOperatorRuns).values(run).returning();
+    return created;
+  }
+
+  async getAiOperatorRun(id: string): Promise<AiOperatorRun | undefined> {
+    const [run] = await db.select().from(aiOperatorRuns).where(eq(aiOperatorRuns.id, id));
+    return run;
+  }
+
+  async getAiOperatorRunsByGym(gymId: string): Promise<AiOperatorRun[]> {
+    return db.select().from(aiOperatorRuns)
+      .where(eq(aiOperatorRuns.gymId, gymId))
+      .orderBy(desc(aiOperatorRuns.createdAt));
+  }
+
+  async updateAiOperatorRun(id: string, updates: Partial<AiOperatorRun>): Promise<AiOperatorRun> {
+    const [updated] = await db.update(aiOperatorRuns).set(updates).where(eq(aiOperatorRuns.id, id)).returning();
+    return updated;
   }
 }
 

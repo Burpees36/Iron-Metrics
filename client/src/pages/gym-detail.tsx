@@ -60,6 +60,7 @@ import {
   Printer,
   CheckCircle2,
   Brain,
+  Zap,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import {
@@ -644,6 +645,24 @@ function ReportView({ gymId }: { gymId: string }) {
           testId="pillar-engagement"
         />
       </div>
+
+      {/* ── AI Operator Entry Point ── */}
+      <Link href={`/gyms/${gymId}/operator?pill=owner&task=7-day+plan`}>
+        <Card className="border-border/40 hover-elevate transition-all duration-300 cursor-pointer animate-fade-in-up animation-delay-150" data-testid="card-operator-entry">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center">
+                <Zap className="w-4 h-4 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">AI Operator</p>
+                <p className="text-xs text-muted-foreground">Generate action plans, outreach drafts, and coaching notes from your metrics</p>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+          </CardContent>
+        </Card>
+      </Link>
 
       {/* ── Section 3: This Week's Focus ── */}
       <Card className="border-primary/20 bg-primary/[0.02] dark:bg-primary/[0.04] animate-fade-in-up animation-delay-200" data-testid="section-focus-panel">

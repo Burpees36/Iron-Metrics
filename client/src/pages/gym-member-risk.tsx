@@ -1,6 +1,8 @@
-import { useRoute } from "wouter";
+import { useRoute, Link } from "wouter";
 import { useGymData, GymPageShell, GymNotFound, GymDetailSkeleton } from "./gym-detail";
 import { usePredictiveData, MemberRiskView, PredictiveSkeleton } from "./predictive-intelligence";
+import { Button } from "@/components/ui/button";
+import { Zap } from "lucide-react";
 
 export default function GymMemberRisk() {
   const [, params] = useRoute("/gyms/:id/member-risk");
@@ -15,6 +17,13 @@ export default function GymMemberRisk() {
   return (
     <GymPageShell
       gym={gym}
+      actions={
+        <Link href={`/gyms/${gym.id}/operator?pill=retention&task=Member+outreach+drafts`}>
+          <Button variant="outline" size="sm" className="gap-1.5" data-testid="button-operator-outreach">
+            <Zap className="w-3.5 h-3.5" /> Generate Outreach Drafts
+          </Button>
+        </Link>
+      }
     >
       {predLoading ? (
         <PredictiveSkeleton />

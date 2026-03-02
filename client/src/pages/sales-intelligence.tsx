@@ -1,4 +1,4 @@
-import { useRoute } from "wouter";
+import { useRoute, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { useGymData, GymPageShell, GymNotFound, GymDetailSkeleton, PageHeader } from "./gym-detail";
@@ -925,15 +925,22 @@ export default function SalesIntelligence() {
     <GymPageShell
       gym={gym}
       actions={
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => sourceData && exportSourceCSV(sourceData)}
-          disabled={!sourceData || sourceData.length === 0}
-          data-testid="button-export-csv"
-        >
-          <Download className="w-4 h-4 mr-1" /> Export CSV
-        </Button>
+        <div className="flex items-center gap-2">
+          <Link href={`/gyms/${gym.id}/operator?pill=sales&task=Sales+follow-up+sequence`}>
+            <Button variant="outline" size="sm" className="gap-1.5" data-testid="button-operator-followup">
+              <Zap className="w-3.5 h-3.5" /> Generate Follow-Up Sequence
+            </Button>
+          </Link>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => sourceData && exportSourceCSV(sourceData)}
+            disabled={!sourceData || sourceData.length === 0}
+            data-testid="button-export-csv"
+          >
+            <Download className="w-4 h-4 mr-1" /> Export CSV
+          </Button>
+        </div>
       }
     >
       <div className="space-y-6">
