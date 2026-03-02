@@ -537,6 +537,12 @@ export const aiOperatorRuns = pgTable("ai_operator_runs", {
   contextSnapshotJson: jsonb("context_snapshot_json"),
   retryCount: integer("retry_count").notNull().default(0),
   validationPassed: boolean("validation_passed"),
+  promptVersion: text("prompt_version"),
+  doctrineVersion: text("doctrine_version"),
+  reasoningSummary: text("reasoning_summary"),
+  riskFilterTriggered: boolean("risk_filter_triggered"),
+  confidenceScore: integer("confidence_score"),
+  dataCompletenessScore: integer("data_completeness_score"),
 }, (table) => [
   index("idx_ai_operator_runs_gym").on(table.gymId),
   index("idx_ai_operator_runs_user").on(table.createdByUserId),
@@ -561,6 +567,7 @@ export const operatorOutputSchema = z.object({
   })).optional(),
   metrics_used: z.array(z.string()),
   confidence_label: z.enum(["Low", "Med", "High"]),
+  reasoning_summary: z.string().optional(),
 });
 
 export type OperatorOutput = z.infer<typeof operatorOutputSchema>;

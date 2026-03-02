@@ -19,6 +19,8 @@ import { ensureDemoData } from "./demo-seed";
 import { previewLeadCsv, parseAllLeadRows, computeFileHash as computeLeadFileHash, type LeadColumnMapping } from "./lead-csv-parser";
 import { buildInputSummary } from "./ai-operator-stub";
 import { generateOperatorOutput } from "./operator-generator";
+import { buildTieredContext } from "./operator-context";
+import { checkRateLimit, recordGeneration } from "./operator-rate-limiter";
 import { OPERATOR_PILLS, OPERATOR_TASK_TYPES, type OperatorPill, type OperatorTaskType, type OperatorRole } from "@shared/schema";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -2094,30 +2096,26 @@ export async function registerRoutes(
       if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
 
       const role = getOperatorRole(req, gym);
+      const pill = (req.query.pill as string) || "owner";
+      const validPill = OPERATOR_PILLS.includes(pill as any) ? pill as OperatorPill : "owner" as OperatorPill;
 
-      const allMetrics = await storage.getAllMonthlyMetrics(gym.id);
-      const latest = allMetrics.length > 0 ? allMetrics[allMetrics.length - 1] : null;
-
-      const now = new Date();
-      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      const allLeads = await storage.getLeadsByGym(gym.id, thirtyDaysAgo, now);
-
-      const wonLeads = allLeads.filter(l => l.status === "won");
-      const conversionRate = allLeads.length > 0 ? Math.round((wonLeads.length / allLeads.length) * 100) : 0;
+      const ctx = await buildTieredContext(gym.id, validPill);
 
       res.json({
         role,
         canGenerate: canGenerate(role),
         canViewHistory: canViewHistory(role),
         metrics: {
-          activeMembers: latest ? latest.activeMembers : null,
-          churnRate: latest ? Number(latest.churnRate) : null,
-          mrr: latest ? Number(latest.mrr) : null,
-          rsi: latest ? latest.rsi : null,
-          avgLtv: latest ? Number(latest.ltv) : null,
-          newLeads: allLeads.length,
-          conversionRate,
+          activeMembers: ctx.gymProfile.activeMembers,
+          churnRate: ctx.financialSignals.churnRate ?? null,
+          mrr: ctx.financialSignals.mrr ?? null,
+          rsi: ctx.retentionSignals.rsi ?? null,
+          avgLtv: ctx.financialSignals.ltv ?? null,
+          newLeads: ctx.salesSignals.newLeads ?? 0,
+          conversionRate: ctx.salesSignals.conversionRate !== undefined ? Math.round(ctx.salesSignals.conversionRate * 100) : 0,
         },
+        gymArchetype: ctx.gymArchetype,
+        dataCompletenessScore: ctx.dataCompletenessScore,
       });
     } catch (error) {
       console.error("Error fetching operator context:", error);
@@ -2136,6 +2134,17 @@ export async function registerRoutes(
         return res.status(403).json({ message: "Your role does not allow generation" });
       }
 
+      const userId = req.user.claims.sub;
+
+      const rateLimitResult = checkRateLimit(userId, gym.id);
+      if (!rateLimitResult.allowed) {
+        const retryAfterSec = rateLimitResult.retryAfterMs ? Math.ceil(rateLimitResult.retryAfterMs / 1000) : 60;
+        return res.status(429).json({
+          message: rateLimitResult.reason || "Rate limit exceeded",
+          retryAfterSeconds: retryAfterSec,
+        });
+      }
+
       const { pill, taskType } = req.body;
       if (!pill || !OPERATOR_PILLS.includes(pill)) {
         return res.status(400).json({ message: "Invalid pill. Must be one of: " + OPERATOR_PILLS.join(", ") });
@@ -2146,22 +2155,26 @@ export async function registerRoutes(
 
       const result = await generateOperatorOutput(gym.id, pill as OperatorPill, taskType as OperatorTaskType);
 
-      const userId = req.user.claims.sub;
+      recordGeneration(userId, gym.id);
+
+      console.log(`[operator] Generation complete: gym=${gym.id}, user=${userId}, pill=${pill}, task=${taskType}, model=${result.model}, confidence=${result.confidenceScore}, stub=${result.usedStub}`);
+
+      const legacyMetrics = {
+        activeMembers: result.context.gymProfile.activeMembers,
+        churnRate: result.context.financialSignals.churnRate,
+        mrr: result.context.financialSignals.mrr,
+        rsi: result.context.retentionSignals.rsi,
+        avgLtv: result.context.financialSignals.ltv,
+        newLeads: result.context.salesSignals.newLeads,
+        conversionRate: result.context.salesSignals.conversionRate !== undefined ? Math.round(result.context.salesSignals.conversionRate * 100) : undefined,
+      };
 
       const run = await storage.createAiOperatorRun({
         gymId: gym.id,
         createdByUserId: userId,
         pill,
         taskType,
-        inputSummaryJson: buildInputSummary(pill as OperatorPill, taskType as OperatorTaskType, {
-          activeMembers: result.context.activeMembers,
-          churnRate: result.context.churnRate,
-          mrr: result.context.mrr,
-          rsi: result.context.rsi,
-          avgLtv: result.context.ltv,
-          newLeads: result.context.newLeads,
-          conversionRate: result.context.conversionRate,
-        }),
+        inputSummaryJson: buildInputSummary(pill as OperatorPill, taskType as OperatorTaskType, legacyMetrics),
         outputJson: result.outputs,
         status: "draft",
         error: null,
@@ -2169,9 +2182,21 @@ export async function registerRoutes(
         contextSnapshotJson: result.context,
         retryCount: result.retryCount,
         validationPassed: result.validationPassed,
+        promptVersion: result.promptVersion,
+        doctrineVersion: result.doctrineVersion,
+        reasoningSummary: result.reasoningSummary,
+        riskFilterTriggered: result.riskFilterTriggered,
+        confidenceScore: result.confidenceScore,
+        dataCompletenessScore: result.dataCompletenessScore,
       });
 
-      res.json({ run, outputs: result.outputs });
+      res.json({
+        run,
+        outputs: result.outputs,
+        reasoningSummary: result.reasoningSummary,
+        confidenceScore: result.confidenceScore,
+        dataCompletenessScore: result.dataCompletenessScore,
+      });
     } catch (error) {
       console.error("Error generating operator output:", error);
       res.status(500).json({ message: "Failed to generate output" });

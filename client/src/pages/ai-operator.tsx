@@ -77,9 +77,31 @@ interface OperatorContext {
     newLeads: number;
     conversionRate: number;
   };
+  gymArchetype?: "growth" | "stable" | "declining" | "startup";
+  dataCompletenessScore?: number;
 }
 
-function ContextPreview({ metrics, pill }: { metrics: OperatorContext["metrics"]; pill: OperatorPill }) {
+interface GenerateResponse {
+  run: any;
+  outputs: OperatorOutput[];
+  reasoningSummary?: string;
+  confidenceScore?: number;
+  dataCompletenessScore?: number;
+}
+
+const ARCHETYPE_LABELS: Record<string, { label: string; color: string }> = {
+  growth: { label: "Growth", color: "text-emerald-400" },
+  stable: { label: "Stable", color: "text-blue-400" },
+  declining: { label: "Declining", color: "text-amber-400" },
+  startup: { label: "Startup", color: "text-violet-400" },
+};
+
+function ContextPreview({ metrics, pill, gymArchetype, dataCompletenessScore }: {
+  metrics: OperatorContext["metrics"];
+  pill: OperatorPill;
+  gymArchetype?: string;
+  dataCompletenessScore?: number;
+}) {
   const items: { label: string; value: string }[] = [];
 
   if (pill === "retention" || pill === "owner") {
@@ -102,16 +124,37 @@ function ContextPreview({ metrics, pill }: { metrics: OperatorContext["metrics"]
     items.push({ label: "Data", value: "Import members and leads to enable context-aware generation" });
   }
 
+  const archetypeConfig = gymArchetype ? ARCHETYPE_LABELS[gymArchetype] : null;
+
   return (
     <Card className="border-border/50" data-testid="context-preview">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
           <AlertTriangle className="w-3.5 h-3.5" />
           Data Context Preview
+          {archetypeConfig && (
+            <Badge variant="outline" className={`text-[10px] ml-auto ${archetypeConfig.color}`} data-testid="badge-gym-archetype">
+              {archetypeConfig.label} Profile
+            </Badge>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent>
         <p className="text-xs text-muted-foreground mb-3">High-level metrics that will inform the generated output. No member PII is included.</p>
+        {dataCompletenessScore !== undefined && (
+          <div className="mb-3" data-testid="data-completeness">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Data Completeness</span>
+              <span className="text-xs font-medium">{dataCompletenessScore}/100</span>
+            </div>
+            <div className="w-full h-1.5 bg-muted/30 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${dataCompletenessScore >= 70 ? "bg-emerald-500" : dataCompletenessScore >= 40 ? "bg-amber-500" : "bg-red-500"}`}
+                style={{ width: `${dataCompletenessScore}%` }}
+              />
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {items.map((item) => (
             <div key={item.label} className="bg-muted/30 rounded-md px-3 py-2" data-testid={`context-metric-${item.label.toLowerCase().replace(/\s+/g, "-")}`}>
@@ -224,6 +267,12 @@ function OutputCard({ output, index, onCopy, onMarkReviewed }: {
           </Collapsible>
         )}
 
+        {output.reasoning_summary && (
+          <p className="text-xs italic text-muted-foreground border-l-2 border-border/40 pl-3" data-testid={`output-reasoning-${index}`}>
+            {output.reasoning_summary}
+          </p>
+        )}
+
         <div className="flex items-center gap-3 pt-2 border-t border-border/30">
           <Button variant="ghost" size="sm" onClick={() => onCopy(fullText)} data-testid={`copy-output-${index}`}>
             <Copy className="w-3.5 h-3.5 mr-1" /> Copy All
@@ -323,6 +372,8 @@ export default function AiOperator() {
   const [showHistory, setShowHistory] = useState(false);
   const [outputs, setOutputs] = useState<OperatorOutput[]>([]);
   const [lastRunId, setLastRunId] = useState<string | null>(null);
+  const [lastConfidenceScore, setLastConfidenceScore] = useState<number | null>(null);
+  const [rateLimitMessage, setRateLimitMessage] = useState<string | null>(null);
 
   const { data: gym, isLoading: gymLoading } = useGymData(gymId);
 
@@ -338,20 +389,31 @@ export default function AiOperator() {
 
   const generateMutation = useMutation({
     mutationFn: async () => {
+      setRateLimitMessage(null);
       const res = await apiRequest("POST", `/api/gyms/${gymId}/operator/generate`, {
         pill: selectedPill,
         taskType: selectedTask,
       });
       return res.json();
     },
-    onSuccess: (data: { run: AiOperatorRun; outputs: OperatorOutput[] }) => {
+    onSuccess: (data: GenerateResponse) => {
       setOutputs(data.outputs);
       setLastRunId(data.run.id);
+      setLastConfidenceScore(data.confidenceScore ?? null);
       setConsentChecked(false);
       queryClient.invalidateQueries({ queryKey: ["/api/gyms", gymId, "operator", "history"] });
     },
-    onError: () => {
-      toast({ title: "Generation failed", description: "Something went wrong. Try again.", variant: "destructive" });
+    onError: (err: Error) => {
+      if (err.message.startsWith("429:")) {
+        try {
+          const body = JSON.parse(err.message.slice(5));
+          setRateLimitMessage(`Rate limit reached. Try again in ${body.retryAfterSeconds || 60} seconds.`);
+        } catch {
+          setRateLimitMessage("Rate limit reached. Please wait before generating again.");
+        }
+      } else {
+        toast({ title: "Generation failed", description: "Something went wrong. Try again.", variant: "destructive" });
+      }
     },
   });
 
@@ -444,7 +506,12 @@ export default function AiOperator() {
               {contextLoading ? (
                 <Skeleton className="h-32 w-full rounded-lg" />
               ) : context ? (
-                <ContextPreview metrics={context.metrics} pill={selectedPill} />
+                <ContextPreview
+                  metrics={context.metrics}
+                  pill={selectedPill}
+                  gymArchetype={context.gymArchetype}
+                  dataCompletenessScore={context.dataCompletenessScore}
+                />
               ) : null}
             </CollapsibleContent>
           </Collapsible>
@@ -482,13 +549,30 @@ export default function AiOperator() {
             {!canGen && !isDemo && (
               <p className="text-xs text-muted-foreground">Your current role does not allow generation.</p>
             )}
+
+            {rateLimitMessage && (
+              <p className="text-xs text-amber-400" data-testid="text-rate-limit">{rateLimitMessage}</p>
+            )}
           </div>
         </div>
 
         {outputs.length > 0 && (
           <div className="space-y-4" data-testid="output-section">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Generated Output</h2>
+              <div className="flex items-center gap-3">
+                <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Generated Output</h2>
+                {lastConfidenceScore !== null && (
+                  <div className="flex items-center gap-2" data-testid="confidence-indicator">
+                    <div className="w-16 h-1.5 bg-muted/30 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${lastConfidenceScore >= 70 ? "bg-emerald-500" : lastConfidenceScore >= 40 ? "bg-amber-500" : "bg-red-500"}`}
+                        style={{ width: `${lastConfidenceScore}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">{lastConfidenceScore}/100</span>
+                  </div>
+                )}
+              </div>
               <Button
                 variant="outline"
                 size="sm"
