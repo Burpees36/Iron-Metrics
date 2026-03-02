@@ -533,6 +533,10 @@ export const aiOperatorRuns = pgTable("ai_operator_runs", {
   outputJson: jsonb("output_json"),
   status: text("status").notNull().default("draft"),
   error: text("error"),
+  llmModel: text("llm_model"),
+  contextSnapshotJson: jsonb("context_snapshot_json"),
+  retryCount: integer("retry_count").notNull().default(0),
+  validationPassed: boolean("validation_passed"),
 }, (table) => [
   index("idx_ai_operator_runs_gym").on(table.gymId),
   index("idx_ai_operator_runs_user").on(table.createdByUserId),

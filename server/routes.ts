@@ -17,9 +17,9 @@ import { computeSalesSummary, computeTrends, computeBySource, computeByCoach, co
 import { getCachedSummary, setCachedSummary, invalidateGymCache, getRecalcStatus, initSalesCache } from "./sales-cache";
 import { ensureDemoData } from "./demo-seed";
 import { previewLeadCsv, parseAllLeadRows, computeFileHash as computeLeadFileHash, type LeadColumnMapping } from "./lead-csv-parser";
-import { generateStubOutput, buildInputSummary } from "./ai-operator-stub";
-import { OPERATOR_PILLS, OPERATOR_TASK_TYPES, operatorOutputSchema, type OperatorPill, type OperatorTaskType, type OperatorRole } from "@shared/schema";
-import { z } from "zod";
+import { buildInputSummary } from "./ai-operator-stub";
+import { generateOperatorOutput } from "./operator-generator";
+import { OPERATOR_PILLS, OPERATOR_TASK_TYPES, type OperatorPill, type OperatorTaskType, type OperatorRole } from "@shared/schema";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -2144,32 +2144,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Invalid task type. Must be one of: " + OPERATOR_TASK_TYPES.join(", ") });
       }
 
-      const allMetrics = await storage.getAllMonthlyMetrics(gym.id);
-      const latest = allMetrics.length > 0 ? allMetrics[allMetrics.length - 1] : null;
-      const now = new Date();
-      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      const allLeads = await storage.getLeadsByGym(gym.id, thirtyDaysAgo, now);
-      const wonLeads = allLeads.filter(l => l.status === "won");
-
-      const metricsSummary = {
-        activeMembers: latest?.activeMembers ?? undefined,
-        churnRate: latest ? Number(latest.churnRate) : undefined,
-        mrr: latest ? Number(latest.mrr) : undefined,
-        rsi: latest?.rsi ?? undefined,
-        avgLtv: latest ? Number(latest.ltv) : undefined,
-        newLeads: allLeads.length,
-        conversionRate: allLeads.length > 0 ? Math.round((wonLeads.length / allLeads.length) * 100) : 0,
-      };
-
-      const rawOutputs = generateStubOutput(pill as OperatorPill, taskType as OperatorTaskType, metricsSummary);
-      const outputsSchema = z.array(operatorOutputSchema);
-      const validated = outputsSchema.safeParse(rawOutputs);
-      if (!validated.success) {
-        console.error("[ai-operator] Output validation failed:", validated.error.message);
-        return res.status(500).json({ message: "Generated output failed validation" });
-      }
-      const outputs = validated.data;
-      const inputSummary = buildInputSummary(pill as OperatorPill, taskType as OperatorTaskType, metricsSummary);
+      const result = await generateOperatorOutput(gym.id, pill as OperatorPill, taskType as OperatorTaskType);
 
       const userId = req.user.claims.sub;
 
@@ -2178,13 +2153,25 @@ export async function registerRoutes(
         createdByUserId: userId,
         pill,
         taskType,
-        inputSummaryJson: inputSummary,
-        outputJson: outputs,
+        inputSummaryJson: buildInputSummary(pill as OperatorPill, taskType as OperatorTaskType, {
+          activeMembers: result.context.activeMembers,
+          churnRate: result.context.churnRate,
+          mrr: result.context.mrr,
+          rsi: result.context.rsi,
+          avgLtv: result.context.ltv,
+          newLeads: result.context.newLeads,
+          conversionRate: result.context.conversionRate,
+        }),
+        outputJson: result.outputs,
         status: "draft",
         error: null,
+        llmModel: result.model,
+        contextSnapshotJson: result.context,
+        retryCount: result.retryCount,
+        validationPassed: result.validationPassed,
       });
 
-      res.json({ run, outputs });
+      res.json({ run, outputs: result.outputs });
     } catch (error) {
       console.error("Error generating operator output:", error);
       res.status(500).json({ message: "Failed to generate output" });

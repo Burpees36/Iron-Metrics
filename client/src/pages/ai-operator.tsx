@@ -36,6 +36,8 @@ import {
   User,
   Loader2,
   ArrowRight,
+  Edit3,
+  RefreshCw,
 } from "lucide-react";
 import type { OperatorOutput, OperatorPill, OperatorTaskType, AiOperatorRun } from "@shared/schema";
 import { OPERATOR_PILLS, OPERATOR_TASK_TYPES } from "@shared/schema";
@@ -129,17 +131,22 @@ function OutputCard({ output, index, onCopy, onMarkReviewed }: {
   onCopy: (text: string) => void;
   onMarkReviewed?: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [draftsExpanded, setDraftsExpanded] = useState(false);
+  const [metricsExpanded, setMetricsExpanded] = useState(false);
+  const [editingDraft, setEditingDraft] = useState<number | null>(null);
+  const [editedDrafts, setEditedDrafts] = useState<Record<number, string>>({});
+
+  const getDraftMessage = (di: number, original: string) => editedDrafts[di] ?? original;
 
   const fullText = useMemo(() => {
     let text = `${output.headline}\n\n${output.why_it_matters}\n\nActions:\n`;
     output.actions.forEach((a, i) => { text += `${i + 1}. ${a}\n`; });
     if (output.drafts?.length) {
       text += "\nDrafts:\n";
-      output.drafts.forEach((d) => { text += `\n[${CHANNEL_LABELS[d.channel] || d.channel}]\n${d.message}\n`; });
+      output.drafts.forEach((d, di) => { text += `\n[${CHANNEL_LABELS[d.channel] || d.channel}]\n${getDraftMessage(di, d.message)}\n`; });
     }
     return text;
-  }, [output]);
+  }, [output, editedDrafts]);
 
   return (
     <Card className="border-border/50" data-testid={`output-card-${index}`}>
@@ -168,29 +175,49 @@ function OutputCard({ output, index, onCopy, onMarkReviewed }: {
         </div>
 
         {output.drafts && output.drafts.length > 0 && (
-          <Collapsible open={expanded} onOpenChange={setExpanded}>
+          <Collapsible open={draftsExpanded} onOpenChange={setDraftsExpanded}>
             <CollapsibleTrigger asChild>
               <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground" data-testid={`toggle-drafts-${index}`}>
-                {expanded ? <ChevronDown className="w-4 h-4 mr-1" /> : <ChevronRight className="w-4 h-4 mr-1" />}
+                {draftsExpanded ? <ChevronDown className="w-4 h-4 mr-1" /> : <ChevronRight className="w-4 h-4 mr-1" />}
                 {output.drafts.length} draft{output.drafts.length > 1 ? "s" : ""} available
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-3 mt-2">
               {output.drafts.map((draft, di) => (
-                <div key={di} className="bg-muted/30 rounded-md p-3 space-y-1" data-testid={`draft-${index}-${di}`}>
+                <div key={di} className="bg-muted/30 rounded-md p-3 space-y-2" data-testid={`draft-${index}-${di}`}>
                   <div className="flex items-center justify-between">
                     <Badge variant="secondary" className="text-[10px]">{CHANNEL_LABELS[draft.channel] || draft.channel}</Badge>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={() => onCopy(draft.message)}
-                      data-testid={`copy-draft-${index}-${di}`}
-                    >
-                      <Copy className="w-3 h-3 mr-1" /> Copy
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => setEditingDraft(editingDraft === di ? null : di)}
+                        data-testid={`edit-draft-${index}-${di}`}
+                      >
+                        <Edit3 className="w-3 h-3 mr-1" /> {editingDraft === di ? "Done" : "Edit"}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => onCopy(getDraftMessage(di, draft.message))}
+                        data-testid={`copy-draft-${index}-${di}`}
+                      >
+                        <Copy className="w-3 h-3 mr-1" /> Copy
+                      </Button>
+                    </div>
                   </div>
-                  <p className="text-sm whitespace-pre-wrap">{draft.message}</p>
+                  {editingDraft === di ? (
+                    <textarea
+                      className="w-full min-h-[100px] text-sm bg-background border border-border rounded-md p-2 resize-y focus:outline-none focus:ring-1 focus:ring-primary"
+                      value={getDraftMessage(di, draft.message)}
+                      onChange={(e) => setEditedDrafts(prev => ({ ...prev, [di]: e.target.value }))}
+                      data-testid={`draft-editor-${index}-${di}`}
+                    />
+                  ) : (
+                    <p className="text-sm whitespace-pre-wrap">{getDraftMessage(di, draft.message)}</p>
+                  )}
                 </div>
               ))}
             </CollapsibleContent>
@@ -208,11 +235,19 @@ function OutputCard({ output, index, onCopy, onMarkReviewed }: {
           )}
         </div>
 
-        <div className="flex flex-wrap gap-1.5 pt-1">
-          {output.metrics_used.map((m) => (
-            <span key={m} className="text-[10px] bg-muted/40 text-muted-foreground px-2 py-0.5 rounded-full">{m}</span>
-          ))}
-        </div>
+        <Collapsible open={metricsExpanded} onOpenChange={setMetricsExpanded}>
+          <CollapsibleTrigger asChild>
+            <button className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors" data-testid={`toggle-metrics-${index}`}>
+              {metricsExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+              Metrics used ({output.metrics_used.length})
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-1.5">
+            <div className="flex flex-wrap gap-1.5">{output.metrics_used.map((m) => (
+              <span key={m} className="text-[10px] bg-muted/40 text-muted-foreground px-2 py-0.5 rounded-full">{m}</span>
+            ))}</div>
+          </CollapsibleContent>
+        </Collapsible>
       </CardContent>
     </Card>
   );
@@ -452,7 +487,23 @@ export default function AiOperator() {
 
         {outputs.length > 0 && (
           <div className="space-y-4" data-testid="output-section">
-            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Generated Output</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Generated Output</h2>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { setConsentChecked(true); generateMutation.mutate(); }}
+                disabled={generateMutation.isPending || !canGen || isDemo}
+                className="gap-1.5"
+                data-testid="button-regenerate"
+              >
+                {generateMutation.isPending ? (
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Regenerating...</>
+                ) : (
+                  <><RefreshCw className="w-3.5 h-3.5" /> Regenerate</>
+                )}
+              </Button>
+            </div>
             {outputs.map((output, i) => (
               <OutputCard
                 key={i}

@@ -1,0 +1,324 @@
+Perfect.
+
+Sprint 1 gave you the **surface + guardrails + logging**.
+
+Sprint 2 is where the AI Operator actually becomes **excellent in its deliveries**.
+
+This sprint is about one thing:
+
+> Output quality, structure, and consistency.
+
+Not scale.
+Not advanced modeling.
+Not automation.
+
+Just making sure when it speaks, it speaks like Iron Metrics.
+
+---
+
+# Sprint 2 — Structured Output Engine (Quality & Delivery Layer)
+
+## 🎯 Sprint Goal
+
+Replace stubbed outputs with a **controlled, schema-driven generation engine** that produces:
+
+* Calm
+* Specific
+* Context-aware
+* Actionable
+* Non-rambling
+* Legally safe
+* UX-renderable
+
+By the end of this sprint:
+
+The AI Operator will generate **real outputs** — but only within strict structured templates.
+
+---
+
+# What Changes From Sprint 1
+
+Sprint 1:
+
+* Stubbed outputs
+* UI + logging + permissions
+* Legal guardrails
+
+Sprint 2:
+
+* Real LLM integration
+* Strict JSON schema enforcement
+* Output validation layer
+* Tone control
+* Length control
+* Context injection engine v1
+
+---
+
+# 1️⃣ Replace Stub Generator with Real LLM Call
+
+## Backend Deliverables
+
+Create:
+
+`/services/operator/generator.ts`
+
+This service must:
+
+* Accept:
+
+  * gym context (aggregated metrics only)
+  * selected pillar
+  * task type
+* Build a structured system prompt
+* Call LLM provider
+* Validate response against schema
+* Retry once if schema invalid
+* Log structured output to DB
+
+### CRITICAL RULE
+
+The model must be forced to return JSON only.
+
+No prose.
+No markdown.
+No explanation outside schema.
+
+---
+
+# 2️⃣ Output Quality Rules (Non-negotiable)
+
+These are enforced both in prompt and server validation:
+
+### Length Rules
+
+* `why_it_matters` ≤ 240 characters
+* `actions` must be 4–7 items
+* No action longer than 140 characters
+* Draft messages ≤ 600 characters
+
+### Tone Rules
+
+* Calm
+* Direct
+* No hype
+* No emojis
+* No motivational fluff
+* No “game changing” language
+* No guarantees
+
+### Prohibited Language
+
+* “This will guarantee…”
+* “Legally…”
+* “Tax strategy…”
+* “Medical…”
+* “You should consult a lawyer…” (unless user explicitly requests)
+
+---
+
+# 3️⃣ Context Injection Engine (V1)
+
+This is where it becomes intelligent.
+
+Build a function:
+
+`buildOperatorContext(gymId, pillar)`
+
+It pulls only:
+
+For Retention:
+
+* RSI current
+* RSI 90-day trend
+* Risk segment counts
+* First 90-day churn %
+* ARM
+* LTV
+
+For Sales:
+
+* Leads last 30 days
+* Show rate
+* Close rate
+* Speed-to-lead metric
+
+For Owner Protection:
+
+* Owner benefit
+* Revenue trend
+* Churn trend
+* ARM
+
+Return a compact structured summary like:
+
+```
+{
+  "rsi": 68,
+  "rsiTrend": -4,
+  "atRiskMembers": 17,
+  "first90DayChurn": 9.2,
+  "arm": 189,
+  "ltv": 1820
+}
+```
+
+This is what feeds the model.
+
+No raw member data yet.
+
+No notes.
+No PII.
+
+---
+
+# 4️⃣ Doctrine Retrieval (Silent Layer)
+
+You already designed doctrine chunking per your architecture description .
+
+Sprint 2 implements basic retrieval:
+
+* Store doctrine snippets tagged by:
+
+  * retention
+  * onboarding
+  * pricing
+  * coaching
+  * community
+* Retrieve top 3 relevant chunks per pillar
+* Inject into system prompt
+* Do NOT expose them in UI
+
+This improves delivery without surfacing sources.
+
+---
+
+# 5️⃣ Schema Enforcement Layer
+
+Use runtime validation (Zod or equivalent).
+
+If invalid:
+
+* Retry with “Return valid JSON only”
+* If still invalid:
+
+  * Log error
+  * Return controlled fallback output
+
+This ensures:
+No broken UI.
+No partial text blobs.
+
+---
+
+# 6️⃣ Output Polishing Layer (Server-Side Post-Processing)
+
+Before returning to frontend:
+
+* Trim whitespace
+* Remove duplicate actions
+* Enforce max length
+* Replace unsafe phrasing
+* Ensure no sensitive data leaked
+
+This layer is simple but critical.
+
+---
+
+# 7️⃣ UI Enhancements (Light, Not Overhaul)
+
+Update `/operator` page:
+
+* Show “Metrics Used” section (small expandable line)
+* Show “Confidence Label” (Low / Medium / High)
+* Add “Regenerate” button
+* Add “Edit Draft” toggle
+
+No chat history.
+No conversational UI.
+
+It is still workflow-driven.
+
+---
+
+# 8️⃣ Logging Upgrade
+
+Update `ai_operator_runs`:
+
+Add fields:
+
+* `llm_model`
+* `context_snapshot_json`
+* `retry_count`
+* `validation_passed` (boolean)
+
+This is future-proofing for eval harness in Sprint 6.
+
+---
+
+# Definition of Done (Sprint 2)
+
+A gym owner can:
+
+1. Open Operator
+2. Choose Retention → Member outreach drafts
+3. Click Generate
+4. Receive:
+
+   * 1–3 structured output cards
+   * Each with clear headline
+   * Short why-it-matters
+   * 4–7 concrete actions
+   * Outreach drafts tailored to context
+5. Regenerate once
+6. See run saved in history
+7. No broken JSON
+8. No rambling AI text
+
+---
+
+# What This Sprint Does NOT Include
+
+* Automation sending messages
+* Outcome tracking
+* Multi-step strategic planning
+* Scenario simulations
+* Staff assignment
+* Prompt injection hardening (Sprint 3)
+* Fine-tuned model
+* Eval harness
+
+---
+
+# Why This Sprint Matters
+
+This is where most AI products fail.
+
+They:
+
+* Skip structure
+* Let the model ramble
+* Have no schema validation
+* Have inconsistent tone
+* Ship junk
+
+If Sprint 2 is executed correctly:
+
+Your AI Operator will already feel:
+
+* Calm
+* Professional
+* Focused
+* Specific
+* Gym-aware
+
+Not like generic ChatGPT.
+
+---
+
+If you want, next I can give you:
+
+A) The exact system prompt template
+B) The Zod schema definitions
+C) The Replit-ready implementation script for Sprint 2
+D) Or Sprint 3 (security + injection hardening + advanced context)
