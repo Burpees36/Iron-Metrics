@@ -1,0 +1,333 @@
+Now we evolve it from “smart assistant” to operational leverage.
+
+Sprint 4 is where the AI Operator stops being a recommendation surface and becomes a workflow engine tied directly to your math — specifically:
+
+interventionScore = expectedRevenueImpact × confidence × urgency 
+
+Description-from-Replit
+
+And remember your product identity:
+
+It tells owners exactly what's wrong, why it matters, and what to do about it 
+
+Description-from-Replit
+
+Sprint 4 makes the “what to do about it” executable and measurable.
+
+🚀 Sprint 4 — Workflow Integration + Quantified Impact + Task Automation
+🎯 Sprint Goal
+
+Turn AI outputs into:
+
+Quantified interventions
+
+Assignable tasks
+
+Revenue-impact visible
+
+Trackable outcomes
+
+Feedback loops back into your intervention engine
+
+At the end of Sprint 4:
+
+The AI Operator is no longer advice.
+
+It’s a production system.
+
+1️⃣ Quantified Impact Layer (Your Differentiator)
+
+Right now, outputs are structured and calm.
+
+Now they must include:
+
+“Projected Impact” Block
+
+Every major plan must show:
+
+Members affected
+
+ARM
+
+Months remaining (avg)
+
+Estimated lift %
+
+Expected revenue impact (3–6 month window)
+
+Using your formula logic 
+
+Description-from-Replit
+
+.
+
+Example:
+
+Estimated Impact
+18 members × $189 ARM × 4 months × 12% lift
+≈ $1,632 projected retention preservation
+
+This makes it mathematically grounded.
+
+No other platform will show this.
+
+UI Additions
+
+Each output card now includes:
+
+📈 Estimated Impact
+
+🔎 Confidence (data-based)
+
+⏳ Urgency multiplier applied
+
+Remove the 85/100 bar.
+
+Replace with:
+
+Impact Tier: High / Moderate / Low
+
+Confidence: High / Medium / Limited Data
+
+This aligns with your predictive framework 
+
+Description-from-Replit
+
+.
+
+2️⃣ Convert Outputs → Assignable Tasks
+
+Right now you have “Copy” and “Mark as Reviewed.”
+
+Sprint 4 adds:
+
+Convert to Task
+
+Each checklist item becomes:
+
+Assignable
+
+Due date
+
+Owner/Coach assignment
+
+Status: Pending / In Progress / Complete
+
+New Table:
+
+operator_tasks
+
+Fields:
+
+id
+
+gym_id
+
+operator_run_id
+
+title
+
+assigned_to_user_id
+
+due_date
+
+impact_value_estimate
+
+status
+
+completed_at
+
+completion_notes
+
+3️⃣ Operator Dashboard View
+
+Create a new tab:
+
+/operator/active
+
+Shows:
+
+Total projected impact in-flight
+
+Tasks by pillar
+
+Completion rate
+
+Estimated realized impact
+
+Example:
+
+Retention Interventions In Progress
+Projected Impact: $4,280
+Completed: 3
+Pending: 6
+
+This is powerful.
+
+It connects:
+AI → Execution → Revenue.
+
+4️⃣ Outcome Feedback Loop (Early Version)
+
+Add to task completion:
+
+When a task is marked complete:
+
+User must answer:
+
+Was intervention executed? (Yes/Partial/No)
+
+Observed impact? (Improved/Neutral/Worse)
+
+Notes
+
+This feeds into:
+
+Future Sprint 5:
+Intervention learning loop.
+
+But Sprint 4 sets the schema.
+
+5️⃣ Auto-Prioritized Weekly Plan
+
+Add a new Operator mode:
+
+“Generate My Weekly Plan”
+
+It:
+
+Pulls top 3 interventions by interventionScore
+
+Converts them to a 7-day calendar layout
+
+Shows total projected impact
+
+This replaces generic “7-day plan.”
+
+Now it’s mathematically ranked.
+
+6️⃣ Owner Protection Mode Upgrade
+
+Right now Owner Protection gives soft leadership advice.
+
+Sprint 4 upgrades it:
+
+If PSI or revenue scenario risk rises 
+
+Description-from-Replit
+
+:
+
+AI must produce:
+
+30-day stabilization plan
+
+With projected salary protection impact
+
+And break-even buffer change
+
+This ties into:
+
+Revenue Scenario Modeling
+Break-even threshold at 60% of MRR 
+
+Description-from-Replit
+
+Now it becomes protective, not motivational.
+
+7️⃣ Impact Memory (Per Intervention Type)
+
+Add table:
+
+intervention_outcomes
+
+Track:
+
+Intervention type
+
+Gym archetype
+
+Members affected
+
+Projected impact
+
+Observed result (from user input)
+
+This sets up:
+
+Future:
+Confidence adjustment by intervention type.
+
+8️⃣ Archetype-Aware Weighting (Visible)
+
+You already auto-detect gym archetype 
+
+Description-from-Replit
+
+.
+
+Sprint 4 surfaces:
+
+This recommendation is boosted because your gym is identified as: Community-Anchor.
+
+Light.
+Not preachy.
+But intelligent.
+
+9️⃣ UI Refinements (Operator-Grade Feel)
+
+Replace:
+
+“Generated Output”
+
+With:
+
+Strategic Execution Brief
+
+Add:
+
+Pill Tag
+
+Impact Tag
+
+Confidence Tag
+
+Make it feel like a command center.
+
+Not a suggestion engine.
+
+Definition of Done (Sprint 4)
+
+AI Operator can:
+
+Generate context-aware intervention
+
+Quantify projected impact
+
+Convert checklist to assignable tasks
+
+Track completion
+
+Display impact in-flight
+
+Capture outcome notes
+
+Surface weekly prioritized plan
+
+Tie impact back to math engine
+
+No automation sending yet.
+No cross-gym learning yet.
+But fully operational inside one gym.
+
+Strategic Result After Sprint 4
+
+Now Iron Metrics is not:
+
+“Here’s what you should do.”
+
+It is:
+
+“Here’s what you should do, here’s what it’s worth, here’s who’s responsible, and here’s what’s currently in flight.”
+
+That aligns perfectly with your identity as a retention intelligence platform

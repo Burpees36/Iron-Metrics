@@ -557,6 +557,18 @@ export const insertAiOperatorRunSchema = createInsertSchema(aiOperatorRuns).omit
 export type InsertAiOperatorRun = z.infer<typeof insertAiOperatorRunSchema>;
 export type AiOperatorRun = typeof aiOperatorRuns.$inferSelect;
 
+export const projectedImpactSchema = z.object({
+  members_affected: z.number(),
+  arm: z.number(),
+  months_remaining: z.number(),
+  estimated_lift_pct: z.number(),
+  expected_revenue_impact: z.number(),
+  impact_tier: z.enum(["High", "Moderate", "Low"]),
+  urgency_multiplier: z.number().optional(),
+});
+
+export type ProjectedImpact = z.infer<typeof projectedImpactSchema>;
+
 export const operatorOutputSchema = z.object({
   headline: z.string(),
   why_it_matters: z.string(),
@@ -568,6 +580,7 @@ export const operatorOutputSchema = z.object({
   metrics_used: z.array(z.string()),
   confidence_label: z.enum(["Low", "Med", "High"]),
   reasoning_summary: z.string().optional(),
+  projected_impact: projectedImpactSchema.optional(),
 });
 
 export type OperatorOutput = z.infer<typeof operatorOutputSchema>;
@@ -586,3 +599,61 @@ export type OperatorTaskType = typeof OPERATOR_TASK_TYPES[number];
 
 export const OPERATOR_ROLES = ["gym_owner", "analyst", "coach_view"] as const;
 export type OperatorRole = typeof OPERATOR_ROLES[number];
+
+export const OPERATOR_TASK_STATUSES = ["pending", "in_progress", "complete"] as const;
+export type OperatorTaskStatus = typeof OPERATOR_TASK_STATUSES[number];
+
+export const operatorTasks = pgTable("operator_tasks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gymId: varchar("gym_id").notNull().references(() => gyms.id),
+  operatorRunId: varchar("operator_run_id").notNull().references(() => aiOperatorRuns.id),
+  title: text("title").notNull(),
+  assignedToUserId: varchar("assigned_to_user_id"),
+  dueDate: timestamp("due_date"),
+  impactValueEstimate: numeric("impact_value_estimate"),
+  status: text("status").notNull().default("pending"),
+  completedAt: timestamp("completed_at"),
+  completionNotes: text("completion_notes"),
+  executionResult: text("execution_result"),
+  observedImpact: text("observed_impact"),
+  pill: text("pill").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_operator_tasks_gym").on(table.gymId),
+  index("idx_operator_tasks_run").on(table.operatorRunId),
+  index("idx_operator_tasks_status").on(table.status),
+]);
+
+export const operatorTasksRelations = relations(operatorTasks, ({ one }) => ({
+  gym: one(gyms, { fields: [operatorTasks.gymId], references: [gyms.id] }),
+  run: one(aiOperatorRuns, { fields: [operatorTasks.operatorRunId], references: [aiOperatorRuns.id] }),
+}));
+
+export const insertOperatorTaskSchema = createInsertSchema(operatorTasks).omit({ id: true, createdAt: true });
+export type InsertOperatorTask = z.infer<typeof insertOperatorTaskSchema>;
+export type OperatorTask = typeof operatorTasks.$inferSelect;
+
+export const interventionOutcomes = pgTable("intervention_outcomes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gymId: varchar("gym_id").notNull().references(() => gyms.id),
+  interventionType: text("intervention_type").notNull(),
+  gymArchetype: text("gym_archetype").notNull(),
+  membersAffected: integer("members_affected"),
+  projectedImpact: numeric("projected_impact"),
+  observedResult: text("observed_result"),
+  outcomeNotes: text("outcome_notes"),
+  operatorRunId: varchar("operator_run_id").references(() => aiOperatorRuns.id),
+  pill: text("pill"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_intervention_outcomes_gym").on(table.gymId),
+]);
+
+export const interventionOutcomesRelations = relations(interventionOutcomes, ({ one }) => ({
+  gym: one(gyms, { fields: [interventionOutcomes.gymId], references: [gyms.id] }),
+  run: one(aiOperatorRuns, { fields: [interventionOutcomes.operatorRunId], references: [aiOperatorRuns.id] }),
+}));
+
+export const insertInterventionOutcomeSchema = createInsertSchema(interventionOutcomes).omit({ id: true, createdAt: true });
+export type InsertInterventionOutcome = z.infer<typeof insertInterventionOutcomeSchema>;
+export type InterventionOutcome = typeof interventionOutcomes.$inferSelect;

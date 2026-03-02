@@ -38,8 +38,11 @@ import {
   ArrowRight,
   Edit3,
   RefreshCw,
+  ListChecks,
+  TrendingUp,
+  Target,
 } from "lucide-react";
-import type { OperatorOutput, OperatorPill, OperatorTaskType, AiOperatorRun } from "@shared/schema";
+import type { OperatorOutput, OperatorPill, OperatorTaskType, AiOperatorRun, ProjectedImpact } from "@shared/schema";
 import { OPERATOR_PILLS, OPERATOR_TASK_TYPES } from "@shared/schema";
 
 const PILL_CONFIG: Record<OperatorPill, { label: string; icon: typeof Shield; color: string }> = {
@@ -168,11 +171,46 @@ function ContextPreview({ metrics, pill, gymArchetype, dataCompletenessScore }: 
   );
 }
 
-function OutputCard({ output, index, onCopy, onMarkReviewed }: {
+const IMPACT_TIER_STYLES: Record<string, string> = {
+  High: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
+  Moderate: "bg-amber-500/10 text-amber-400 border-amber-500/30",
+  Low: "bg-muted/30 text-muted-foreground border-border/30",
+};
+
+function ProjectedImpactBlock({ impact }: { impact: ProjectedImpact }) {
+  return (
+    <div className="bg-muted/15 border border-border/30 rounded-lg p-3 space-y-2" data-testid="projected-impact">
+      <div className="flex items-center gap-2">
+        <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+        <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Estimated Impact</span>
+        <Badge variant="outline" className={`text-[10px] ml-auto border ${IMPACT_TIER_STYLES[impact.impact_tier]}`} data-testid="impact-tier-badge">
+          {impact.impact_tier} Impact
+        </Badge>
+      </div>
+      <p className="text-sm font-mono text-foreground" data-testid="impact-formula">
+        {impact.members_affected} members × ${impact.arm} ARM × {impact.months_remaining} months × {impact.estimated_lift_pct}% lift
+      </p>
+      <p className="text-base font-semibold text-emerald-400" data-testid="impact-revenue">
+        ≈ ${impact.expected_revenue_impact.toLocaleString()} projected retention preservation
+      </p>
+      {impact.urgency_multiplier !== undefined && impact.urgency_multiplier > 1.0 && (
+        <p className="text-[10px] text-amber-400" data-testid="impact-urgency">
+          Urgency multiplier: ×{impact.urgency_multiplier} applied
+        </p>
+      )}
+    </div>
+  );
+}
+
+function OutputCard({ output, index, pill, gymArchetype, onCopy, onMarkReviewed, onConvertToTasks, convertingTasks }: {
   output: OperatorOutput;
   index: number;
+  pill: OperatorPill;
+  gymArchetype?: string;
   onCopy: (text: string) => void;
   onMarkReviewed?: () => void;
+  onConvertToTasks?: () => void;
+  convertingTasks?: boolean;
 }) {
   const [draftsExpanded, setDraftsExpanded] = useState(false);
   const [metricsExpanded, setMetricsExpanded] = useState(false);
@@ -195,10 +233,18 @@ function OutputCard({ output, index, onCopy, onMarkReviewed }: {
     <Card className="border-border/50" data-testid={`output-card-${index}`}>
       <CardContent className="pt-5 space-y-4">
         <div className="flex items-start justify-between gap-3">
-          <div className="space-y-1 flex-1">
+          <div className="space-y-1.5 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
+              <Badge variant="outline" className={`text-[10px] ${PILL_CONFIG[pill]?.color || ""}`} data-testid={`output-pill-tag-${index}`}>
+                {PILL_CONFIG[pill]?.label || pill}
+              </Badge>
+              {output.projected_impact && (
+                <Badge variant="outline" className={`text-[10px] border ${IMPACT_TIER_STYLES[output.projected_impact.impact_tier]}`} data-testid={`output-impact-tag-${index}`}>
+                  {output.projected_impact.impact_tier} Impact
+                </Badge>
+              )}
               <Badge variant="outline" className="text-[10px]" data-testid={`output-confidence-${index}`}>
-                {output.confidence_label} confidence
+                {output.confidence_label === "Med" ? "Medium" : output.confidence_label === "Low" ? "Limited Data" : output.confidence_label} Confidence
               </Badge>
               <span className="text-[10px] text-muted-foreground italic">Draft — review before sending.</span>
             </div>
@@ -207,6 +253,14 @@ function OutputCard({ output, index, onCopy, onMarkReviewed }: {
         </div>
 
         <p className="text-sm text-muted-foreground" data-testid={`output-why-${index}`}>{output.why_it_matters}</p>
+
+        {output.projected_impact && <ProjectedImpactBlock impact={output.projected_impact} />}
+
+        {gymArchetype && gymArchetype !== "stable" && (
+          <p className="text-xs text-muted-foreground italic" data-testid={`archetype-reasoning-${index}`}>
+            This recommendation is boosted because your gym is identified as: <span className="font-medium text-foreground">{ARCHETYPE_LABELS[gymArchetype]?.label || gymArchetype}</span>.
+          </p>
+        )}
 
         <div className="space-y-1.5">
           {output.actions.map((action, i) => (
@@ -273,13 +327,19 @@ function OutputCard({ output, index, onCopy, onMarkReviewed }: {
           </p>
         )}
 
-        <div className="flex items-center gap-3 pt-2 border-t border-border/30">
+        <div className="flex items-center gap-3 pt-2 border-t border-border/30 flex-wrap">
           <Button variant="ghost" size="sm" onClick={() => onCopy(fullText)} data-testid={`copy-output-${index}`}>
             <Copy className="w-3.5 h-3.5 mr-1" /> Copy All
           </Button>
           {onMarkReviewed && (
             <Button variant="ghost" size="sm" onClick={onMarkReviewed} data-testid={`mark-reviewed-${index}`}>
               <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Mark as Reviewed
+            </Button>
+          )}
+          {onConvertToTasks && (
+            <Button variant="outline" size="sm" onClick={onConvertToTasks} disabled={convertingTasks} data-testid={`convert-tasks-${index}`}>
+              {convertingTasks ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <ListChecks className="w-3.5 h-3.5 mr-1" />}
+              Convert to Tasks
             </Button>
           )}
         </div>
@@ -374,6 +434,8 @@ export default function AiOperator() {
   const [lastRunId, setLastRunId] = useState<string | null>(null);
   const [lastConfidenceScore, setLastConfidenceScore] = useState<number | null>(null);
   const [rateLimitMessage, setRateLimitMessage] = useState<string | null>(null);
+  const [tasksConverted, setTasksConverted] = useState(false);
+  const [showWeeklyPlan, setShowWeeklyPlan] = useState(false);
 
   const { data: gym, isLoading: gymLoading } = useGymData(gymId);
 
@@ -385,6 +447,24 @@ export default function AiOperator() {
   const { data: history, isLoading: historyLoading } = useQuery<AiOperatorRun[]>({
     queryKey: ["/api/gyms", gymId, "operator", "history"],
     enabled: !!gymId && showHistory,
+  });
+
+  interface WeeklyPlanDay {
+    day: string;
+    pill: string;
+    focus: string;
+    impact: ProjectedImpact;
+  }
+  interface WeeklyPlanData {
+    totalProjectedImpact: number;
+    topInterventions: Array<ProjectedImpact & { pill: string }>;
+    plan: WeeklyPlanDay[];
+    archetype: string;
+  }
+
+  const { data: weeklyPlan, isLoading: weeklyPlanLoading } = useQuery<WeeklyPlanData>({
+    queryKey: ["/api/gyms", gymId, "operator", "weekly-plan"],
+    enabled: !!gymId && showWeeklyPlan,
   });
 
   const generateMutation = useMutation({
@@ -401,6 +481,7 @@ export default function AiOperator() {
       setLastRunId(data.run.id);
       setLastConfidenceScore(data.confidenceScore ?? null);
       setConsentChecked(false);
+      setTasksConverted(false);
       queryClient.invalidateQueries({ queryKey: ["/api/gyms", gymId, "operator", "history"] });
     },
     onError: (err: Error) => {
@@ -425,6 +506,29 @@ export default function AiOperator() {
     onSuccess: () => {
       toast({ title: "Status updated" });
       queryClient.invalidateQueries({ queryKey: ["/api/gyms", gymId, "operator", "history"] });
+    },
+  });
+
+  const convertToTasksMutation = useMutation({
+    mutationFn: async ({ runId, output }: { runId: string; output: OperatorOutput }) => {
+      const impactPerTask = output.projected_impact
+        ? Math.round(output.projected_impact.expected_revenue_impact / output.actions.length)
+        : null;
+      const tasks = output.actions.map(action => ({
+        title: action,
+        pill: selectedPill,
+        impactValueEstimate: impactPerTask ? String(impactPerTask) : null,
+      }));
+      const res = await apiRequest("POST", `/api/gyms/${gymId}/operator/tasks`, { runId, tasks });
+      return res.json();
+    },
+    onSuccess: () => {
+      setTasksConverted(true);
+      toast({ title: "Tasks created", description: "Action items converted to trackable tasks." });
+      queryClient.invalidateQueries({ queryKey: ["/api/gyms", gymId, "operator", "tasks"] });
+    },
+    onError: () => {
+      toast({ title: "Failed to create tasks", variant: "destructive" });
     },
   });
 
@@ -560,7 +664,7 @@ export default function AiOperator() {
           <div className="space-y-4" data-testid="output-section">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Generated Output</h2>
+                <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Strategic Execution Brief</h2>
                 {lastConfidenceScore !== null && (
                   <div className="flex items-center gap-2" data-testid="confidence-indicator">
                     <div className="w-16 h-1.5 bg-muted/30 rounded-full overflow-hidden">
@@ -593,16 +697,95 @@ export default function AiOperator() {
                 key={i}
                 output={output}
                 index={i}
+                pill={selectedPill}
+                gymArchetype={context?.gymArchetype}
                 onCopy={handleCopy}
                 onMarkReviewed={
                   lastRunId
                     ? () => updateStatusMutation.mutate({ runId: lastRunId, status: "reviewed" })
                     : undefined
                 }
+                onConvertToTasks={
+                  lastRunId && !isDemo && !tasksConverted
+                    ? () => convertToTasksMutation.mutate({ runId: lastRunId, output })
+                    : undefined
+                }
+                convertingTasks={convertToTasksMutation.isPending}
               />
             ))}
+            {tasksConverted && (
+              <div className="flex items-center gap-3 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg" data-testid="tasks-created-banner">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <span className="text-sm text-emerald-400">Tasks created.</span>
+                <Link href={`/gyms/${gymId}/operator/active`}>
+                  <Button variant="link" size="sm" className="text-emerald-400 p-0 h-auto" data-testid="link-active-tasks">
+                    View Active Tasks <ArrowRight className="w-3 h-3 ml-1" />
+                  </Button>
+                </Link>
+              </div>
+            )}
           </div>
         )}
+
+        <div className="border-t border-border/30 pt-4">
+          <Collapsible open={showWeeklyPlan} onOpenChange={setShowWeeklyPlan}>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm" className="text-muted-foreground gap-1.5" data-testid="toggle-weekly-plan">
+                <Clock className="w-4 h-4" />
+                {showWeeklyPlan ? "Hide" : "Show"} Auto-Prioritized Weekly Plan
+                {showWeeklyPlan ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-3">
+              {weeklyPlanLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-12 w-full rounded-lg" />
+                  <div className="grid grid-cols-7 gap-2">
+                    {Array.from({ length: 7 }).map((_, i) => (
+                      <Skeleton key={i} className="h-32 rounded-lg" />
+                    ))}
+                  </div>
+                </div>
+              ) : weeklyPlan ? (
+                <div className="space-y-4" data-testid="weekly-plan-section">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Badge variant="outline" className="text-emerald-400">
+                        ${weeklyPlan.totalProjectedImpact.toLocaleString()} total projected impact
+                      </Badge>
+                      <Badge variant="outline" className="text-muted-foreground text-[10px]">
+                        {weeklyPlan.archetype} gym
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2" data-testid="weekly-plan-grid">
+                    {weeklyPlan.plan.map((dayPlan) => {
+                      const pillConfig = PILL_CONFIG[dayPlan.pill as OperatorPill];
+                      const PillIcon = pillConfig?.icon || Zap;
+                      return (
+                        <Card key={dayPlan.day} className="border-border/30" data-testid={`plan-day-${dayPlan.day.toLowerCase()}`}>
+                          <CardContent className="p-3">
+                            <div className="flex items-center gap-1.5 mb-2">
+                              <PillIcon className={`w-3 h-3 ${pillConfig?.color || "text-muted-foreground"}`} />
+                              <span className="text-xs font-medium">{dayPlan.day.slice(0, 3)}</span>
+                            </div>
+                            <Badge variant="outline" className={`text-[9px] mb-2 ${pillConfig?.color || ""}`}>
+                              {pillConfig?.label || dayPlan.pill}
+                            </Badge>
+                            <p className="text-[10px] text-muted-foreground leading-relaxed">{dayPlan.focus}</p>
+                            <p className="text-[9px] text-emerald-400/70 mt-2">
+                              ${dayPlan.impact.expected_revenue_impact.toLocaleString()}
+                            </p>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+            </CollapsibleContent>
+          </Collapsible>
+        </div>
 
         {(context?.canViewHistory !== false) && (
           <div className="border-t border-border/30 pt-4">

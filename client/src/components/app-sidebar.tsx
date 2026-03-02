@@ -32,6 +32,7 @@ import {
   BookOpen,
   GitBranchPlus,
   Zap,
+  ListChecks,
 } from "lucide-react";
 
 export function AppSidebar() {
@@ -57,7 +58,8 @@ export function AppSidebar() {
     { href: `/gyms/${activeGymId}/member-risk`, label: "Member Intelligence", icon: Brain },
     { href: `/gyms/${activeGymId}/pipeline`, label: "Lead Pipeline", icon: GitBranchPlus },
     { href: `/gyms/${activeGymId}/sales`, label: "Sales Intelligence", icon: DollarSign },
-    { href: `/gyms/${activeGymId}/operator`, label: "AI Operator", icon: Zap },
+    { href: `/gyms/${activeGymId}/operator`, label: "AI Operator", icon: Zap, exact: true },
+    { href: `/gyms/${activeGymId}/operator/active`, label: "Active Tasks", icon: ListChecks },
     { href: `/gyms/${activeGymId}/planning`, label: "Future Planning", icon: Target },
     { href: `/gyms/${activeGymId}/resources`, label: "Resources", icon: BookOpen },
     { href: `/gyms/${activeGymId}/settings`, label: "Settings", icon: Settings },

@@ -21,7 +21,7 @@ import { buildInputSummary } from "./ai-operator-stub";
 import { generateOperatorOutput } from "./operator-generator";
 import { buildTieredContext } from "./operator-context";
 import { checkRateLimit, recordGeneration } from "./operator-rate-limiter";
-import { OPERATOR_PILLS, OPERATOR_TASK_TYPES, type OperatorPill, type OperatorTaskType, type OperatorRole } from "@shared/schema";
+import { OPERATOR_PILLS, OPERATOR_TASK_TYPES, OPERATOR_TASK_STATUSES, type OperatorPill, type OperatorTaskType, type OperatorRole } from "@shared/schema";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -2251,5 +2251,226 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/gyms/:id/operator/tasks", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const { runId, tasks } = req.body;
+      if (!runId || !Array.isArray(tasks) || tasks.length === 0) {
+        return res.status(400).json({ message: "runId and tasks array are required" });
+      }
+
+      const run = await storage.getAiOperatorRun(runId);
+      if (!run || run.gymId !== gym.id) {
+        return res.status(404).json({ message: "Operator run not found" });
+      }
+
+      const created = [];
+      for (const t of tasks) {
+        if (!t.title || typeof t.title !== "string") continue;
+        const task = await storage.createOperatorTask({
+          gymId: gym.id,
+          operatorRunId: runId,
+          title: t.title,
+          assignedToUserId: t.assignedToUserId || null,
+          dueDate: t.dueDate ? new Date(t.dueDate) : null,
+          impactValueEstimate: t.impactValueEstimate != null ? String(t.impactValueEstimate) : null,
+          status: "pending",
+          completedAt: null,
+          completionNotes: null,
+          executionResult: null,
+          observedImpact: null,
+          pill: t.pill || run.pill,
+        });
+        created.push(task);
+      }
+
+      res.status(201).json(created);
+    } catch (error) {
+      console.error("Error creating operator tasks:", error);
+      res.status(500).json({ message: "Failed to create tasks" });
+    }
+  });
+
+  app.get("/api/gyms/:id/operator/tasks", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const filters: { status?: string; pill?: string } = {};
+      if (typeof req.query.status === "string" && OPERATOR_TASK_STATUSES.includes(req.query.status as any)) {
+        filters.status = req.query.status;
+      }
+      if (typeof req.query.pill === "string" && OPERATOR_PILLS.includes(req.query.pill as any)) {
+        filters.pill = req.query.pill;
+      }
+
+      const tasks = await storage.getOperatorTasksByGym(gym.id, filters);
+      res.json(tasks);
+    } catch (error) {
+      console.error("Error fetching operator tasks:", error);
+      res.status(500).json({ message: "Failed to fetch tasks" });
+    }
+  });
+
+  app.patch("/api/gyms/:id/operator/tasks/:taskId", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const existingTasks = await storage.getOperatorTasksByGym(gym.id);
+      const task = existingTasks.find(t => t.id === req.params.taskId);
+      if (!task) return res.status(404).json({ message: "Task not found" });
+
+      const updates: Record<string, any> = {};
+
+      if (req.body.status && OPERATOR_TASK_STATUSES.includes(req.body.status)) {
+        updates.status = req.body.status;
+        if (req.body.status === "complete" && !task.completedAt) {
+          updates.completedAt = new Date();
+        }
+      }
+      if (req.body.completionNotes !== undefined) {
+        updates.completionNotes = req.body.completionNotes;
+      }
+      if (req.body.executionResult !== undefined) {
+        updates.executionResult = req.body.executionResult;
+      }
+      if (req.body.observedImpact !== undefined) {
+        updates.observedImpact = req.body.observedImpact;
+      }
+      if (req.body.assignedToUserId !== undefined) {
+        updates.assignedToUserId = req.body.assignedToUserId;
+      }
+      if (req.body.dueDate !== undefined) {
+        updates.dueDate = req.body.dueDate ? new Date(req.body.dueDate) : null;
+      }
+
+      const updated = await storage.updateOperatorTask(task.id, updates);
+
+      if (req.body.status === "complete" && req.body.createOutcome) {
+        const run = await storage.getAiOperatorRun(task.operatorRunId);
+        const outputJson = run?.outputJson as any;
+        const projectedImpact = outputJson?.projected_impact;
+
+        await storage.createInterventionOutcome({
+          gymId: gym.id,
+          interventionType: task.pill,
+          gymArchetype: run?.contextSnapshotJson ? (run.contextSnapshotJson as any).gymArchetype || "unknown" : "unknown",
+          membersAffected: projectedImpact?.members_affected || null,
+          projectedImpact: task.impactValueEstimate || null,
+          observedResult: req.body.observedImpact || null,
+          outcomeNotes: req.body.completionNotes || null,
+          operatorRunId: task.operatorRunId,
+          pill: task.pill,
+        });
+      }
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating operator task:", error);
+      res.status(500).json({ message: "Failed to update task" });
+    }
+  });
+
+  app.get("/api/gyms/:id/operator/dashboard", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const stats = await storage.getOperatorTaskStats(gym.id);
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching operator dashboard:", error);
+      res.status(500).json({ message: "Failed to fetch dashboard" });
+    }
+  });
+
+  app.get("/api/gyms/:id/operator/weekly-plan", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const ctx = await buildTieredContext(gym.id, "retention");
+
+      const pills: OperatorPill[] = ["retention", "sales", "coaching", "community", "owner"];
+      const impactByPill: Record<string, any> = {};
+      for (const pill of pills) {
+        const pillCtx = await buildTieredContext(gym.id, pill);
+        const { computeProjectedImpact } = await import("./operator-impact");
+        impactByPill[pill] = computeProjectedImpact(pillCtx, pill);
+      }
+
+      const ranked = pills
+        .map(pill => ({ pill, impact: impactByPill[pill] }))
+        .sort((a, b) => b.impact.expected_revenue_impact - a.impact.expected_revenue_impact);
+
+      const top3 = ranked.slice(0, 3);
+      const totalProjectedImpact = top3.reduce((sum: number, r: any) => sum + r.impact.expected_revenue_impact, 0);
+
+      const dayLabels = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+      const plan = dayLabels.map((day, i) => {
+        if (i < 2) {
+          const item = top3[0];
+          return { day, pill: item.pill, focus: getWeeklyFocus(item.pill, i === 0 ? "plan" : "execute"), impact: item.impact };
+        }
+        if (i < 4) {
+          const item = top3[1] || top3[0];
+          return { day, pill: item.pill, focus: getWeeklyFocus(item.pill, i === 2 ? "plan" : "execute"), impact: item.impact };
+        }
+        if (i === 4) {
+          const item = top3[2] || top3[0];
+          return { day, pill: item.pill, focus: getWeeklyFocus(item.pill, "execute"), impact: item.impact };
+        }
+        if (i === 5) {
+          return { day, pill: "community", focus: "Community engagement and member touchpoints", impact: impactByPill["community"] };
+        }
+        return { day, pill: "owner", focus: "Review metrics, assess progress, plan next week", impact: impactByPill["owner"] };
+      });
+
+      res.json({
+        totalProjectedImpact,
+        topInterventions: top3.map(r => ({ pill: r.pill, ...r.impact })),
+        plan,
+        archetype: ctx.gymArchetype,
+      });
+    } catch (error) {
+      console.error("Error generating weekly plan:", error);
+      res.status(500).json({ message: "Failed to generate weekly plan" });
+    }
+  });
+
   return httpServer;
+}
+
+function getWeeklyFocus(pill: string, phase: "plan" | "execute"): string {
+  const focuses: Record<string, { plan: string; execute: string }> = {
+    retention: {
+      plan: "Identify at-risk members. Review attendance patterns and draft re-engagement messages.",
+      execute: "Send outreach to at-risk members. Schedule check-in calls or texts.",
+    },
+    sales: {
+      plan: "Review pipeline. Prioritize stale leads and identify follow-up targets.",
+      execute: "Execute follow-ups. Confirm booked consults and send reminders.",
+    },
+    coaching: {
+      plan: "Review coaching feedback and class attendance trends.",
+      execute: "Deliver coaching touchpoints. Run skill assessment or feedback session.",
+    },
+    community: {
+      plan: "Plan community event or member spotlight.",
+      execute: "Community engagement and member touchpoints.",
+    },
+    owner: {
+      plan: "Review weekly metrics. Identify top concerns.",
+      execute: "Review metrics, assess progress, plan next week.",
+    },
+  };
+  return focuses[pill]?.[phase] || "Focus on execution.";
 }

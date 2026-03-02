@@ -1,16 +1,17 @@
 import OpenAI from "openai";
 import { z } from "zod";
-import { operatorOutputSchema, type OperatorOutput, type OperatorPill, type OperatorTaskType } from "@shared/schema";
+import { operatorOutputSchema, type OperatorOutput, type OperatorPill, type OperatorTaskType, type ProjectedImpact } from "@shared/schema";
 import { generateStubOutput, buildInputSummary } from "./ai-operator-stub";
 import { buildTieredContext, flattenContextForLegacy, type TieredContext } from "./operator-context";
 import { computeConfidence, buildReasoningSummary, type ConfidenceResult } from "./operator-confidence";
+import { computeProjectedImpact } from "./operator-impact";
 import { scanOutputRisk } from "./operator-risk-filter";
 import { sanitizeForPrompt, sanitizeDoctrine, detectInjectionAttempt } from "./operator-sanitizer";
 import { storage } from "./storage";
 import { generateEmbedding } from "./knowledge-ingestion";
 
 const LLM_MODEL = "gpt-4o-mini";
-const PROMPT_VERSION = "3.0.0";
+const PROMPT_VERSION = "4.0.0";
 const DOCTRINE_CACHE_TTL = 60 * 60 * 1000;
 
 const PILL_LABELS: Record<OperatorPill, string> = {
@@ -46,6 +47,14 @@ const PROHIBITED_PHRASES = [
 ];
 
 const doctrineCache = new Map<string, { snippets: string[]; timestamp: number; version: string }>();
+
+function isStabilizationMode(ctx: TieredContext): boolean {
+  const rsiLow = ctx.retentionSignals.rsi !== undefined && ctx.retentionSignals.rsi < 60;
+  const rsiDeclining = ctx.retentionSignals.rsiTrend !== undefined && ctx.retentionSignals.rsiTrend < -3;
+  const churnRising = ctx.financialSignals.churnTrend !== undefined && ctx.financialSignals.churnTrend > 1;
+  const mrrDeclining = ctx.financialSignals.mrrTrend !== undefined && ctx.financialSignals.mrrTrend < 0;
+  return rsiLow || rsiDeclining || (churnRising && mrrDeclining) || ctx.gymArchetype === "declining";
+}
 
 function buildContextBlock(ctx: TieredContext, pill: OperatorPill): string {
   const lines: string[] = [];
@@ -141,6 +150,12 @@ ${draftsInstruction}
 
 TONE: Calm, direct, professional. No hype, no emojis, no fluff. Specific to the gym's numbers.
 ${confidence.label === "Low" ? "DATA NOTE: Limited data available. State this clearly and adjust recommendations to be general best practices." : ""}
+${pill === "owner" && isStabilizationMode(ctx) ? `
+STABILIZATION MODE: This gym shows risk signals (declining RSI, rising churn, or MRR contraction). Generate a 30-day stabilization plan. Include:
+- Projected salary protection impact based on current MRR and break-even threshold (60% of MRR)
+- Break-even buffer analysis: current MRR vs estimated operating cost
+- Focus on immediate retention saves, cash flow protection, and operational triage
+- Prioritize actions by revenue preservation potential` : ""}
 
 Return ONLY valid JSON. No markdown, no explanation.`;
 }
@@ -199,7 +214,7 @@ function sanitizeOutputText(text: string): string {
   return cleaned;
 }
 
-function polishOutputs(outputs: OperatorOutput[], confidence: ConfidenceResult, reasoningSummary: string): OperatorOutput[] {
+function polishOutputs(outputs: OperatorOutput[], confidence: ConfidenceResult, reasoningSummary: string, projectedImpact?: ProjectedImpact): OperatorOutput[] {
   return outputs.map(output => {
     let whyItMatters = sanitizeOutputText(output.why_it_matters);
     if (whyItMatters.length > 240) whyItMatters = whyItMatters.slice(0, 237) + "...";
@@ -236,6 +251,7 @@ function polishOutputs(outputs: OperatorOutput[], confidence: ConfidenceResult, 
       metrics_used: output.metrics_used.map(m => sanitizeOutputText(m)).filter(m => m.length > 0),
       confidence_label: confidence.label,
       reasoning_summary: reasoningSummary,
+      projected_impact: projectedImpact,
     };
   });
 }
@@ -264,6 +280,7 @@ export async function generateOperatorOutput(
   const confidence = computeConfidence(ctx, pill);
   const reasoningSummary = buildReasoningSummary(ctx, pill);
   const { snippets: doctrine, version: doctrineVersion } = await retrieveDoctrine(pill, taskType);
+  const projectedImpact = computeProjectedImpact(ctx, pill);
 
   const legacyMetrics = flattenContextForLegacy(ctx);
 
@@ -278,7 +295,7 @@ export async function generateOperatorOutput(
       conversionRate: legacyMetrics.conversionRate,
     });
     return {
-      outputs: polishOutputs(stubOutputs, confidence, reasoningSummary),
+      outputs: polishOutputs(stubOutputs, confidence, reasoningSummary, projectedImpact),
       model,
       context: ctx,
       retryCount,
@@ -360,7 +377,7 @@ export async function generateOperatorOutput(
       const validated = outputsSchema.safeParse(outputArray);
 
       if (validated.success) {
-        const polished = polishOutputs(validated.data, confidence, reasoningSummary).slice(0, 2);
+        const polished = polishOutputs(validated.data, confidence, reasoningSummary, projectedImpact).slice(0, 2);
 
         const riskScan = scanOutputRisk(polished);
         if (!riskScan.passed) {

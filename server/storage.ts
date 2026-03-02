@@ -5,7 +5,7 @@ import {
   knowledgeSources, knowledgeDocuments, knowledgeChunks,
   recommendationChunkAudit, ingestJobs,
   leads, consults, salesMemberships, payments,
-  aiOperatorRuns,
+  aiOperatorRuns, operatorTasks, interventionOutcomes,
   type Gym, type InsertGym,
   type Member, type InsertMember,
   type GymMonthlyMetrics, type InsertGymMonthlyMetrics,
@@ -25,6 +25,8 @@ import {
   type SalesMembership, type InsertSalesMembership,
   type Payment, type InsertPayment,
   type AiOperatorRun, type InsertAiOperatorRun,
+  type OperatorTask, type InsertOperatorTask,
+  type InterventionOutcome, type InsertInterventionOutcome,
 } from "@shared/schema";
 import { db } from "./db";
 import { pool } from "./db";
@@ -127,6 +129,18 @@ export interface IStorage {
   getAiOperatorRun(id: string): Promise<AiOperatorRun | undefined>;
   getAiOperatorRunsByGym(gymId: string): Promise<AiOperatorRun[]>;
   updateAiOperatorRun(id: string, updates: Partial<AiOperatorRun>): Promise<AiOperatorRun>;
+
+  createOperatorTask(task: InsertOperatorTask): Promise<OperatorTask>;
+  getOperatorTasksByGym(gymId: string, filters?: { status?: string; pill?: string }): Promise<OperatorTask[]>;
+  getOperatorTasksByRun(runId: string): Promise<OperatorTask[]>;
+  updateOperatorTask(id: string, updates: Partial<OperatorTask>): Promise<OperatorTask>;
+  getOperatorTaskStats(gymId: string): Promise<{
+    totalProjectedImpact: number;
+    tasksByPill: Record<string, { pending: number; in_progress: number; complete: number }>;
+    completionRate: number;
+    totalTasks: number;
+  }>;
+  createInterventionOutcome(outcome: InsertInterventionOutcome): Promise<InterventionOutcome>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -772,6 +786,78 @@ export class DatabaseStorage implements IStorage {
   async updateAiOperatorRun(id: string, updates: Partial<AiOperatorRun>): Promise<AiOperatorRun> {
     const [updated] = await db.update(aiOperatorRuns).set(updates).where(eq(aiOperatorRuns.id, id)).returning();
     return updated;
+  }
+
+  async createOperatorTask(task: InsertOperatorTask): Promise<OperatorTask> {
+    const [created] = await db.insert(operatorTasks).values(task).returning();
+    return created;
+  }
+
+  async getOperatorTasksByGym(gymId: string, filters?: { status?: string; pill?: string }): Promise<OperatorTask[]> {
+    const conditions = [eq(operatorTasks.gymId, gymId)];
+    if (filters?.status) {
+      conditions.push(eq(operatorTasks.status, filters.status));
+    }
+    if (filters?.pill) {
+      conditions.push(eq(operatorTasks.pill, filters.pill));
+    }
+    return db.select().from(operatorTasks)
+      .where(and(...conditions))
+      .orderBy(desc(operatorTasks.createdAt));
+  }
+
+  async getOperatorTasksByRun(runId: string): Promise<OperatorTask[]> {
+    return db.select().from(operatorTasks)
+      .where(eq(operatorTasks.operatorRunId, runId))
+      .orderBy(operatorTasks.createdAt);
+  }
+
+  async updateOperatorTask(id: string, updates: Partial<OperatorTask>): Promise<OperatorTask> {
+    const [updated] = await db.update(operatorTasks).set(updates).where(eq(operatorTasks.id, id)).returning();
+    return updated;
+  }
+
+  async getOperatorTaskStats(gymId: string): Promise<{
+    totalProjectedImpact: number;
+    tasksByPill: Record<string, { pending: number; in_progress: number; complete: number }>;
+    completionRate: number;
+    totalTasks: number;
+  }> {
+    const tasks = await db.select().from(operatorTasks).where(eq(operatorTasks.gymId, gymId));
+
+    let totalProjectedImpact = 0;
+    const tasksByPill: Record<string, { pending: number; in_progress: number; complete: number }> = {};
+    let completedCount = 0;
+
+    for (const task of tasks) {
+      if (task.status !== "complete" && task.impactValueEstimate) {
+        totalProjectedImpact += Number(task.impactValueEstimate);
+      }
+
+      if (!tasksByPill[task.pill]) {
+        tasksByPill[task.pill] = { pending: 0, in_progress: 0, complete: 0 };
+      }
+      const statusKey = task.status as "pending" | "in_progress" | "complete";
+      if (tasksByPill[task.pill][statusKey] !== undefined) {
+        tasksByPill[task.pill][statusKey]++;
+      }
+
+      if (task.status === "complete") {
+        completedCount++;
+      }
+    }
+
+    return {
+      totalProjectedImpact,
+      tasksByPill,
+      completionRate: tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0,
+      totalTasks: tasks.length,
+    };
+  }
+
+  async createInterventionOutcome(outcome: InsertInterventionOutcome): Promise<InterventionOutcome> {
+    const [created] = await db.insert(interventionOutcomes).values(outcome).returning();
+    return created;
   }
 }
 
