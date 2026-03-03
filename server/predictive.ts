@@ -438,6 +438,11 @@ function computeMemberPredictions(
       applyFactor("Connection window closing", Math.min(0.08, urgencyDecayScore * 0.09), 0.68, "The window to make an impact with this member is shrinking — act soon.");
     }
 
+    const riskScore = churnProb - 0.03;
+    const logisticA = -3.5;
+    const logisticB = 0.15;
+    const scaledScore = riskScore * 100;
+    churnProb = 1 / (1 + Math.exp(-(logisticA + logisticB * scaledScore)));
     churnProb = Math.max(0.01, Math.min(0.95, churnProb));
 
     const hasRecentAttendance = m.lastAttendedDate

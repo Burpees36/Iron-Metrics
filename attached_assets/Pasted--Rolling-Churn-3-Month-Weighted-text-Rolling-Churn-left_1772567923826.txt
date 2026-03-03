@@ -1,0 +1,162 @@
+
+⸻
+
+Rolling Churn (3-Month, Weighted)
+
+\text{Rolling Churn (\%)} =
+\left(
+\frac{
+\sum_{i=1}^{3} \text{Cancels}_i
+}{
+\sum_{i=1}^{3} \text{Active Members at Start}_i
+}
+\right)
+\times 100
+
+⸻
+
+MRR (Monthly Recurring Revenue)
+
+\text{MRR} =
+\sum (\text{Monthly-Equivalent Rate per Active Member})
+
+Monthly-equivalent conversions:
+
+\text{Annual Rate} = \frac{\text{Annual Price}}{12}
+
+\text{Weekly Rate} = \frac{\text{Weekly Price} \times 52}{12}
+
+⸻
+
+ARM (Average Revenue per Member)
+
+\text{ARM} = \frac{\text{MRR}}{\text{Total Active Members}}
+
+⸻
+
+LTV (Lifetime Value)
+
+Use rolling churn.
+
+\text{Average Lifespan (months)} =
+\frac{1}{\text{Rolling Churn as Decimal}}
+
+\text{LTV} = \text{ARM} \times \text{Average Lifespan}
+
+If Rolling Churn ≤ 0.5%:
+
+\text{Average Lifespan} = 20 \text{ months (cap)}
+
+⸻
+
+LTVE Impact (Annual Revenue Gain from 1% Churn Reduction)
+
+Let:
+
+\Delta C = 0.01
+
+\text{Annual Gain} =
+\text{Active Members}
+\times \Delta C
+\times \text{ARM}
+\times 12
+
+⸻
+
+RSI (Retention Stability Index)
+
+\text{RSI Raw} =
+100
+- P_{\text{churn}}
+- P_{\text{early}}
++ B_{\text{tenure}}
++ B_{\text{growth}}
+
+\text{RSI} = \min(100,\max(0,\text{RSI Raw}))
+
+⸻
+
+RES (Revenue Efficiency Score)
+
+\text{RES} =
+\text{ARM Tier Points}
++
+\text{Volume Tier Points}
++
+\text{MRR Tier Points}
+
+\text{RES} = \min(100,\text{RES})
+
+⸻
+
+Member Risk Probability
+
+Step 1 — Risk Score
+
+S =
+S_{\text{tenure}}
++
+S_{\text{outreach}}
++
+S_{\text{gym churn}}
++
+S_{\text{rate}}
++
+S_{\text{urgency}}
+
+⸻
+
+Step 2 — Logistic Mapping to Probability
+
+p =
+\frac{1}{1 + e^{-(a + bS)}}
+
+Where:
+	•	a = -3.5
+	•	b = 0.15
+
+⸻
+
+Step 3 — Clamp Output
+
+\text{Risk Probability} =
+\min(0.95,\max(0.01,p))
+
+⸻
+
+Expected Revenue Impact
+
+\text{Impact} =
+\text{Members Affected}
+\times
+\text{ARM}
+\times
+\text{Months Horizon}
+\times
+\text{Estimated Lift (decimal)}
+\times
+\text{Urgency Multiplier}
+
+⸻
+
+Intervention Score
+
+Convert confidence to decimal:
+
+C_d = \frac{\text{Confidence}}{100}
+
+\text{Intervention Score} =
+\text{Impact}
+\times
+C_d
+\times
+\text{Urgency}
+
+⸻
+
+Confidence Normalization
+
+\text{Confidence} =
+\min(100,\text{Sum of Confidence Components})
+
+⸻

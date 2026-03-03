@@ -26,10 +26,6 @@ export async function computeMonthlyMetrics(gymId: string, monthStart: string) {
   const mrr = activeMembers.reduce((sum, m) => sum + Number(m.monthlyRate), 0);
   const arm = activeMemberCount > 0 ? mrr / activeMemberCount : 0;
 
-  const avgChurn = churnRate > 0 ? churnRate / 100 : 0.05;
-  const avgLifespan = avgChurn > 0 ? 1 / avgChurn : 20;
-  const ltv = arm * avgLifespan;
-
   let rollingChurn3m: number | null = null;
   const prev1 = getPrevMonth(monthStart, 1);
   const prev2 = getPrevMonth(monthStart, 2);
@@ -37,14 +33,21 @@ export async function computeMonthlyMetrics(gymId: string, monthStart: string) {
   const m2 = await storage.getMonthlyMetrics(gymId, prev2);
 
   if (m1 && m2) {
-    rollingChurn3m = parseFloat(
-      ((Number(m2.churnRate) + Number(m1.churnRate) + churnRate) / 3).toFixed(2)
-    );
+    const totalCancels = cancelCount + Number(m1.cancels) + Number(m2.cancels);
+    const totalActiveAtStart = activeStartOfMonth + Number(m1.activeStartOfMonth) + Number(m2.activeStartOfMonth);
+    rollingChurn3m = totalActiveAtStart > 0
+      ? parseFloat(((totalCancels / totalActiveAtStart) * 100).toFixed(2))
+      : 0;
   }
+
+  const churnForLtv = rollingChurn3m !== null ? rollingChurn3m : (churnRate > 0 ? churnRate : 0);
+  const churnDecimalForLtv = churnForLtv / 100;
+  const avgLifespan = churnDecimalForLtv > 0.005 ? (1 / churnDecimalForLtv) : 20;
+  const ltv = arm * avgLifespan;
 
   const rsi = computeRSI(churnRate, activeMembers, cancelCount, newMemberCount, activeStartOfMonth);
   const res = computeRES(mrr, activeMemberCount, arm);
-  const ltveImpact = computeLTVEImpact(arm, churnRate);
+  const ltveImpact = computeLTVEImpact(arm, activeMemberCount);
   const memberRiskCount = computeRiskCount(activeMembers, monthDate);
 
   return storage.upsertMonthlyMetrics({
@@ -129,18 +132,9 @@ function computeRES(mrr: number, activeMemberCount: number, arm: number): number
   return Math.min(100, score);
 }
 
-function computeLTVEImpact(arm: number, churnRate: number): number {
-  if (churnRate <= 0 || arm <= 0) return 0;
-  const currentChurnDecimal = churnRate / 100;
-  const reducedChurnDecimal = (churnRate - 1) / 100;
-
-  if (currentChurnDecimal <= 0.01) return 0;
-
-  const currentLTV = arm / currentChurnDecimal;
-  const improvedLTV = reducedChurnDecimal > 0 ? arm / reducedChurnDecimal : arm * 100;
-  const ltvDelta = improvedLTV - currentLTV;
-
-  return ltvDelta * 12;
+function computeLTVEImpact(arm: number, activeMemberCount: number): number {
+  if (arm <= 0 || activeMemberCount <= 0) return 0;
+  return activeMemberCount * 0.01 * arm * 12;
 }
 
 function computeRiskCount(activeMembers: Member[], monthDate: Date): number {
