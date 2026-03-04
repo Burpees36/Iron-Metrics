@@ -122,16 +122,16 @@ function generateDemoMembers(gymId: string, now: Date) {
     let lastAttendedStr: string | null = null;
     if (!isCancelled) {
       let daysSinceAttendance: number;
-      if (i < 10) {
+      if (i < 70) {
         daysSinceAttendance = Math.floor(Math.random() * 3);
-      } else if (i < 50) {
-        daysSinceAttendance = Math.floor(Math.random() * 7);
-      } else if (i < 70) {
-        daysSinceAttendance = Math.floor(7 + Math.random() * 14);
-      } else if (i < 80) {
-        daysSinceAttendance = Math.floor(14 + Math.random() * 21);
+      } else if (i < 82) {
+        daysSinceAttendance = Math.floor(3 + Math.random() * 4);
+      } else if (i < 86) {
+        daysSinceAttendance = Math.floor(8 + Math.random() * 5);
+      } else if (i < 88) {
+        daysSinceAttendance = Math.floor(15 + Math.random() * 10);
       } else {
-        daysSinceAttendance = Math.floor(30 + Math.random() * 60);
+        daysSinceAttendance = Math.floor(32 + Math.random() * 20);
       }
       const lastAttended = new Date(now.getTime() - daysSinceAttendance * 86400000);
       lastAttendedStr = lastAttended.toISOString().split("T")[0];
