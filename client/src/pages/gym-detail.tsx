@@ -570,6 +570,22 @@ function ReportView({ gymId }: { gymId: string }) {
     ? "Your gym is holding, but watch for drift. Small cracks in retention can widen quickly."
     : "Stability is at risk. Churn is outpacing growth and revenue is under pressure.";
 
+  const rsiWhyItMatters = rsi >= 80
+    ? "A high RSI means your revenue is protected. Members are staying long enough to compound your growth — every month of retained membership adds to LTV without the cost of acquiring someone new."
+    : rsi >= 60
+    ? "Your retention is functional but fragile. At this level, a single bad month — a coach leaving, a price increase, a holiday slump — can tip the balance. Stabilizing now protects months of future revenue."
+    : "Below 60, churn is actively eroding your revenue base. Every lost member costs you their remaining lifetime value and the marketing dollars to replace them. This is where gyms stall or shrink.";
+
+  const rsiWhatToDo = rsi >= 80
+    ? "Protect what's working. Focus on your Core members — keep them engaged, recognized, and connected. Small gestures compound."
+    : rsi >= 60
+    ? "Identify your Drifters before they become Ghosts. A personal check-in this week with 2-3 members who've missed classes can shift the trend."
+    : "Prioritize immediate outreach to your Ghost and At-Risk members. Every member you save at this stage has outsized impact on your revenue recovery.";
+
+  const arm = Number(data.metrics.arm);
+  const ltveImpact = Number(data.metrics.ltveImpact);
+  const rollingChurn = data.metrics.rollingChurn3m !== null ? Number(data.metrics.rollingChurn3m) : null;
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -579,17 +595,59 @@ function ReportView({ gymId }: { gymId: string }) {
         icon={Gauge}
       />
 
-      {/* ── Section 1: Stability Verdict ── */}
+      {/* ── Section 1: RSI — Retention Stability Index ── */}
       <Card className={`${rsiColor.bg} border ${rsiColor.border} animate-fade-in-up`} data-testid="section-stability-verdict">
-        <CardContent className="p-5 sm:p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
+        <CardContent className="p-5 sm:p-6 space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-start gap-4 sm:gap-6">
             <RSIDial value={rsi} testId="metric-rsi" />
-            <div className="flex-1 space-y-1.5">
-              <h2 className={`text-base font-bold ${rsiColor.text}`} data-testid="text-stability-label">
-                {rsiColor.label}
-              </h2>
-              <p className="text-sm text-muted-foreground leading-relaxed" data-testid="text-stability-verdict">
-                {stabilityVerdict}
+            <div className="flex-1 space-y-3">
+              <div>
+                <h2 className={`text-base font-bold ${rsiColor.text}`} data-testid="text-stability-label">
+                  {rsiColor.label}
+                </h2>
+                <p className="text-sm text-muted-foreground leading-relaxed mt-1" data-testid="text-stability-verdict">
+                  {stabilityVerdict}
+                </p>
+              </div>
+
+              <div className="grid sm:grid-cols-3 gap-3">
+                {rollingChurn !== null && (
+                  <div className="bg-background/50 rounded-lg p-3 border border-border/30">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Rolling Churn (3mo)</p>
+                    <p className="text-lg font-bold" data-testid="metric-rolling-churn">{rollingChurn}%</p>
+                  </div>
+                )}
+                <div className="bg-background/50 rounded-lg p-3 border border-border/30">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Members at Risk</p>
+                  <p className="text-lg font-bold" data-testid="metric-flagged-count">{totalFlagged}</p>
+                </div>
+                {ltveImpact > 0 && (
+                  <div className="bg-background/50 rounded-lg p-3 border border-border/30">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">1% Churn Reduction =</p>
+                    <p className="text-lg font-bold text-emerald-500" data-testid="metric-ltve-impact">${Math.round(ltveImpact).toLocaleString()}/yr</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-border/30 pt-4 space-y-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">What This Means</p>
+              <p className="text-sm text-foreground/80 leading-relaxed" data-testid="text-rsi-interpretation">
+                Your Retention Stability Index is a 0-100 composite score that measures how well your gym holds onto its members. It factors in your churn rate, how quickly new members cancel, average member tenure, and growth momentum. A higher RSI means more predictable revenue and a healthier business.
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">Why It Matters</p>
+              <p className="text-sm text-foreground/80 leading-relaxed" data-testid="text-rsi-why">
+                {rsiWhyItMatters}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">What To Do Next</p>
+              <p className="text-sm text-foreground/80 leading-relaxed" data-testid="text-rsi-action">
+                {rsiWhatToDo}
               </p>
             </div>
           </div>

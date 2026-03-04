@@ -445,23 +445,26 @@ function computeMemberPredictions(
     churnProb = 1 / (1 + Math.exp(-(logisticA + logisticB * scaledScore)));
     churnProb = Math.max(0.01, Math.min(0.95, churnProb));
 
-    const hasRecentAttendance = m.lastAttendedDate
-      ? (now.getTime() - new Date(m.lastAttendedDate).getTime()) / (1000 * 60 * 60 * 24) <= 7
-      : false;
+    const daysSinceLastAttendance = m.lastAttendedDate
+      ? Math.floor((now.getTime() - new Date(m.lastAttendedDate).getTime()) / (1000 * 60 * 60 * 24))
+      : null;
+    const hasRecentAttendance = daysSinceLastAttendance !== null && daysSinceLastAttendance <= 7;
     const recentContact = lastContactDays !== null && lastContactDays <= 14;
     const isRising = churnProb <= 0.20 && tenureDays <= 90 && (hasRecentAttendance || recentContact);
 
     let engagementClass: EngagementClass;
-    if (churnProb <= 0.15 && tenureDays > 90) {
-      engagementClass = "core";
+    if (daysSinceLastAttendance !== null && daysSinceLastAttendance >= 30) {
+      engagementClass = "ghost";
+    } else if (tenureDays <= 90 || (daysSinceLastAttendance !== null && daysSinceLastAttendance >= 14)) {
+      engagementClass = "at-risk";
+    } else if (daysSinceLastAttendance !== null && daysSinceLastAttendance >= 7) {
+      engagementClass = "drifter";
     } else if (isRising) {
       engagementClass = "rising";
-    } else if (churnProb <= 0.30) {
-      engagementClass = "drifter";
-    } else if (churnProb <= 0.55) {
-      engagementClass = "at-risk";
+    } else if (tenureDays > 90 && hasRecentAttendance) {
+      engagementClass = "core";
     } else {
-      engagementClass = "ghost";
+      engagementClass = daysSinceLastAttendance === null ? "at-risk" : "core";
     }
 
     const monthlyChurnProb = Math.min(churnProb, 0.5);

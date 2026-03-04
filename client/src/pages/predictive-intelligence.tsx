@@ -942,11 +942,11 @@ function MemberRiskView({ predictions, gymId }: { predictions: PredictiveIntelli
   };
 
   const classTooltips: Record<string, string> = {
-    core: "Your retention foundation. These members have been here 90+ days with consistently low churn probability. They attend regularly, are engaged, and drive a significant share of your revenue. Protect them.",
-    rising: "Members showing strong early engagement signals — recent attendance, low churn risk, and building momentum in their first 90 days. These are your future Core members. Nurture them with personal attention and goal-setting.",
-    drifter: "Showing early signs of disengagement. Attendance may be slipping, or contact has lapsed. A gentle check-in now — a quick text, a coach conversation — can prevent escalation before it starts.",
-    "at-risk": "Significant risk signals detected. These members are likely considering leaving. Prioritize direct outreach this week. A personal conversation about their goals can change the trajectory.",
-    ghost: "High probability of cancellation without intervention. These members have disengaged significantly and may already be mentally out the door. Immediate, personal outreach is critical to retain them.",
+    core: "Your retention foundation. These members have been here 90+ days and attended class within the last week. They show up consistently and drive a significant share of your revenue. Protect them.",
+    rising: "Members in their first 90 days showing strong early signals — attending class recently and building momentum. These are your future Core members. Nurture them with personal attention and goal-setting.",
+    drifter: "Haven't attended a class in the last 7-13 days. A gentle check-in now — a quick text, a coach conversation — can get them back on the mat before they slip further.",
+    "at-risk": "New members still in their first 90 days, or members who haven't attended class in 14+ days. They're at a critical point — prioritize direct outreach this week. After 14 days of no attendance, drifters cross into this category.",
+    ghost: "Haven't attended a class in 30+ days. These members have disengaged and may already be mentally out the door. Immediate, personal outreach is critical — they're the closest to cancelling.",
   };
 
   const classDescriptions: Record<string, (count: number, total: number, members: MemberPrediction[]) => string> = {
@@ -957,10 +957,10 @@ function MemberRiskView({ predictions, gymId }: { predictions: PredictiveIntelli
       const pct = totalRevenue > 0 ? Math.round((coreRevenue / totalRevenue) * 100) : 0;
       return `Core members account for ${pct}% of revenue. These are your retention foundation.`;
     },
-    rising: (count) => `${count} member${count !== 1 ? "s" : ""} building momentum early. Strong engagement in their first 90 days — future Core members.`,
-    drifter: (count) => `${count} member${count !== 1 ? "s" : ""} showing early signs of drift. Gentle re-engagement now prevents escalation.`,
-    "at-risk": (count) => `${count} member${count !== 1 ? "s" : ""} showing signs they might leave. Reach out this week.`,
-    ghost: (count) => `${count} member${count !== 1 ? "s" : ""} likely to cancel without direct action. Immediate outreach is critical.`,
+    rising: (count) => `${count} member${count !== 1 ? "s" : ""} building momentum early. Attending class and engaging in their first 90 days — future Core members.`,
+    drifter: (count) => `${count} member${count !== 1 ? "s" : ""} haven't attended in 7-13 days. A check-in now prevents them from crossing into At-Risk.`,
+    "at-risk": (count) => `${count} member${count !== 1 ? "s" : ""} — new members in their first 90 days or 14+ days since last class. Reach out this week.`,
+    ghost: (count) => `${count} member${count !== 1 ? "s" : ""} haven't attended in 30+ days. They're likely to cancel without direct action. Immediate outreach is critical.`,
   };
 
   const urgencyConfig: Record<string, { color: string; bgColor: string; dotColor: string; label: string }> = {
