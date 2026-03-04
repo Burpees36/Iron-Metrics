@@ -665,7 +665,7 @@ function ReportView({ gymId }: { gymId: string }) {
         <PillarCard
           label="Engagement"
           icon={Users}
-          primary={String(cei.score)}
+          primary={`${cei.score}/100`}
           primaryLabel="Community Engagement Index"
           supporting={`${cei.activePercent}%`}
           supportingLabel="Active (2+ visits / 14d)"
