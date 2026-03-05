@@ -29,6 +29,7 @@ import LeadPipeline from "@/pages/lead-pipeline";
 import LeadImport from "@/pages/lead-import";
 import AiOperator from "@/pages/ai-operator";
 import OperatorDashboard from "@/pages/operator-dashboard";
+import BillingIntelligence from "@/pages/billing-intelligence";
 import { NotificationBell } from "@/components/notification-bell";
 
 
@@ -74,6 +75,7 @@ function AuthenticatedApp() {
               <Route path="/gyms/:id/strategy" component={GymStrategy} />
               <Route path="/gyms/:id/member-risk" component={GymMemberRisk} />
               <Route path="/gyms/:id/planning" component={GymPlanning} />
+              <Route path="/gyms/:id/billing" component={BillingIntelligence} />
               <Route path="/gyms/:id/sales" component={SalesIntelligence} />
               <Route path="/gyms/:id/pipeline" component={LeadPipeline} />
               <Route path="/gyms/:id/leads/import" component={LeadImport} />

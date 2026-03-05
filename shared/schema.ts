@@ -657,3 +657,30 @@ export const interventionOutcomesRelations = relations(interventionOutcomes, ({ 
 export const insertInterventionOutcomeSchema = createInsertSchema(interventionOutcomes).omit({ id: true, createdAt: true });
 export type InsertInterventionOutcome = z.infer<typeof insertInterventionOutcomeSchema>;
 export type InterventionOutcome = typeof interventionOutcomes.$inferSelect;
+
+export const memberBilling = pgTable("member_billing", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gymId: varchar("gym_id").notNull().references(() => gyms.id),
+  memberId: varchar("member_id").notNull().references(() => members.id),
+  billingMonth: date("billing_month").notNull(),
+  amountDue: numeric("amount_due", { precision: 10, scale: 2 }).notNull().default("0"),
+  amountPaid: numeric("amount_paid", { precision: 10, scale: 2 }).notNull().default("0"),
+  status: text("status").notNull().default("pending"),
+  dueDate: date("due_date").notNull(),
+  paidAt: timestamp("paid_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_member_billing_gym").on(table.gymId),
+  index("idx_member_billing_member").on(table.memberId),
+  index("idx_member_billing_month").on(table.billingMonth),
+]);
+
+export const memberBillingRelations = relations(memberBilling, ({ one }) => ({
+  gym: one(gyms, { fields: [memberBilling.gymId], references: [gyms.id] }),
+  member: one(members, { fields: [memberBilling.memberId], references: [members.id] }),
+}));
+
+export const insertMemberBillingSchema = createInsertSchema(memberBilling).omit({ id: true, createdAt: true });
+export type InsertMemberBilling = z.infer<typeof insertMemberBillingSchema>;
+export type MemberBilling = typeof memberBilling.$inferSelect;

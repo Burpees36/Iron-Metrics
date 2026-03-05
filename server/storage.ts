@@ -27,6 +27,8 @@ import {
   type AiOperatorRun, type InsertAiOperatorRun,
   type OperatorTask, type InsertOperatorTask,
   type InterventionOutcome, type InsertInterventionOutcome,
+  memberBilling,
+  type MemberBilling, type InsertMemberBilling,
 } from "@shared/schema";
 import { db } from "./db";
 import { pool } from "./db";
@@ -141,6 +143,11 @@ export interface IStorage {
     totalTasks: number;
   }>;
   createInterventionOutcome(outcome: InsertInterventionOutcome): Promise<InterventionOutcome>;
+
+  getMemberBillingByGym(gymId: string, billingMonth: string): Promise<MemberBilling[]>;
+  upsertMemberBilling(billing: InsertMemberBilling): Promise<MemberBilling>;
+  updateMemberBilling(id: string, updates: Partial<MemberBilling>): Promise<MemberBilling>;
+  getMemberBillingByMember(memberId: string, billingMonth: string): Promise<MemberBilling | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -858,6 +865,43 @@ export class DatabaseStorage implements IStorage {
   async createInterventionOutcome(outcome: InsertInterventionOutcome): Promise<InterventionOutcome> {
     const [created] = await db.insert(interventionOutcomes).values(outcome).returning();
     return created;
+  }
+
+  async getMemberBillingByGym(gymId: string, billingMonth: string): Promise<MemberBilling[]> {
+    return db.select().from(memberBilling)
+      .where(and(eq(memberBilling.gymId, gymId), eq(memberBilling.billingMonth, billingMonth)))
+      .orderBy(memberBilling.dueDate);
+  }
+
+  async upsertMemberBilling(billing: InsertMemberBilling): Promise<MemberBilling> {
+    const existing = await db.select().from(memberBilling)
+      .where(and(
+        eq(memberBilling.memberId, billing.memberId!),
+        eq(memberBilling.billingMonth, billing.billingMonth!)
+      ));
+    if (existing.length > 0) {
+      const [updated] = await db.update(memberBilling)
+        .set(billing)
+        .where(eq(memberBilling.id, existing[0].id))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(memberBilling).values(billing).returning();
+    return created;
+  }
+
+  async updateMemberBilling(id: string, updates: Partial<MemberBilling>): Promise<MemberBilling> {
+    const [updated] = await db.update(memberBilling)
+      .set(updates)
+      .where(eq(memberBilling.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getMemberBillingByMember(memberId: string, billingMonth: string): Promise<MemberBilling | undefined> {
+    const [record] = await db.select().from(memberBilling)
+      .where(and(eq(memberBilling.memberId, memberId), eq(memberBilling.billingMonth, billingMonth)));
+    return record;
   }
 }
 

@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { gyms, members, gymMonthlyMetrics, leads, consults, salesMemberships, payments } from "@shared/schema";
+import { gyms, members, gymMonthlyMetrics, leads, consults, salesMemberships, payments, memberBilling } from "@shared/schema";
 import { users } from "@shared/models/auth";
 import { eq } from "drizzle-orm";
 import { DEMO_GYM_ID, DEMO_USER_ID } from "./replit_integrations/auth";
@@ -273,5 +273,51 @@ async function seedDemoLeads(gymId: string) {
         paidAt: leadData.wonAt,
       });
     }
+  }
+
+  const allMembers = await db.select().from(members).where(eq(members.gymId, gymId));
+  const activeForBilling = allMembers.filter(m => m.status === "active" && Number(m.monthlyRate) > 0);
+  const billingMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const currentDay = now.getDate();
+
+  for (const member of activeForBilling) {
+    const joinDay = Math.min(new Date(member.joinDate + "T12:00:00Z").getUTCDate(), 28);
+    const rate = Number(member.monthlyRate);
+    const dueDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(joinDay).padStart(2, "0")}`;
+
+    let status: string;
+    let amountPaid = "0";
+    let paidAt: Date | null = null;
+
+    if (joinDay < currentDay - 2) {
+      const rand = Math.random();
+      if (rand < 0.8) {
+        status = "paid";
+        amountPaid = rate.toString();
+        const paidDay = joinDay + Math.floor(Math.random() * 2);
+        paidAt = new Date(now.getFullYear(), now.getMonth(), Math.min(paidDay, currentDay));
+      } else {
+        status = "overdue";
+      }
+    } else if (joinDay <= currentDay) {
+      status = Math.random() < 0.6 ? "paid" : "pending";
+      if (status === "paid") {
+        amountPaid = rate.toString();
+        paidAt = new Date(now.getFullYear(), now.getMonth(), joinDay);
+      }
+    } else {
+      status = "pending";
+    }
+
+    await db.insert(memberBilling).values({
+      gymId,
+      memberId: member.id,
+      billingMonth: billingMonthStr,
+      amountDue: rate.toString(),
+      amountPaid,
+      status,
+      dueDate,
+      paidAt,
+    });
   }
 }

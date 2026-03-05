@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import { z } from "zod";
 import { storage } from "./storage";
 import { setupAuth, registerAuthRoutes, isAuthenticated, isDemoUser, demoReadOnlyGuard, DEMO_USER_ID, DEMO_GYM_ID } from "./replit_integrations/auth";
 import { parseMembersCsv, previewCsv, parseAllRows, computeFileHash, type ColumnMapping } from "./csv-parser";
@@ -2443,6 +2444,75 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error generating weekly plan:", error);
       res.status(500).json({ message: "Failed to generate weekly plan" });
+    }
+  });
+
+  app.get("/api/gyms/:id/billing", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const now = new Date();
+      const yearParsed = parseInt(req.query.year as string);
+      const monthParsed = parseInt(req.query.month as string);
+      const year = Number.isNaN(yearParsed) ? now.getFullYear() : yearParsed;
+      const month = Number.isNaN(monthParsed) ? now.getMonth() : monthParsed;
+
+      const { generateBillingData } = await import("./billing-engine");
+      const data = await generateBillingData(gym.id, year, month);
+      res.json(data);
+    } catch (error) {
+      console.error("Error fetching billing data:", error);
+      res.status(500).json({ message: "Failed to fetch billing data" });
+    }
+  });
+
+  const billingUpdateSchema = z.object({
+    memberId: z.string().optional(),
+    billingMonth: z.string().optional(),
+    status: z.enum(["paid", "pending", "overdue"]),
+    amountPaid: z.number().min(0).optional(),
+    notes: z.string().optional(),
+  });
+
+  app.patch("/api/gyms/:id/billing/:memberId", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const parsed = billingUpdateSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Invalid request", errors: parsed.error.errors });
+
+      const { memberId, billingMonth, status, amountPaid, notes } = parsed.data;
+      const memberIdToUse = memberId || req.params.memberId;
+
+      const member = await storage.getMemberById(memberIdToUse);
+      if (!member) return res.status(404).json({ message: "Member not found" });
+
+      const monthStr = billingMonth || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-01`;
+      const rate = Number(member.monthlyRate) || 0;
+      const joinDay = Math.min(new Date(member.joinDate + "T12:00:00Z").getUTCDate(), 28);
+      const [y, m] = monthStr.split("-").map(Number);
+      const dueDate = `${y}-${String(m).padStart(2, "0")}-${String(joinDay).padStart(2, "0")}`;
+
+      const record = await storage.upsertMemberBilling({
+        gymId: gym.id,
+        memberId: memberIdToUse,
+        billingMonth: monthStr,
+        amountDue: rate.toString(),
+        amountPaid: (amountPaid !== undefined ? amountPaid : (status === "paid" ? rate : 0)).toString(),
+        status: status || "paid",
+        dueDate,
+        paidAt: status === "paid" ? new Date() : null,
+        notes: notes || null,
+      });
+
+      res.json(record);
+    } catch (error) {
+      console.error("Error updating billing record:", error);
+      res.status(500).json({ message: "Failed to update billing record" });
     }
   });
 
