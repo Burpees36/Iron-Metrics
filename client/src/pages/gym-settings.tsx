@@ -2,14 +2,16 @@ import { useRoute } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/auth-utils";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Form,
   FormControl,
@@ -18,9 +20,45 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Settings, Save, Upload, Plug, RefreshCw, ChevronRight, Download } from "lucide-react";
+import {
+  Settings,
+  Save,
+  Upload,
+  Plug,
+  RefreshCw,
+  ChevronRight,
+  Download,
+  CreditCard,
+  ExternalLink,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  XCircle,
+  Sparkles,
+  ArrowUpRight,
+} from "lucide-react";
 import { Link } from "wouter";
 import { useGymData, GymPageShell, GymNotFound, GymDetailSkeleton, PageHeader } from "./gym-detail";
+import { useAuth } from "@/hooks/use-auth";
+
+interface SubscriptionStatus {
+  hasSubscription: boolean;
+  status: "none" | "trialing" | "active" | "past_due" | "canceled" | "unpaid" | "expired";
+  plan: string | null;
+  trialEndsAt: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd?: boolean;
+  isActive: boolean;
+  stripeConfigured: boolean;
+}
+
+interface PlansData {
+  plans: {
+    starter: { name: string; price: number; priceDisplay: string; features: string[] };
+    pro: { name: string; price: number; priceDisplay: string; features: string[] };
+  };
+  stripeConfigured: boolean;
+}
 
 const formSchema = z.object({
   name: z.string().min(1, "Gym name is required").max(100),
@@ -29,12 +67,337 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return "N/A";
+  return new Date(dateStr).toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function daysUntil(dateStr: string | null): number | null {
+  if (!dateStr) return null;
+  const diff = new Date(dateStr).getTime() - Date.now();
+  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+}
+
+function StatusBadge({ status, cancelAtPeriodEnd }: { status: string; cancelAtPeriodEnd?: boolean }) {
+  if (cancelAtPeriodEnd && status === "active") {
+    return (
+      <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30" data-testid="badge-subscription-canceling">
+        <Clock className="w-3 h-3 mr-1" />
+        Canceling
+      </Badge>
+    );
+  }
+
+  switch (status) {
+    case "active":
+      return (
+        <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30" data-testid="badge-subscription-active">
+          <CheckCircle2 className="w-3 h-3 mr-1" />
+          Active
+        </Badge>
+      );
+    case "trialing":
+      return (
+        <Badge className="bg-blue-500/15 text-blue-400 border-blue-500/30" data-testid="badge-subscription-trial">
+          <Sparkles className="w-3 h-3 mr-1" />
+          Free Trial
+        </Badge>
+      );
+    case "past_due":
+    case "unpaid":
+      return (
+        <Badge className="bg-red-500/15 text-red-400 border-red-500/30" data-testid="badge-subscription-past-due">
+          <AlertTriangle className="w-3 h-3 mr-1" />
+          {status === "unpaid" ? "Unpaid" : "Past Due"}
+        </Badge>
+      );
+    case "canceled":
+    case "expired":
+      return (
+        <Badge className="bg-muted text-muted-foreground border-border" data-testid="badge-subscription-canceled">
+          <XCircle className="w-3 h-3 mr-1" />
+          {status === "expired" ? "Trial Expired" : "Canceled"}
+        </Badge>
+      );
+    default:
+      return (
+        <Badge className="bg-muted text-muted-foreground border-border" data-testid="badge-subscription-none">
+          No Plan
+        </Badge>
+      );
+  }
+}
+
+function SubscriptionSection({ gymId, isDemoUser }: { gymId: string; isDemoUser: boolean }) {
+  const { toast } = useToast();
+
+  const { data: subscription, isLoading: subLoading } = useQuery<SubscriptionStatus>({
+    queryKey: ["/api/gyms", gymId, "subscription"],
+    queryFn: async () => {
+      const res = await fetch(`/api/gyms/${gymId}/subscription`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load subscription");
+      return res.json();
+    },
+  });
+
+  const { data: plansData, isLoading: plansLoading } = useQuery<PlansData>({
+    queryKey: ["/api/plans"],
+  });
+
+  const checkoutMutation = useMutation({
+    mutationFn: async (plan: "starter" | "pro") => {
+      const res = await apiRequest("POST", `/api/gyms/${gymId}/subscription/checkout`, {
+        plan,
+        returnUrl: window.location.href,
+      });
+      return res.json();
+    },
+    onSuccess: (data: { url: string }) => {
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const portalMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/gyms/${gymId}/subscription/portal`, {
+        returnUrl: window.location.href,
+      });
+      return res.json();
+    },
+    onSuccess: (data: { url: string }) => {
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  if (subLoading) {
+    return (
+      <div className="space-y-3 pt-2">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Subscription & Billing</p>
+        <Card>
+          <CardContent className="p-6 space-y-4">
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="h-4 w-64" />
+            <Skeleton className="h-9 w-32" />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const sub = subscription;
+  const plans = plansData?.plans;
+  const dataLoaded = !subLoading && !plansLoading;
+  const stripeReady = dataLoaded && sub?.stripeConfigured && plansData?.stripeConfigured;
+  const currentPlan = sub?.plan as "starter" | "pro" | null;
+  const trialDaysLeft = daysUntil(sub?.trialEndsAt ?? null);
+  const periodEnd = sub?.currentPeriodEnd ? formatDate(sub.currentPeriodEnd) : null;
+  const hasActiveSubscription = sub?.isActive && sub?.status !== "trialing";
+  const hasBillingHistory = !!sub?.hasSubscription && !!sub?.plan;
+  const starterLabel = plans?.starter ? `${plans.starter.name} ${plans.starter.priceDisplay}` : "Starter $149/mo";
+  const proLabel = plans?.pro ? `${plans.pro.name} ${plans.pro.priceDisplay}` : "Pro $249/mo";
+
+  return (
+    <div className="space-y-3 pt-2">
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Subscription & Billing</p>
+
+      <Card data-testid="card-subscription">
+        <CardContent className="p-6 space-y-5">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-md bg-primary/10">
+                <CreditCard className="w-4 h-4 text-primary" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium" data-testid="text-current-plan">
+                    {currentPlan ? `${plans?.[currentPlan]?.name ?? currentPlan} Plan` : "No Plan"}
+                  </p>
+                  <StatusBadge status={sub?.status ?? "none"} cancelAtPeriodEnd={sub?.cancelAtPeriodEnd} />
+                </div>
+                {sub?.status === "trialing" && trialDaysLeft !== null && (
+                  <p className="text-xs text-muted-foreground mt-0.5" data-testid="text-trial-info">
+                    {trialDaysLeft > 0
+                      ? `${trialDaysLeft} day${trialDaysLeft !== 1 ? "s" : ""} remaining in your free trial`
+                      : "Your free trial has ended"}
+                  </p>
+                )}
+                {sub?.status === "active" && periodEnd && (
+                  <p className="text-xs text-muted-foreground mt-0.5" data-testid="text-period-end">
+                    {sub.cancelAtPeriodEnd
+                      ? `Access until ${periodEnd}`
+                      : `Next billing date: ${periodEnd}`}
+                  </p>
+                )}
+                {(sub?.status === "past_due" || sub?.status === "unpaid") && (
+                  <p className="text-xs text-red-400 mt-0.5" data-testid="text-past-due-warning">
+                    Payment failed. Update your payment method to avoid service interruption.
+                  </p>
+                )}
+                {(sub?.status === "canceled" || sub?.status === "expired") && (
+                  <p className="text-xs text-muted-foreground mt-0.5" data-testid="text-canceled-info">
+                    Subscribe to regain full access to Iron Metrics.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {(sub?.status === "past_due" || sub?.status === "unpaid") && stripeReady && !isDemoUser && (
+            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+              <p className="text-sm text-red-400 font-medium">Payment Required</p>
+              <p className="text-xs text-red-400/80 mt-1">
+                Your last payment didn't go through. Please update your payment method to keep your account active.
+              </p>
+              <Button
+                size="sm"
+                variant="destructive"
+                className="mt-2"
+                onClick={() => portalMutation.mutate()}
+                disabled={portalMutation.isPending}
+                data-testid="button-update-payment-urgent"
+              >
+                <CreditCard className="w-3.5 h-3.5 mr-1" />
+                {portalMutation.isPending ? "Loading..." : "Update Payment Method"}
+              </Button>
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2 pt-1">
+            {hasActiveSubscription && stripeReady && !isDemoUser && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => portalMutation.mutate()}
+                disabled={portalMutation.isPending}
+                data-testid="button-manage-billing"
+              >
+                <ExternalLink className="w-3.5 h-3.5 mr-1" />
+                {portalMutation.isPending ? "Loading..." : "Manage Billing"}
+              </Button>
+            )}
+
+            {sub?.status === "trialing" && stripeReady && !isDemoUser && (
+              <>
+                <Button
+                  size="sm"
+                  onClick={() => checkoutMutation.mutate("starter")}
+                  disabled={checkoutMutation.isPending}
+                  data-testid="button-subscribe-starter"
+                >
+                  <ArrowUpRight className="w-3.5 h-3.5 mr-1" />
+                  {checkoutMutation.isPending ? "Loading..." : `Subscribe — ${starterLabel}`}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => checkoutMutation.mutate("pro")}
+                  disabled={checkoutMutation.isPending}
+                  data-testid="button-subscribe-pro"
+                >
+                  <ArrowUpRight className="w-3.5 h-3.5 mr-1" />
+                  {checkoutMutation.isPending ? "Loading..." : `Subscribe — ${proLabel}`}
+                </Button>
+              </>
+            )}
+
+            {(sub?.status === "canceled" || sub?.status === "expired" || sub?.status === "none") && stripeReady && !isDemoUser && (
+              <>
+                <Button
+                  size="sm"
+                  onClick={() => checkoutMutation.mutate("starter")}
+                  disabled={checkoutMutation.isPending}
+                  data-testid="button-resubscribe-starter"
+                >
+                  <ArrowUpRight className="w-3.5 h-3.5 mr-1" />
+                  {checkoutMutation.isPending ? "Loading..." : `Start ${starterLabel}`}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => checkoutMutation.mutate("pro")}
+                  disabled={checkoutMutation.isPending}
+                  data-testid="button-resubscribe-pro"
+                >
+                  <ArrowUpRight className="w-3.5 h-3.5 mr-1" />
+                  {checkoutMutation.isPending ? "Loading..." : `Start ${proLabel}`}
+                </Button>
+              </>
+            )}
+
+            {currentPlan === "starter" && sub?.isActive && stripeReady && !isDemoUser && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => checkoutMutation.mutate("pro")}
+                disabled={checkoutMutation.isPending}
+                data-testid="button-upgrade-pro"
+              >
+                <Sparkles className="w-3.5 h-3.5 mr-1" />
+                {checkoutMutation.isPending ? "Loading..." : `Upgrade to ${proLabel}`}
+              </Button>
+            )}
+          </div>
+
+          {hasBillingHistory && stripeReady && !isDemoUser && (
+            <div className="pt-3 border-t border-border/50">
+              <button
+                onClick={() => portalMutation.mutate()}
+                disabled={portalMutation.isPending}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
+                data-testid="link-billing-portal"
+              >
+                <ExternalLink className="w-3 h-3" />
+                View invoices, update payment method, or cancel
+              </button>
+            </div>
+          )}
+
+          {!stripeReady && dataLoaded && !isDemoUser && (
+            <p className="text-xs text-muted-foreground">
+              Payment processing is being configured. Subscription management will be available soon.
+            </p>
+          )}
+
+          {plansLoading && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <RefreshCw className="w-3 h-3 animate-spin" />
+              Loading plan details...
+            </div>
+          )}
+
+          {isDemoUser && (
+            <p className="text-xs text-muted-foreground italic">
+              Subscription management is disabled in demo mode.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function GymSettings() {
   const [, params] = useRoute("/gyms/:id/settings");
   const gymId = params?.id;
 
   const { data: gym, isLoading: gymLoading } = useGymData(gymId);
+  const { user } = useAuth();
   const { toast } = useToast();
+  const isDemoUser = !user;
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -99,8 +462,8 @@ export default function GymSettings() {
       <div className="max-w-lg space-y-8 animate-fade-in-up">
         <PageHeader
           title="Settings"
-          subtitle="Manage your gym details, import member data, and connect your gym management platform."
-          howTo="Edit your gym info below, or use the data tools to import members or sync with Wodify."
+          subtitle="Manage your gym details, subscription, and data integrations."
+          howTo="Edit your gym info, manage your subscription, or use the data tools below."
           icon={Settings}
         />
 
@@ -152,6 +515,8 @@ export default function GymSettings() {
             Created {new Date(gym.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
           </p>
         )}
+
+        <SubscriptionSection gymId={gymId!} isDemoUser={isDemoUser} />
 
         <div className="space-y-3 pt-2">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Data & Integrations</p>
