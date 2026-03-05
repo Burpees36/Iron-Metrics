@@ -29,6 +29,8 @@ import {
   type InterventionOutcome, type InsertInterventionOutcome,
   memberBilling,
   type MemberBilling, type InsertMemberBilling,
+  subscriptions,
+  type Subscription, type InsertSubscription,
 } from "@shared/schema";
 import { db } from "./db";
 import { pool } from "./db";
@@ -146,9 +148,16 @@ export interface IStorage {
   deleteOperatorTasksByGym(gymId: string): Promise<number>;
 
   getMemberBillingByGym(gymId: string, billingMonth: string): Promise<MemberBilling[]>;
+  getAllMemberBillingByGym(gymId: string): Promise<MemberBilling[]>;
   upsertMemberBilling(billing: InsertMemberBilling): Promise<MemberBilling>;
   updateMemberBilling(id: string, updates: Partial<MemberBilling>): Promise<MemberBilling>;
   getMemberBillingByMember(memberId: string, billingMonth: string): Promise<MemberBilling | undefined>;
+
+  getSubscriptionByGym(gymId: string): Promise<Subscription | undefined>;
+  getSubscriptionByStripeCustomerId(stripeCustomerId: string): Promise<Subscription | undefined>;
+  getSubscriptionByStripeSubscriptionId(stripeSubscriptionId: string): Promise<Subscription | undefined>;
+  createSubscription(sub: InsertSubscription): Promise<Subscription>;
+  updateSubscription(id: string, updates: Partial<Subscription>): Promise<Subscription>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -879,6 +888,12 @@ export class DatabaseStorage implements IStorage {
       .orderBy(memberBilling.dueDate);
   }
 
+  async getAllMemberBillingByGym(gymId: string): Promise<MemberBilling[]> {
+    return db.select().from(memberBilling)
+      .where(eq(memberBilling.gymId, gymId))
+      .orderBy(desc(memberBilling.billingMonth));
+  }
+
   async upsertMemberBilling(billing: InsertMemberBilling): Promise<MemberBilling> {
     const existing = await db.select().from(memberBilling)
       .where(and(
@@ -908,6 +923,34 @@ export class DatabaseStorage implements IStorage {
     const [record] = await db.select().from(memberBilling)
       .where(and(eq(memberBilling.memberId, memberId), eq(memberBilling.billingMonth, billingMonth)));
     return record;
+  }
+
+  async getSubscriptionByGym(gymId: string): Promise<Subscription | undefined> {
+    const [sub] = await db.select().from(subscriptions).where(eq(subscriptions.gymId, gymId));
+    return sub;
+  }
+
+  async getSubscriptionByStripeCustomerId(stripeCustomerId: string): Promise<Subscription | undefined> {
+    const [sub] = await db.select().from(subscriptions).where(eq(subscriptions.stripeCustomerId, stripeCustomerId));
+    return sub;
+  }
+
+  async getSubscriptionByStripeSubscriptionId(stripeSubscriptionId: string): Promise<Subscription | undefined> {
+    const [sub] = await db.select().from(subscriptions).where(eq(subscriptions.stripeSubscriptionId, stripeSubscriptionId));
+    return sub;
+  }
+
+  async createSubscription(sub: InsertSubscription): Promise<Subscription> {
+    const [created] = await db.insert(subscriptions).values(sub).returning();
+    return created;
+  }
+
+  async updateSubscription(id: string, updates: Partial<Subscription>): Promise<Subscription> {
+    const [updated] = await db.update(subscriptions)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(subscriptions.id, id))
+      .returning();
+    return updated;
   }
 }
 

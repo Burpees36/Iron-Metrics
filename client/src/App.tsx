@@ -15,6 +15,7 @@ import LandingPage from "@/pages/landing";
 import Dashboard from "@/pages/dashboard";
 import GymDetail from "@/pages/gym-detail";
 import GymNew from "@/pages/gym-new";
+import Onboarding from "@/pages/onboarding";
 import CsvImport from "@/pages/csv-import";
 import WodifyIntegration from "@/pages/wodify-integration";
 import GymTrends from "@/pages/gym-trends";
@@ -30,7 +31,10 @@ import LeadImport from "@/pages/lead-import";
 import AiOperator from "@/pages/ai-operator";
 import OperatorDashboard from "@/pages/operator-dashboard";
 import BillingIntelligence from "@/pages/billing-intelligence";
+import TermsOfService from "@/pages/terms";
+import PrivacyPolicy from "@/pages/privacy";
 import { NotificationBell } from "@/components/notification-bell";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 
 function DemoBanner() {
@@ -69,6 +73,7 @@ function AuthenticatedApp() {
             <Switch>
               <Route path="/" component={Dashboard} />
               <Route path="/gyms/new" component={GymNew} />
+              <Route path="/gyms/onboarding" component={Onboarding} />
               <Route path="/gyms/:id/import" component={CsvImport} />
               <Route path="/gyms/:id/wodify" component={WodifyIntegration} />
               <Route path="/gyms/:id/trends" component={GymTrends} />
@@ -109,7 +114,13 @@ function AppContent() {
   }
 
   if (!user) {
-    return <LandingPage />;
+    return (
+      <Switch>
+        <Route path="/terms" component={TermsOfService} />
+        <Route path="/privacy" component={PrivacyPolicy} />
+        <Route component={LandingPage} />
+      </Switch>
+    );
   }
 
   return <AuthenticatedApp />;
@@ -121,7 +132,9 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <LuxuryThemeShell>
-            <AppContent />
+            <ErrorBoundary>
+              <AppContent />
+            </ErrorBoundary>
           </LuxuryThemeShell>
           <Toaster />
         </TooltipProvider>

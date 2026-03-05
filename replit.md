@@ -45,12 +45,26 @@ Iron Metrics includes a Stability Command Center dashboard with key financial an
 -   **Wodify Integration**: Direct API connection for data synchronization, including backfill and incremental sync.
 -   **Demo Mode**: Unauthenticated visitors can click "Try Demo" on the landing page to explore the full app with real sample data (read-only). Demo users see a persistent banner and cannot modify any data. Backend uses `isDemoUser()` check and `demoReadOnlyGuard` middleware. Demo gym ID: `f2d3ff6b-ced8-4735-847e-4f65b4cad721`.
 
+### Production Readiness & Security
+-   **Security Headers**: `helmet` middleware provides CSP, HSTS, X-Frame-Options, X-Content-Type-Options, and other security headers. CSP and COEP are disabled to allow Replit's proxy and embedding to work.
+-   **API Rate Limiting**: Global rate limiting via `express-rate-limit` at 100 requests/minute per IP on all `/api` routes. AI Operator has additional per-user (10/10min) and per-gym (20/10min) limits.
+-   **Tenant Isolation**: All gym-scoped routes validate ownership via `checkGymAccess()`. Knowledge base management routes require gym ownership. Sales recalc-status route includes gym access check.
+-   **Health Endpoint**: `GET /api/health` with database connectivity check for uptime monitoring.
+-   **Database Pool Error Handling**: `pool.on("error")` listener prevents unhandled pool errors from crashing the process.
+-   **React Error Boundary**: Global `ErrorBoundary` component wrapping the app catches render errors and shows a friendly fallback UI with reload button.
+-   **Stripe Subscription Infrastructure**: `subscriptions` table tracks gym subscription state (plan, status, trial_ends_at, current_period_end). Stripe Checkout session creation, Customer Portal, and webhook handler for lifecycle events. 14-day free trial auto-created on gym creation. Subscription status API at `GET /api/gyms/:id/subscription`. Stripe integration pending connector setup.
+-   **Pricing Page**: Landing page includes pricing section with Starter ($149/mo) and Pro ($249/mo) plan cards.
+-   **Onboarding Wizard**: Multi-step onboarding at `/gyms/onboarding` — gym name/location entry, data source selection (CSV/Wodify/Sample), and quick feature tour.
+-   **Legal Pages**: Terms of Service at `/terms` and Privacy Policy at `/privacy` with footer links throughout the app.
+-   **Data Export**: CSV export endpoints for members, leads, metrics, and billing at `/api/gyms/:id/export/*`. Export buttons in gym settings.
+
 ### Intelligence Philosophy
 All insights are presented as Iron Metrics intelligence, embedding coaching concepts without external attribution. Strategic briefs are limited to the top 3 ranked recommendations, focusing on distinct execution categories with concise checklists and action items. Language is direct and gym-owner-friendly, avoiding jargon. Recommendations are validated against the project's core objectives: improving financial stability, retention clarity, reducing owner stress, and strengthening community longevity.
 
 ## External Dependencies
 -   **Replit Auth**: For user authentication (OpenID Connect).
 -   **PostgreSQL**: Primary database for all application data.
+-   **Stripe**: Payment processing for SaaS subscriptions (via Replit integration connector).
 -   **Wodify**: Third-party gym management platform for attendance and membership data integration.
 -   **Tailwind CSS**: Utility-first CSS framework.
 -   **shadcn/ui**: UI component library.
@@ -59,3 +73,5 @@ All insights are presented as Iron Metrics intelligence, embedding coaching conc
 -   **Express.js**: Backend web application framework.
 -   **Drizzle ORM**: TypeScript ORM for database interaction.
 -   **wouter**: Small routing library for React.
+-   **helmet**: Security headers middleware.
+-   **express-rate-limit**: API rate limiting.

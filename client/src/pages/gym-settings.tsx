@@ -6,7 +6,7 @@ import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/auth-utils";
 import { useToast } from "@/hooks/use-toast";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Settings, Save, Upload, Plug, RefreshCw, ChevronRight } from "lucide-react";
+import { Settings, Save, Upload, Plug, RefreshCw, ChevronRight, Download } from "lucide-react";
 import { Link } from "wouter";
 import { useGymData, GymPageShell, GymNotFound, GymDetailSkeleton, PageHeader } from "./gym-detail";
 
@@ -208,7 +208,73 @@ export default function GymSettings() {
             </Card>
           </div>
         </div>
+
+        <div className="space-y-3 pt-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Export Your Data</p>
+          <Card>
+            <CardContent className="p-4 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-md bg-primary/10">
+                  <Download className="w-4 h-4 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Export My Data</p>
+                  <p className="text-xs text-muted-foreground">Download all your gym data as CSV files.</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <ExportButton gymId={gymId!} type="members" label="Members" />
+                <ExportButton gymId={gymId!} type="leads" label="Leads" />
+                <ExportButton gymId={gymId!} type="metrics" label="Metrics" />
+                <ExportButton gymId={gymId!} type="billing" label="Billing" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </GymPageShell>
+  );
+}
+
+function ExportButton({ gymId, type, label }: { gymId: string; type: string; label: string }) {
+  const [downloading, setDownloading] = useState(false);
+  const { toast } = useToast();
+
+  const handleExport = async () => {
+    setDownloading(true);
+    try {
+      const response = await fetch(`/api/gyms/${gymId}/export/${type}`, { credentials: "include" });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ message: "Export failed" }));
+        throw new Error(err.message);
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${type}-${gymId}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast({ title: "Export complete", description: `${label} data downloaded successfully.` });
+    } catch (error: any) {
+      toast({ title: "Export failed", description: error.message, variant: "destructive" });
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={handleExport}
+      disabled={downloading}
+      data-testid={`button-export-${type}`}
+    >
+      <Download className="w-3.5 h-3.5 mr-1" />
+      {downloading ? "Downloading..." : label}
+    </Button>
   );
 }

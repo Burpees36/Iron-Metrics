@@ -23,6 +23,8 @@ import { generateOperatorOutput } from "./operator-generator";
 import { buildTieredContext } from "./operator-context";
 import { checkRateLimit, recordGeneration } from "./operator-rate-limiter";
 import { OPERATOR_PILLS, OPERATOR_TASK_TYPES, OPERATOR_TASK_STATUSES, type OperatorPill, type OperatorTaskType, type OperatorRole } from "@shared/schema";
+import { pool } from "./db";
+import { createCheckoutSession, createCustomerPortalSession, handleWebhookEvent, getSubscriptionStatus, ensureTrialSubscription, isStripeConfigured, PLANS } from "./stripe";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -51,6 +53,83 @@ export async function registerRoutes(
 ): Promise<Server> {
   await setupAuth(app);
   registerAuthRoutes(app);
+
+  app.get("/api/health", async (_req, res) => {
+    try {
+      const result = await pool.query("SELECT 1");
+      res.json({ status: "healthy", db: "connected", timestamp: new Date().toISOString() });
+    } catch (error) {
+      res.status(503).json({ status: "unhealthy", db: "disconnected", timestamp: new Date().toISOString() });
+    }
+  });
+
+  app.get("/api/plans", (_req, res) => {
+    res.json({
+      plans: PLANS,
+      stripeConfigured: isStripeConfigured(),
+    });
+  });
+
+  app.get("/api/gyms/:id/subscription", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const status = await getSubscriptionStatus(req.params.id);
+      res.json(status);
+    } catch (error) {
+      console.error("Error fetching subscription:", error);
+      res.status(500).json({ message: "Failed to fetch subscription status" });
+    }
+  });
+
+  app.post("/api/gyms/:id/subscription/checkout", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const { plan } = req.body;
+      if (!plan || !["starter", "pro"].includes(plan)) {
+        return res.status(400).json({ message: "Invalid plan" });
+      }
+
+      const userEmail = req.user?.claims?.email || "";
+      const returnUrl = `${req.protocol}://${req.get("host")}/gyms/${req.params.id}/settings`;
+      const session = await createCheckoutSession(req.params.id, plan, userEmail, returnUrl);
+      res.json(session);
+    } catch (error: any) {
+      console.error("Error creating checkout session:", error);
+      res.status(500).json({ message: error.message || "Failed to create checkout session" });
+    }
+  });
+
+  app.post("/api/gyms/:id/subscription/portal", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const returnUrl = `${req.protocol}://${req.get("host")}/gyms/${req.params.id}/settings`;
+      const session = await createCustomerPortalSession(req.params.id, returnUrl);
+      res.json(session);
+    } catch (error: any) {
+      console.error("Error creating portal session:", error);
+      res.status(500).json({ message: error.message || "Failed to create portal session" });
+    }
+  });
+
+  app.post("/api/stripe/webhook", async (req: any, res) => {
+    try {
+      const sig = req.headers["stripe-signature"];
+      if (!sig) return res.status(400).json({ message: "Missing stripe-signature header" });
+      const result = await handleWebhookEvent(req.rawBody, sig);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Webhook error:", error);
+      res.status(400).json({ message: error.message || "Webhook error" });
+    }
+  });
 
   app.post("/api/demo", async (req: any, res, next) => {
     try {
@@ -100,6 +179,11 @@ export async function registerRoutes(
       const userId = req.user.claims.sub;
       const parsed = insertGymSchema.parse({ ...req.body, ownerId: userId });
       const gym = await storage.createGym(parsed);
+      try {
+        await ensureTrialSubscription(gym.id);
+      } catch (e) {
+        console.error("Error creating trial subscription:", e);
+      }
       res.status(201).json(gym);
     } catch (error: any) {
       console.error("Error creating gym:", error);
@@ -1273,8 +1357,12 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/knowledge/sources", isAuthenticated, async (_req: any, res) => {
+  app.get("/api/knowledge/sources", isAuthenticated, async (req: any, res) => {
     try {
+      const userId = isDemoUser(req) ? DEMO_USER_ID : req.user?.claims?.sub;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const gyms = isDemoUser(req) ? [await storage.getGym(DEMO_GYM_ID)] : await storage.getGymsByOwner(userId);
+      if (!gyms || gyms.length === 0) return res.json([]);
       const sources = await storage.getKnowledgeSources();
       res.json(sources);
     } catch (error) {
@@ -1285,6 +1373,10 @@ export async function registerRoutes(
 
   app.post("/api/knowledge/sources", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
     try {
+      const userId = req.user?.claims?.sub;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const gyms = await storage.getGymsByOwner(userId);
+      if (!gyms || gyms.length === 0) return res.status(403).json({ message: "Forbidden" });
       const parsed = insertKnowledgeSourceSchema.parse(req.body);
       const source = await storage.createKnowledgeSource(parsed);
       res.status(201).json(source);
@@ -1296,6 +1388,10 @@ export async function registerRoutes(
 
   app.delete("/api/knowledge/sources/:id", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
     try {
+      const userId = req.user?.claims?.sub;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const gyms = await storage.getGymsByOwner(userId);
+      if (!gyms || gyms.length === 0) return res.status(403).json({ message: "Forbidden" });
       await storage.deleteKnowledgeSource(req.params.id);
       res.json({ message: "Source deleted" });
     } catch (error) {
@@ -1306,6 +1402,10 @@ export async function registerRoutes(
 
   app.post("/api/knowledge/sources/:id/ingest", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
     try {
+      const userId = req.user?.claims?.sub;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const gyms = await storage.getGymsByOwner(userId);
+      if (!gyms || gyms.length === 0) return res.status(403).json({ message: "Forbidden" });
       const source = await storage.getKnowledgeSource(req.params.id);
       if (!source) return res.status(404).json({ message: "Source not found" });
 
@@ -1384,8 +1484,12 @@ export async function registerRoutes(
     res.json(TAXONOMY_TAGS);
   });
 
-  app.post("/api/knowledge/seed", isAuthenticated, demoReadOnlyGuard, async (_req: any, res) => {
+  app.post("/api/knowledge/seed", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
     try {
+      const userId = req.user?.claims?.sub;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const gyms = await storage.getGymsByOwner(userId);
+      if (!gyms || gyms.length === 0) return res.status(403).json({ message: "Forbidden" });
       res.json({ message: "Seeding started" });
       seedKnowledgeBase().then(result => {
         console.log("[SEED] Result:", JSON.stringify(result));
@@ -1400,6 +1504,10 @@ export async function registerRoutes(
 
   app.get("/api/knowledge/ingest-jobs", isAuthenticated, async (req: any, res) => {
     try {
+      const userId = isDemoUser(req) ? DEMO_USER_ID : req.user?.claims?.sub;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const gyms = isDemoUser(req) ? [await storage.getGym(DEMO_GYM_ID)] : await storage.getGymsByOwner(userId);
+      if (!gyms || gyms.length === 0) return res.json([]);
       const sourceId = typeof req.query.sourceId === "string" ? req.query.sourceId : undefined;
       const jobs = await storage.getIngestJobs(sourceId);
       res.json(jobs);
@@ -1444,6 +1552,9 @@ export async function registerRoutes(
 
   app.get("/api/gyms/:id/sales-intelligence/recalc-status", isAuthenticated, async (req: any, res) => {
     try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
       res.json(getRecalcStatus());
     } catch (error) {
       res.status(500).json({ message: "Failed to get recalc status" });
@@ -2530,7 +2641,140 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/gyms/:id/export/members", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const rows = await storage.getMembersByGym(req.params.id);
+      const header = "Name,Email,Status,Join Date,Cancel Date,Last Attended Date,Monthly Rate";
+      const csvRows = rows.map(r => [
+        escapeCsvField(r.name),
+        escapeCsvField(r.email || ""),
+        escapeCsvField(r.status),
+        escapeCsvField(r.joinDate),
+        escapeCsvField(r.cancelDate || ""),
+        escapeCsvField(r.lastAttendedDate || ""),
+        escapeCsvField(r.monthlyRate),
+      ].join(","));
+      const csv = [header, ...csvRows].join("\n");
+
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="members-${req.params.id}.csv"`);
+      res.send(csv);
+    } catch (error) {
+      console.error("Error exporting members:", error);
+      res.status(500).json({ message: "Failed to export members" });
+    }
+  });
+
+  app.get("/api/gyms/:id/export/leads", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const rows = await storage.getLeadsByGymAllTime(req.params.id);
+      const header = "Name,Email,Phone,Source,Status,Created At,Sale Price,Won At,Lost At,Lost Reason,Notes";
+      const csvRows = rows.map(r => [
+        escapeCsvField(r.name || ""),
+        escapeCsvField(r.email || ""),
+        escapeCsvField(r.phone || ""),
+        escapeCsvField(r.source),
+        escapeCsvField(r.status),
+        escapeCsvField(r.createdAt ? new Date(r.createdAt).toISOString() : ""),
+        escapeCsvField(r.salePrice || ""),
+        escapeCsvField(r.wonAt ? new Date(r.wonAt).toISOString() : ""),
+        escapeCsvField(r.lostAt ? new Date(r.lostAt).toISOString() : ""),
+        escapeCsvField(r.lostReason || ""),
+        escapeCsvField(r.notes || ""),
+      ].join(","));
+      const csv = [header, ...csvRows].join("\n");
+
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="leads-${req.params.id}.csv"`);
+      res.send(csv);
+    } catch (error) {
+      console.error("Error exporting leads:", error);
+      res.status(500).json({ message: "Failed to export leads" });
+    }
+  });
+
+  app.get("/api/gyms/:id/export/metrics", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const rows = await storage.getAllMonthlyMetrics(req.params.id);
+      const header = "Month,Active Members,New Members,Cancels,Churn Rate,Rolling Churn 3m,MRR,ARM,LTV,RSI,RES";
+      const csvRows = rows.map(r => [
+        escapeCsvField(r.monthStart),
+        r.activeMembers,
+        r.newMembers,
+        r.cancels,
+        escapeCsvField(r.churnRate),
+        escapeCsvField(r.rollingChurn3m || ""),
+        escapeCsvField(r.mrr),
+        escapeCsvField(r.arm),
+        escapeCsvField(r.ltv),
+        r.rsi,
+        escapeCsvField(r.res),
+      ].join(","));
+      const csv = [header, ...csvRows].join("\n");
+
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="metrics-${req.params.id}.csv"`);
+      res.send(csv);
+    } catch (error) {
+      console.error("Error exporting metrics:", error);
+      res.status(500).json({ message: "Failed to export metrics" });
+    }
+  });
+
+  app.get("/api/gyms/:id/export/billing", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const rows = await storage.getAllMemberBillingByGym(req.params.id);
+      const header = "Member ID,Billing Month,Amount Due,Amount Paid,Status,Due Date,Paid At,Notes";
+      const csvRows = rows.map(r => [
+        escapeCsvField(r.memberId),
+        escapeCsvField(r.billingMonth),
+        escapeCsvField(r.amountDue),
+        escapeCsvField(r.amountPaid),
+        escapeCsvField(r.status),
+        escapeCsvField(r.dueDate),
+        escapeCsvField(r.paidAt ? new Date(r.paidAt).toISOString() : ""),
+        escapeCsvField(r.notes || ""),
+      ].join(","));
+      const csv = [header, ...csvRows].join("\n");
+
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="billing-${req.params.id}.csv"`);
+      res.send(csv);
+    } catch (error) {
+      console.error("Error exporting billing:", error);
+      res.status(500).json({ message: "Failed to export billing" });
+    }
+  });
+
   return httpServer;
+}
+
+function escapeCsvField(value: any): string {
+  if (value === null || value === undefined) return "";
+  let str = String(value);
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = "'" + str;
+  }
+  if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
 }
 
 function getWeeklyFocus(pill: string, phase: "plan" | "execute"): string {

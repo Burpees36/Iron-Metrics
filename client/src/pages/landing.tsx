@@ -8,10 +8,13 @@ import {
   ArrowDown,
   ArrowUp,
   CheckCircle2,
+  Check,
   Eye,
+  Star,
 } from "lucide-react";
 import { IronMetricsLogoCompact, IronMetricsWordmark } from "@/components/brand-logos";
 import { useQueryClient } from "@tanstack/react-query";
+import { Link } from "wouter";
 
 interface GymScenario {
   name: string;
@@ -345,6 +348,78 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+      <section className="py-20 sm:py-28 border-t border-border/50" data-testid="section-pricing">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-12">
+          <div className="space-y-4">
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight" data-testid="text-pricing-title">Simple, transparent pricing</h2>
+            <p className="text-muted-foreground max-w-xl mx-auto leading-relaxed">Start with a 14-day free trial. No credit card required.</p>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-6">
+            <FadeInCard delay={0}>
+              <Card className="text-left h-full" data-testid="card-plan-starter">
+                <CardContent className="p-6 space-y-6">
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-bold" data-testid="text-plan-name-starter">Starter</h3>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-3xl font-extrabold" data-testid="text-plan-price-starter">$149</span>
+                      <span className="text-muted-foreground text-sm">/mo</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">14-day free trial</p>
+                  </div>
+                  <ul className="space-y-2.5">
+                    {["Retention Stability Index", "Member Risk Radar", "Revenue Stability Panel", "Billing Intelligence", "CSV Import", "Wodify Integration", "Resources Library"].map((feature) => (
+                      <li key={feature} className="flex items-start gap-2 text-sm" data-testid={`text-feature-starter-${feature.toLowerCase().replace(/\s+/g, "-")}`}>
+                        <Check className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <a href="/api/login" className="block">
+                    <Button className="w-full" variant="outline" data-testid="button-get-started-starter">
+                      Get Started
+                      <ArrowRight className="w-4 h-4 ml-1" />
+                    </Button>
+                  </a>
+                </CardContent>
+              </Card>
+            </FadeInCard>
+            <FadeInCard delay={100}>
+              <Card className="text-left h-full border-primary/50 relative" data-testid="card-plan-pro">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                  <Badge className="bg-primary text-primary-foreground" data-testid="badge-recommended">
+                    <Star className="w-3 h-3 mr-1" />
+                    Recommended
+                  </Badge>
+                </div>
+                <CardContent className="p-6 space-y-6">
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-bold" data-testid="text-plan-name-pro">Pro</h3>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-3xl font-extrabold" data-testid="text-plan-price-pro">$249</span>
+                      <span className="text-muted-foreground text-sm">/mo</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">14-day free trial</p>
+                  </div>
+                  <ul className="space-y-2.5">
+                    {["Everything in Starter", "AI Operator (unlimited generations)", "Predictive Intelligence Stack", "Sales Intelligence", "Lead Pipeline (CRM)", "Ranked Intervention Engine", "Data Export", "Priority Support"].map((feature) => (
+                      <li key={feature} className="flex items-start gap-2 text-sm" data-testid={`text-feature-pro-${feature.toLowerCase().replace(/[\\s()]+/g, "-")}`}>
+                        <Check className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <a href="/api/login" className="block">
+                    <Button className="w-full" data-testid="button-get-started-pro">
+                      Get Started
+                      <ArrowRight className="w-4 h-4 ml-1" />
+                    </Button>
+                  </a>
+                </CardContent>
+              </Card>
+            </FadeInCard>
+          </div>
+        </div>
+      </section>
       <section className="py-16 sm:py-20 border-t border-border/50" data-testid="section-trust">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl mx-auto text-center space-y-6">
@@ -378,7 +453,11 @@ export default function LandingPage() {
           <div className="flex items-center">
             <IronMetricsLogoCompact className="h-8 w-auto" variant="dark" />
           </div>
-          <p>The Stability Command Center for gyms.</p>
+          <div className="flex items-center gap-4">
+            <p>The Stability Command Center for gyms.</p>
+            <Link href="/terms"><span className="hover:underline cursor-pointer" data-testid="link-footer-terms">Terms</span></Link>
+            <Link href="/privacy"><span className="hover:underline cursor-pointer" data-testid="link-footer-privacy">Privacy</span></Link>
+          </div>
         </div>
       </footer>
     </div>

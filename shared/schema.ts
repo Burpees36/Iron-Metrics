@@ -684,3 +684,35 @@ export const memberBillingRelations = relations(memberBilling, ({ one }) => ({
 export const insertMemberBillingSchema = createInsertSchema(memberBilling).omit({ id: true, createdAt: true });
 export type InsertMemberBilling = z.infer<typeof insertMemberBillingSchema>;
 export type MemberBilling = typeof memberBilling.$inferSelect;
+
+export const SUBSCRIPTION_PLANS = ["starter", "pro"] as const;
+export type SubscriptionPlan = typeof SUBSCRIPTION_PLANS[number];
+
+export const SUBSCRIPTION_STATUSES = ["trialing", "active", "past_due", "canceled", "unpaid"] as const;
+export type SubscriptionStatus = typeof SUBSCRIPTION_STATUSES[number];
+
+export const subscriptions = pgTable("subscriptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gymId: varchar("gym_id").notNull().references(() => gyms.id),
+  stripeCustomerId: varchar("stripe_customer_id"),
+  stripeSubscriptionId: varchar("stripe_subscription_id"),
+  plan: text("plan").notNull().default("starter"),
+  status: text("status").notNull().default("trialing"),
+  trialEndsAt: timestamp("trial_ends_at"),
+  currentPeriodEnd: timestamp("current_period_end"),
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_subscriptions_gym").on(table.gymId),
+  index("idx_subscriptions_stripe_customer").on(table.stripeCustomerId),
+  index("idx_subscriptions_stripe_sub").on(table.stripeSubscriptionId),
+]);
+
+export const subscriptionsRelations = relations(subscriptions, ({ one }) => ({
+  gym: one(gyms, { fields: [subscriptions.gymId], references: [gyms.id] }),
+}));
+
+export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
+export type Subscription = typeof subscriptions.$inferSelect;
