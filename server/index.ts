@@ -4,6 +4,8 @@ import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { WebhookHandlers } from "./webhookHandlers";
+import { initStripeCheck } from "./stripe";
 
 const app = express();
 const httpServer = createServer(app);
@@ -30,6 +32,25 @@ const apiLimiter = rateLimit({
   message: { message: "Too many requests, please try again later." },
 });
 app.use("/api", apiLimiter);
+
+app.post(
+  '/api/stripe/webhook',
+  express.raw({ type: 'application/json' }),
+  async (req, res) => {
+    const signature = req.headers['stripe-signature'];
+    if (!signature) {
+      return res.status(400).json({ error: 'Missing stripe-signature' });
+    }
+    try {
+      const sig = Array.isArray(signature) ? signature[0] : signature;
+      await WebhookHandlers.processWebhook(req.body as Buffer, sig);
+      res.status(200).json({ received: true });
+    } catch (error: any) {
+      console.error('Webhook error:', error.message);
+      res.status(400).json({ error: 'Webhook processing error' });
+    }
+  }
+);
 
 app.use(
   express.json({
@@ -79,6 +100,38 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  try {
+    const { runMigrations } = await import('stripe-replit-sync');
+    const databaseUrl = process.env.DATABASE_URL;
+    if (databaseUrl) {
+      await runMigrations({ databaseUrl });
+      log("Stripe schema ready", "stripe");
+
+      const { getStripeSync } = await import('./stripeClient');
+      const stripeSync = await getStripeSync();
+
+      const firstDomain = process.env.REPLIT_DOMAINS?.split(',')[0];
+      if (firstDomain) {
+        try {
+          const { webhook } = await stripeSync.findOrCreateManagedWebhook(
+            `https://${firstDomain}/api/stripe/webhook`
+          );
+          log(`Webhook configured: ${webhook.url}`, "stripe");
+        } catch (webhookErr) {
+          console.warn("[STRIPE] Could not register managed webhook:", (webhookErr as Error).message);
+        }
+      }
+
+      stripeSync.syncBackfill()
+        .then(() => log("Stripe data synced", "stripe"))
+        .catch((err: Error) => console.error("Error syncing Stripe data:", err));
+    }
+  } catch (e) {
+    console.warn("[STRIPE] Stripe initialization skipped:", (e as Error).message);
+  }
+
+  await initStripeCheck();
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
@@ -94,9 +147,6 @@ app.use((req, res, next) => {
     return res.status(status).json({ message });
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
   if (process.env.NODE_ENV === "production") {
     serveStatic(app);
   } else {
@@ -104,10 +154,6 @@ app.use((req, res, next) => {
     await setupVite(httpServer, app);
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || "5000", 10);
   httpServer.listen(
     {

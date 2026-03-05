@@ -24,7 +24,7 @@ import { buildTieredContext } from "./operator-context";
 import { checkRateLimit, recordGeneration } from "./operator-rate-limiter";
 import { OPERATOR_PILLS, OPERATOR_TASK_TYPES, OPERATOR_TASK_STATUSES, type OperatorPill, type OperatorTaskType, type OperatorRole } from "@shared/schema";
 import { pool } from "./db";
-import { createCheckoutSession, createCustomerPortalSession, handleWebhookEvent, getSubscriptionStatus, ensureTrialSubscription, isStripeConfigured, PLANS } from "./stripe";
+import { createCheckoutSession, createCustomerPortalSession, getSubscriptionStatus, ensureTrialSubscription, isStripeConfigured, PLANS } from "./stripe";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -116,18 +116,6 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("Error creating portal session:", error);
       res.status(500).json({ message: error.message || "Failed to create portal session" });
-    }
-  });
-
-  app.post("/api/stripe/webhook", async (req: any, res) => {
-    try {
-      const sig = req.headers["stripe-signature"];
-      if (!sig) return res.status(400).json({ message: "Missing stripe-signature header" });
-      const result = await handleWebhookEvent(req.rawBody, sig);
-      res.json(result);
-    } catch (error: any) {
-      console.error("Webhook error:", error);
-      res.status(400).json({ message: error.message || "Webhook error" });
     }
   });
 
