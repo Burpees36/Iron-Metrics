@@ -201,21 +201,33 @@ function SummaryCard({
 }
 
 function CollectionChart({ schedule, currentDay, isCurrentMonth }: { schedule: CollectionScheduleDay[]; currentDay: number; isCurrentMonth: boolean }) {
-  const chartData = schedule.map((d) => ({
-    name: `${d.day}`,
-    day: d.day,
-    expected: d.expectedAmount,
-    collected: d.collectedAmount,
-    members: d.memberCount,
-    memberList: d.members,
-  }));
+  const chartData = useMemo(() => {
+    let runningTotal = 0;
+    return schedule.map((d) => {
+      runningTotal += d.expectedAmount;
+      return {
+        name: `${d.day}`,
+        day: d.day,
+        expected: d.expectedAmount,
+        collected: d.collectedAmount,
+        members: d.memberCount,
+        memberList: d.members,
+        runningTotal,
+      };
+    });
+  }, [schedule]);
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (!active || !payload?.length) return null;
     const data = payload[0]?.payload;
     return (
-      <div className="bg-popover border border-border rounded-lg p-3 shadow-lg text-sm">
-        <p className="font-medium mb-1">Day {data.day}</p>
+      <div className="bg-popover border border-border rounded-lg p-3 shadow-lg text-sm" data-testid="tooltip-collection-day">
+        <div className="flex items-center justify-between gap-4 mb-1">
+          <p className="font-medium">Day {data.day}</p>
+          <p className="text-xs font-medium text-blue-400">
+            Running Total: {formatCurrency(data.runningTotal)}
+          </p>
+        </div>
         <p className="text-muted-foreground">
           Expected: <span className="text-foreground">{formatCurrency(data.expected)}</span>
         </p>
@@ -226,15 +238,17 @@ function CollectionChart({ schedule, currentDay, isCurrentMonth }: { schedule: C
           Members: <span className="text-foreground">{data.members}</span>
         </p>
         {data.memberList?.length > 0 && (
-          <div className="mt-2 pt-2 border-t border-border/50 space-y-0.5">
-            {data.memberList.slice(0, 5).map((m: any, i: number) => (
-              <p key={i} className="text-xs text-muted-foreground">
-                {m.name} — {formatCurrency(m.amount)}
-                {m.status === "paid" && " ✓"}
-              </p>
+          <div className="mt-2 pt-2 border-t border-border/50 space-y-0.5 max-h-[140px] overflow-y-auto">
+            {data.memberList.slice(0, 8).map((m: any, i: number) => (
+              <div key={i} className="flex items-center gap-1 text-xs text-muted-foreground">
+                {m.status === "paid" && <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />}
+                {m.status === "overdue" && <AlertTriangle className="w-3 h-3 text-red-400 shrink-0" />}
+                {m.status === "pending" && <Clock className="w-3 h-3 text-amber-400 shrink-0" />}
+                <span>{m.name} — {formatCurrency(m.amount)}</span>
+              </div>
             ))}
-            {data.memberList.length > 5 && (
-              <p className="text-xs text-muted-foreground/60">+{data.memberList.length - 5} more</p>
+            {data.memberList.length > 8 && (
+              <p className="text-xs text-muted-foreground/60">+{data.memberList.length - 8} more</p>
             )}
           </div>
         )}
@@ -242,15 +256,50 @@ function CollectionChart({ schedule, currentDay, isCurrentMonth }: { schedule: C
     );
   };
 
+  const CustomXTick = ({ x, y, payload }: any) => {
+    const entry = chartData.find((d) => d.name === payload.value);
+    if (!entry) return null;
+    const formattedTotal = entry.runningTotal >= 1000
+      ? `${formatCurrency(Math.round(entry.runningTotal / 100) * 100)}`
+      : formatCurrency(entry.runningTotal);
+    return (
+      <g transform={`translate(${x},${y})`}>
+        <text
+          x={0}
+          y={0}
+          dy={12}
+          textAnchor="middle"
+          fill="hsl(var(--muted-foreground))"
+          fontSize={11}
+        >
+          {entry.day}
+        </text>
+        <text
+          x={0}
+          y={0}
+          dy={24}
+          textAnchor="middle"
+          fill="hsl(var(--primary))"
+          fontSize={9}
+          fontWeight={500}
+          opacity={0.7}
+        >
+          {formattedTotal}
+        </text>
+      </g>
+    );
+  };
+
   return (
-    <ResponsiveContainer width="100%" height={280}>
-      <BarChart data={chartData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+    <ResponsiveContainer width="100%" height={300}>
+      <BarChart data={chartData} margin={{ top: 5, right: 5, left: 5, bottom: 20 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
         <XAxis
           dataKey="name"
-          tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
+          tick={<CustomXTick />}
           axisLine={{ stroke: "hsl(var(--border))" }}
           tickLine={false}
+          height={40}
         />
         <YAxis
           tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
@@ -437,34 +486,6 @@ export default function BillingIntelligence() {
   if (!gym) return <GymNotFound />;
 
   const summary = billingData?.summary;
-
-  const cumulativeData = useMemo(() => {
-    if (!billingData?.records) return [];
-    const byDay = new Map<number, { expected: number; collected: number }>();
-    for (const r of billingData.records) {
-      const existing = byDay.get(r.billingDay) || { expected: 0, collected: 0 };
-      existing.expected += r.amountDue;
-      if (r.status === "paid") existing.collected += r.amountPaid;
-      byDay.set(r.billingDay, existing);
-    }
-
-    let cumExpected = 0;
-    let cumCollected = 0;
-    const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
-    const result: { day: number; cumExpected: number; cumCollected: number }[] = [];
-
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dayData = byDay.get(d);
-      if (dayData) {
-        cumExpected += dayData.expected;
-        cumCollected += dayData.collected;
-      }
-      if (d % 5 === 0 || d === 1 || d === daysInMonth || dayData) {
-        result.push({ day: d, cumExpected, cumCollected });
-      }
-    }
-    return result;
-  }, [billingData?.records, selectedYear, selectedMonth]);
 
   return (
     <GymPageShell gym={gym}>
