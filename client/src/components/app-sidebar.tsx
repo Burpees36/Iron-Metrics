@@ -2,6 +2,7 @@ import { useLocation, Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
 import type { Gym } from "@shared/schema";
+import { IronMetricsLogoCompact } from "@/components/brand-logos";
 import {
   Sidebar,
   SidebarContent,
@@ -19,7 +20,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard,
-  Activity,
   Plus,
   Building2,
   LogOut,
@@ -76,12 +76,8 @@ export function AppSidebar() {
     <Sidebar className="sidebar-gradient">
       <SidebarHeader className="p-4">
         <Link href="/">
-          <div className="flex items-center gap-2 hover-elevate rounded-md px-2 py-1.5 cursor-pointer" data-testid="link-home">
-            <Activity className="w-5 h-5 text-primary flex-shrink-0" />
-            <div>
-              <span className="text-base font-bold tracking-tight">Iron Metrics</span>
-              <p className="text-[10px] text-muted-foreground leading-tight">CrossFit Command Center</p>
-            </div>
+          <div className="hover-elevate rounded-md px-1 py-1 cursor-pointer" data-testid="link-home">
+            <IronMetricsLogoCompact className="h-10 w-auto" variant="dark" />
           </div>
         </Link>
       </SidebarHeader>

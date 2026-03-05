@@ -1,0 +1,120 @@
+// Main logo with icon and text - horizontal lockup
+export function IronMetricsLogo({ className = "", variant = "default" }: { className?: string; variant?: "default" | "white" | "dark" }) {
+  const colors = {
+    default: {
+      primary: "#10b981", // emerald-500
+      secondary: "#059669", // emerald-600
+      text: "#111827", // gray-900
+    },
+    white: {
+      primary: "#ffffff",
+      secondary: "#f3f4f6",
+      text: "#ffffff",
+    },
+    dark: {
+      primary: "#10b981",
+      secondary: "#059669",
+      text: "#ffffff",
+    }
+  };
+
+  const c = colors[variant];
+
+  return (
+    <svg className={className} viewBox="0 0 240 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Icon - Dumbbell with upward chart bar */}
+      <g transform="translate(0, 10)">
+        {/* Left weight */}
+        <rect x="2" y="12" width="8" height="16" rx="1.5" fill={c.primary} />
+        <rect x="3" y="10" width="6" height="20" rx="1" fill={c.secondary} opacity="0.6" />
+        
+        {/* Bar */}
+        <rect x="10" y="18" width="20" height="4" rx="2" fill={c.primary} />
+        
+        {/* Right weight */}
+        <rect x="30" y="12" width="8" height="16" rx="1.5" fill={c.primary} />
+        <rect x="31" y="10" width="6" height="20" rx="1" fill={c.secondary} opacity="0.6" />
+        
+        {/* Metric bars rising from dumbbell */}
+        <rect x="14" y="8" width="2.5" height="10" rx="1.25" fill={c.secondary} opacity="0.4" />
+        <rect x="18" y="4" width="2.5" height="14" rx="1.25" fill={c.secondary} opacity="0.6" />
+        <rect x="22" y="0" width="2.5" height="18" rx="1.25" fill={c.primary} />
+      </g>
+
+      {/* Text */}
+      <g transform="translate(50, 30)">
+        {/* IRON */}
+        <text x="0" y="0" fontFamily="system-ui, -apple-system, sans-serif" fontSize="22" fontWeight="800" fill={c.text} letterSpacing="-0.5">
+          IRON
+        </text>
+        
+        {/* METRICS */}
+        <text x="0" y="18" fontFamily="system-ui, -apple-system, sans-serif" fontSize="12" fontWeight="600" fill={c.secondary} letterSpacing="2">
+          METRICS
+        </text>
+      </g>
+
+      {/* Accent dot */}
+      <circle cx="44" y="20" r="2" fill={c.primary} />
+    </svg>
+  );
+}
+
+// Compact version with text beside icon
+export function IronMetricsLogoCompact({ className = "", variant = "default" }: { className?: string; variant?: "default" | "white" | "dark" }) {
+  const colors = {
+    default: {
+      primary: "#10b981",
+      secondary: "#059669",
+      text: "#111827",
+      subtext: "#6b7280",
+    },
+    white: {
+      primary: "#ffffff",
+      secondary: "#f3f4f6",
+      text: "#ffffff",
+      subtext: "#e5e7eb",
+    },
+    dark: {
+      primary: "#10b981",
+      secondary: "#059669",
+      text: "#ffffff",
+      subtext: "#9ca3af",
+    }
+  };
+
+  const c = colors[variant];
+
+  return (
+    <svg className={className} viewBox="0 0 180 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Icon */}
+      <g transform="translate(4, 6)">
+        {/* Left weight */}
+        <rect x="0" y="12" width="6" height="12" rx="1.5" fill={c.primary} />
+        <rect x="0.5" y="10" width="5" height="16" rx="1" fill={c.secondary} opacity="0.5" />
+        
+        {/* Bar */}
+        <rect x="6" y="16" width="16" height="4" rx="2" fill={c.primary} />
+        
+        {/* Right weight */}
+        <rect x="22" y="12" width="6" height="12" rx="1.5" fill={c.primary} />
+        <rect x="22.5" y="10" width="5" height="16" rx="1" fill={c.secondary} opacity="0.5" />
+        
+        {/* Metric bars */}
+        <rect x="10" y="8" width="2" height="8" rx="1" fill={c.secondary} opacity="0.4" />
+        <rect x="13" y="5" width="2" height="11" rx="1" fill={c.secondary} opacity="0.6" />
+        <rect x="16" y="2" width="2" height="14" rx="1" fill={c.primary} />
+      </g>
+
+      {/* Text */}
+      <g transform="translate(48, 24)">
+        <text x="0" y="0" fontFamily="system-ui, -apple-system, sans-serif" fontSize="20" fontWeight="800" fill={c.text} letterSpacing="-0.5">
+          Iron Metrics
+        </text>
+        <text x="0" y="12" fontFamily="system-ui, -apple-system, sans-serif" fontSize="8" fontWeight="600" fill={c.subtext} letterSpacing="1.5">
+          GYM ANALYTICS
+        </text>
+      </g>
+    </svg>
+  );
+}

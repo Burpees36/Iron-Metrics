@@ -4,13 +4,13 @@ import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useState, useEffect, useRef } from "react";
 import {
-  Activity,
   ArrowRight,
   ArrowDown,
   ArrowUp,
   CheckCircle2,
   Eye,
 } from "lucide-react";
+import { IronMetricsLogoCompact } from "@/components/brand-logos";
 import { useQueryClient } from "@tanstack/react-query";
 
 interface GymScenario {
@@ -134,9 +134,8 @@ export default function LandingPage() {
     <div className="min-h-screen">
       <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md bg-background/70 border-b border-border/50">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4 h-14">
-          <div className="flex items-center gap-2">
-            <Activity className="w-5 h-5 text-primary" />
-            <span className="font-semibold text-base tracking-tight" data-testid="text-logo">Iron Metrics</span>
+          <div className="flex items-center" data-testid="text-logo">
+            <IronMetricsLogoCompact className="h-9 w-auto" variant="dark" />
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
@@ -379,9 +378,8 @@ export default function LandingPage() {
       </section>
       <footer className="border-t border-border/50 py-10">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-wrap items-center justify-between gap-4 text-sm text-muted-foreground">
-          <div className="flex items-center gap-2">
-            <Activity className="w-4 h-4 text-primary" />
-            <span className="font-semibold text-foreground">Iron Metrics</span>
+          <div className="flex items-center">
+            <IronMetricsLogoCompact className="h-8 w-auto" variant="dark" />
           </div>
           <p>The Stability Command Center for gyms.</p>
         </div>
