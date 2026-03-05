@@ -22,16 +22,14 @@ export function IronMetricsLogo({ className = "", variant = "default" }: { class
   return (
     <svg className={className} viewBox="0 0 240 60" fill="none" xmlns="http://www.w3.org/2000/svg">
       <g transform="translate(0, 10)">
-        <rect x="2" y="12" width="8" height="16" rx="1.5" fill={c.primary} />
-        <rect x="3" y="10" width="6" height="20" rx="1" fill={c.secondary} opacity="0.6" />
-        <rect x="10" y="18" width="20" height="4" rx="2" fill={c.primary} />
-        <rect x="30" y="12" width="8" height="16" rx="1.5" fill={c.primary} />
-        <rect x="31" y="10" width="6" height="20" rx="1" fill={c.secondary} opacity="0.6" />
-        <rect x="14" y="8" width="2.5" height="10" rx="1.25" fill={c.secondary} opacity="0.4" />
-        <rect x="18" y="4" width="2.5" height="14" rx="1.25" fill={c.secondary} opacity="0.6" />
-        <rect x="22" y="0" width="2.5" height="18" rx="1.25" fill={c.primary} />
+        <rect x="0" y="10" width="12" height="20" rx="2" fill={c.primary} />
+        <rect x="12" y="18" width="16" height="4" rx="2" fill={c.primary} />
+        <rect x="28" y="10" width="12" height="20" rx="2" fill={c.primary} />
+        <rect x="16" y="8" width="2.5" height="10" rx="1.25" fill={c.secondary} opacity="0.4" />
+        <rect x="20" y="4" width="2.5" height="14" rx="1.25" fill={c.secondary} opacity="0.6" />
+        <rect x="24" y="0" width="2.5" height="18" rx="1.25" fill={c.primary} />
       </g>
-      <g transform="translate(50, 30)">
+      <g transform="translate(52, 30)">
         <text x="0" y="0" fontFamily="system-ui, -apple-system, sans-serif" fontSize="22" fontWeight="800" fill={c.text} letterSpacing="-0.5">
           IRON
         </text>
@@ -39,7 +37,7 @@ export function IronMetricsLogo({ className = "", variant = "default" }: { class
           METRICS
         </text>
       </g>
-      <circle cx="44" cy="20" r="2" fill={c.primary} />
+      <circle cx="46" cy="20" r="2" fill={c.primary} />
     </svg>
   );
 }
@@ -70,15 +68,13 @@ export function IronMetricsLogoCompact({ className = "", variant = "default" }: 
 
   return (
     <svg className={className} viewBox="0 0 180 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <g transform="translate(4, 6)">
-        <rect x="0" y="12" width="6" height="12" rx="1.5" fill={c.primary} />
-        <rect x="0.5" y="10" width="5" height="16" rx="1" fill={c.secondary} opacity="0.5" />
-        <rect x="6" y="16" width="16" height="4" rx="2" fill={c.primary} />
-        <rect x="22" y="12" width="6" height="12" rx="1.5" fill={c.primary} />
-        <rect x="22.5" y="10" width="5" height="16" rx="1" fill={c.secondary} opacity="0.5" />
-        <rect x="10" y="8" width="2" height="8" rx="1" fill={c.secondary} opacity="0.4" />
-        <rect x="13" y="5" width="2" height="11" rx="1" fill={c.secondary} opacity="0.6" />
-        <rect x="16" y="2" width="2" height="14" rx="1" fill={c.primary} />
+      <g transform="translate(2, 6)">
+        <rect x="0" y="10" width="9" height="16" rx="1.5" fill={c.primary} />
+        <rect x="9" y="16" width="12" height="4" rx="2" fill={c.primary} />
+        <rect x="21" y="10" width="9" height="16" rx="1.5" fill={c.primary} />
+        <rect x="12" y="8" width="2" height="8" rx="1" fill={c.secondary} opacity="0.4" />
+        <rect x="15" y="5" width="2" height="11" rx="1" fill={c.secondary} opacity="0.6" />
+        <rect x="18" y="2" width="2" height="14" rx="1" fill={c.primary} />
       </g>
       <g transform="translate(48, 24)">
         <text x="0" y="0" fontFamily="system-ui, -apple-system, sans-serif" fontSize="20" fontWeight="800" fill={c.text} letterSpacing="-0.5">
@@ -136,11 +132,11 @@ export function IronMetricsWordmark({ className = "", variant = "default" }: { c
       </text>
       <rect x="20" y="72" width="280" height="1" fill={c.primary} opacity="0.2" />
       <g transform="translate(265, 38)">
-        <rect x="0" y="4" width="3" height="6" rx="0.5" fill={c.primary} opacity="0.6" />
-        <rect x="3" y="5" width="8" height="4" rx="2" fill={c.primary} opacity="0.6" />
-        <rect x="11" y="4" width="3" height="6" rx="0.5" fill={c.primary} opacity="0.6" />
-        <rect x="5" y="2" width="1.5" height="3" rx="0.75" fill={c.primary} />
-        <rect x="7" y="0" width="1.5" height="5" rx="0.75" fill={c.primary} />
+        <rect x="0" y="3" width="4" height="8" rx="1" fill={c.primary} opacity="0.7" />
+        <rect x="4" y="5" width="6" height="4" rx="2" fill={c.primary} opacity="0.7" />
+        <rect x="10" y="3" width="4" height="8" rx="1" fill={c.primary} opacity="0.7" />
+        <rect x="5" y="1" width="1.5" height="3" rx="0.75" fill={c.primary} />
+        <rect x="7" y="-1" width="1.5" height="5" rx="0.75" fill={c.primary} />
       </g>
     </svg>
   );
@@ -172,15 +168,13 @@ export function IronMetricsLogoStacked({ className = "", variant = "default" }: 
 
   return (
     <svg className={className} viewBox="0 0 120 140" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <g transform="translate(36, 20)">
-        <rect x="0" y="10" width="10" height="18" rx="2" fill={c.primary} />
-        <rect x="1" y="8" width="8" height="22" rx="1.5" fill={c.secondary} opacity="0.5" />
-        <rect x="10" y="16" width="28" height="6" rx="3" fill={c.primary} />
-        <rect x="38" y="10" width="10" height="18" rx="2" fill={c.primary} />
-        <rect x="39" y="8" width="8" height="22" rx="1.5" fill={c.secondary} opacity="0.5" />
-        <rect x="16" y="6" width="3" height="10" rx="1.5" fill={c.secondary} opacity="0.4" />
-        <rect x="21" y="2" width="3" height="14" rx="1.5" fill={c.secondary} opacity="0.6" />
-        <rect x="26" y="-2" width="3" height="18" rx="1.5" fill={c.primary} />
+      <g transform="translate(33, 20)">
+        <rect x="0" y="8" width="14" height="22" rx="2.5" fill={c.primary} />
+        <rect x="14" y="16" width="26" height="6" rx="3" fill={c.primary} />
+        <rect x="40" y="8" width="14" height="22" rx="2.5" fill={c.primary} />
+        <rect x="19" y="6" width="3" height="10" rx="1.5" fill={c.secondary} opacity="0.4" />
+        <rect x="24" y="2" width="3" height="14" rx="1.5" fill={c.secondary} opacity="0.6" />
+        <rect x="29" y="-2" width="3" height="18" rx="1.5" fill={c.primary} />
       </g>
       <g>
         <text x="60" y="80" fontFamily="system-ui, -apple-system, sans-serif" fontSize="24" fontWeight="900" fill={c.text} textAnchor="middle" letterSpacing="-0.5">
@@ -238,15 +232,13 @@ export function IronMetricsIcon({ className = "", variant = "default" }: { class
         </defs>
       )}
       <circle cx="24" cy="24" r="22" fill={variant === "gradient" ? c.primary : "transparent"} opacity={variant === "gradient" ? 0.1 : 0} />
-      <g transform="translate(8, 14)">
-        <rect x="0" y="6" width="8" height="14" rx="2" fill={c.primary} />
-        <rect x="1" y="4" width="6" height="18" rx="1.5" fill={c.secondary} opacity="0.5" />
-        <rect x="8" y="11" width="16" height="4" rx="2" fill={c.primary} />
-        <rect x="24" y="6" width="8" height="14" rx="2" fill={c.primary} />
-        <rect x="25" y="4" width="6" height="18" rx="1.5" fill={c.secondary} opacity="0.5" />
-        <rect x="11" y="3" width="2.5" height="8" rx="1.25" fill={variant === "gradient" ? "url(#barGradient)" : c.secondary} opacity="0.5" />
-        <rect x="15" y="0" width="2.5" height="11" rx="1.25" fill={variant === "gradient" ? "url(#barGradient)" : c.secondary} opacity="0.7" />
-        <rect x="19" y="-3" width="2.5" height="14" rx="1.25" fill={variant === "gradient" ? "url(#barGradient)" : c.accent} />
+      <g transform="translate(6, 14)">
+        <rect x="0" y="4" width="10" height="18" rx="2.5" fill={c.primary} />
+        <rect x="10" y="11" width="16" height="4" rx="2" fill={c.primary} />
+        <rect x="26" y="4" width="10" height="18" rx="2.5" fill={c.primary} />
+        <rect x="14" y="3" width="2.5" height="8" rx="1.25" fill={variant === "gradient" ? "url(#barGradient)" : c.secondary} opacity="0.5" />
+        <rect x="18" y="0" width="2.5" height="11" rx="1.25" fill={variant === "gradient" ? "url(#barGradient)" : c.secondary} opacity="0.7" />
+        <rect x="22" y="-3" width="2.5" height="14" rx="1.25" fill={variant === "gradient" ? "url(#barGradient)" : c.accent} />
       </g>
     </svg>
   );
@@ -257,13 +249,13 @@ export function IronMetricsIconMinimal({ className = "", variant = "default" }: 
 
   return (
     <svg className={className} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <g transform="translate(4, 10)">
-        <rect x="0" y="4" width="4" height="8" rx="1" fill={color} />
-        <rect x="4" y="6" width="16" height="4" rx="2" fill={color} />
-        <rect x="20" y="4" width="4" height="8" rx="1" fill={color} />
-        <rect x="8" y="2" width="2" height="4" rx="1" fill={color} opacity="0.5" />
-        <rect x="11" y="0" width="2" height="6" rx="1" fill={color} opacity="0.7" />
-        <rect x="14" y="-2" width="2" height="8" rx="1" fill={color} />
+      <g transform="translate(3, 10)">
+        <rect x="0" y="3" width="6" height="10" rx="1.5" fill={color} />
+        <rect x="6" y="6" width="14" height="4" rx="2" fill={color} />
+        <rect x="20" y="3" width="6" height="10" rx="1.5" fill={color} />
+        <rect x="10" y="1" width="2" height="4" rx="1" fill={color} opacity="0.5" />
+        <rect x="13" y="-1" width="2" height="6" rx="1" fill={color} opacity="0.7" />
+        <rect x="16" y="-3" width="2" height="8" rx="1" fill={color} />
       </g>
     </svg>
   );

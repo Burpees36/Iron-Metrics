@@ -10,7 +10,7 @@ import {
   CheckCircle2,
   Eye,
 } from "lucide-react";
-import { IronMetricsLogoCompact } from "@/components/brand-logos";
+import { IronMetricsLogoCompact, IronMetricsWordmark } from "@/components/brand-logos";
 import { useQueryClient } from "@tanstack/react-query";
 
 interface GymScenario {
@@ -153,12 +153,9 @@ export default function LandingPage() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             <div className="space-y-8">
-              <span
-                className="inline-block text-xs font-bold text-primary tracking-widest uppercase bg-primary/10 border border-primary/25 rounded-full px-4 py-1.5 animate-fade-in-up"
-                data-testid="text-subtitle"
-              >
-                The Stability Command Center
-              </span>
+              <div className="animate-fade-in-up" data-testid="hero-wordmark">
+                <IronMetricsWordmark className="h-16 sm:h-20 w-auto -ml-5" variant="dark" />
+              </div>
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.1] animate-fade-in-up animation-delay-100" data-testid="text-hero-headline">
                 Stop guessing.
                 <br />
