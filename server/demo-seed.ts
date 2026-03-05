@@ -106,9 +106,22 @@ function generateDemoMembers(gymId: string, now: Date) {
     const email = `${firstName.toLowerCase()}.${lastName.toLowerCase()}${i > 0 ? i : ""}@example.com`;
 
     const isCancelled = i >= 90;
-    const tenureDays = isCancelled
-      ? Math.floor(60 + Math.random() * 400)
-      : Math.floor(14 + Math.random() * 730);
+    let tenureDays: number;
+    if (isCancelled) {
+      tenureDays = Math.floor(60 + Math.random() * 1400);
+    } else if (i < 8) {
+      tenureDays = Math.floor(1600 + Math.random() * 300);
+    } else if (i < 20) {
+      tenureDays = Math.floor(1100 + Math.random() * 400);
+    } else if (i < 40) {
+      tenureDays = Math.floor(700 + Math.random() * 350);
+    } else if (i < 60) {
+      tenureDays = Math.floor(365 + Math.random() * 300);
+    } else if (i < 75) {
+      tenureDays = Math.floor(180 + Math.random() * 180);
+    } else {
+      tenureDays = Math.floor(14 + Math.random() * 160);
+    }
     const joinDate = new Date(now.getTime() - tenureDays * 86400000);
     const joinStr = joinDate.toISOString().split("T")[0];
 
@@ -193,6 +206,9 @@ async function seedDemoLeads(gymId: string) {
 
   for (const dl of demoLeads) {
     const createdAt = new Date(now.getTime() - dl.daysAgo * 86400000);
+    const responseMinutes = 10 + Math.floor(Math.random() * 10);
+    const firstContactAt = new Date(createdAt.getTime() + responseMinutes * 60000);
+
     const leadData: any = {
       gymId,
       name: dl.name,
@@ -203,6 +219,7 @@ async function seedDemoLeads(gymId: string) {
       notes: dl.notes,
       status: dl.status,
       createdAt,
+      firstContactAt,
     };
 
     if (dl.status === "booked" || dl.status === "showed" || dl.status === "won") {
