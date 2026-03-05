@@ -12,6 +12,7 @@ import { useAuth } from "@/hooks/use-auth";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -36,6 +37,7 @@ import {
   User,
   ArrowLeft,
   Zap,
+  Trash2,
 } from "lucide-react";
 import type { OperatorTask, OperatorPill } from "@shared/schema";
 
@@ -71,6 +73,7 @@ export default function OperatorDashboard() {
   const gymId = params?.id;
   const { isDemo } = useAuth();
   const { toast } = useToast();
+  const [showClearDialog, setShowClearDialog] = useState(false);
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
   const [completionForm, setCompletionForm] = useState<CompletionForm>({
     executionResult: "",
@@ -101,6 +104,21 @@ export default function OperatorDashboard() {
     },
     onError: () => {
       toast({ title: "Failed to update task", variant: "destructive" });
+    },
+  });
+
+  const clearTasksMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("DELETE", `/api/gyms/${gymId}/operator/tasks`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/gyms", gymId, "operator", "tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/gyms", gymId, "operator", "dashboard"] });
+      setShowClearDialog(false);
+      toast({ title: "Tasks cleared", description: "All active tasks have been removed." });
+    },
+    onError: () => {
+      toast({ title: "Failed to clear tasks", variant: "destructive" });
     },
   });
 
@@ -147,12 +165,26 @@ export default function OperatorDashboard() {
           </Link>
         </div>
 
-        <PageHeader
-          title="Active Tasks"
-          subtitle="Track interventions from strategy to execution."
-          howTo="Tasks are created from AI Operator outputs. Update status and record outcomes when complete."
-          icon={Target}
-        />
+        <div className="flex items-start justify-between gap-4">
+          <PageHeader
+            title="Active Tasks"
+            subtitle="Track interventions from strategy to execution."
+            howTo="Tasks are created from AI Operator outputs. Update status and record outcomes when complete."
+            icon={Target}
+          />
+          {(tasks || []).length > 0 && !isDemo && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-muted-foreground shrink-0 mt-1"
+              onClick={() => setShowClearDialog(true)}
+              data-testid="button-clear-tasks"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Clear All
+            </Button>
+          )}
+        </div>
 
         {statsLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -317,6 +349,30 @@ export default function OperatorDashboard() {
                 data-testid="button-confirm-completion"
               >
                 <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Complete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showClearDialog} onOpenChange={setShowClearDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Clear all tasks?</DialogTitle>
+              <DialogDescription>
+                This will permanently remove all {(tasks || []).length} tasks. Completed task outcomes will be preserved, but the tasks themselves cannot be recovered.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowClearDialog(false)} data-testid="button-cancel-clear">
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => clearTasksMutation.mutate()}
+                disabled={clearTasksMutation.isPending}
+                data-testid="button-confirm-clear"
+              >
+                {clearTasksMutation.isPending ? "Clearing..." : "Clear All Tasks"}
               </Button>
             </DialogFooter>
           </DialogContent>

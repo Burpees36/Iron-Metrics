@@ -2392,6 +2392,20 @@ export async function registerRoutes(
     }
   });
 
+  app.delete("/api/gyms/:id/operator/tasks", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const deletedCount = await storage.deleteOperatorTasksByGym(gym.id);
+      res.json({ deleted: deletedCount });
+    } catch (error) {
+      console.error("Error clearing operator tasks:", error);
+      res.status(500).json({ message: "Failed to clear tasks" });
+    }
+  });
+
   app.get("/api/gyms/:id/operator/weekly-plan", isAuthenticated, async (req: any, res) => {
     try {
       const gym = await storage.getGym(req.params.id);

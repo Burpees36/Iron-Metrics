@@ -143,6 +143,7 @@ export interface IStorage {
     totalTasks: number;
   }>;
   createInterventionOutcome(outcome: InsertInterventionOutcome): Promise<InterventionOutcome>;
+  deleteOperatorTasksByGym(gymId: string): Promise<number>;
 
   getMemberBillingByGym(gymId: string, billingMonth: string): Promise<MemberBilling[]>;
   upsertMemberBilling(billing: InsertMemberBilling): Promise<MemberBilling>;
@@ -865,6 +866,11 @@ export class DatabaseStorage implements IStorage {
   async createInterventionOutcome(outcome: InsertInterventionOutcome): Promise<InterventionOutcome> {
     const [created] = await db.insert(interventionOutcomes).values(outcome).returning();
     return created;
+  }
+
+  async deleteOperatorTasksByGym(gymId: string): Promise<number> {
+    const deleted = await db.delete(operatorTasks).where(eq(operatorTasks.gymId, gymId)).returning();
+    return deleted.length;
   }
 
   async getMemberBillingByGym(gymId: string, billingMonth: string): Promise<MemberBilling[]> {
