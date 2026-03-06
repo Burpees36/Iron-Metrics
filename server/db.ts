@@ -10,6 +10,12 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
+if (!process.env.SESSION_SECRET) {
+  throw new Error(
+    "SESSION_SECRET must be set. This is required for secure session signing.",
+  );
+}
+
 export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 pool.on("error", (err) => {

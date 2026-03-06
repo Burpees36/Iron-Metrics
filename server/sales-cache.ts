@@ -17,6 +17,15 @@ interface RecalcStatus {
   gymsProcessed: number;
 }
 
+// SCALING NOTE: cache is an in-memory Map with 5-min TTL, and the nightly
+// recalculation uses a recursive setTimeout loop. Both work correctly on a
+// single Reserved VM. If migrating to Autoscale or multi-instance:
+//   - Cache: Replace with Redis for shared state, or accept per-instance
+//     cold-computation (cache misses fall back to PostgreSQL safely).
+//   - Nightly job: Move to an external scheduler (Replit scheduled deployment,
+//     database-checked cron, or pg_cron) since setTimeout is lost on
+//     instance termination.
+
 const cache = new Map<string, CacheEntry>();
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const NIGHTLY_INTERVAL_MS = 24 * 60 * 60 * 1000;

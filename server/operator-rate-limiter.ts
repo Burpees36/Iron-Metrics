@@ -1,3 +1,11 @@
+// SCALING NOTE: userBuckets and gymBuckets are in-memory Maps.
+// This works correctly on a single Reserved VM instance.
+// If migrating to Autoscale or multi-instance deployment, replace
+// these Maps with a Redis-backed store (e.g. ioredis) to share
+// rate limit state across instances. Without this, each instance
+// tracks limits independently and users can bypass quotas by
+// hitting different instances.
+
 const WINDOW_MS = 10 * 60 * 1000;
 const USER_LIMIT = 10;
 const GYM_LIMIT = 20;
