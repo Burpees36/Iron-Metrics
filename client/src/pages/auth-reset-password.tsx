@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { supabase } from "@/lib/supabase";
+import { supabase, getAppUrl } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -16,15 +16,38 @@ export default function AuthResetPassword() {
   const [error, setError] = useState("");
   const [emailSent, setEmailSent] = useState(false);
   const [isRecoveryMode, setIsRecoveryMode] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
 
   useEffect(() => {
-    const hash = window.location.hash;
-    if (hash) {
-      const params = new URLSearchParams(hash.replace("#", ""));
-      if (params.get("type") === "recovery") {
-        setIsRecoveryMode(true);
+    async function checkRecovery() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const params = new URLSearchParams(window.location.search);
+        const hashParams = new URLSearchParams(window.location.hash.replace("#", ""));
+        if (params.get("type") === "recovery" || hashParams.get("type") === "recovery") {
+          setIsRecoveryMode(true);
+        } else {
+          const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+            if (event === "PASSWORD_RECOVERY") {
+              setIsRecoveryMode(true);
+            }
+            subscription.unsubscribe();
+          });
+        }
       }
+      setCheckingSession(false);
     }
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setIsRecoveryMode(true);
+        setCheckingSession(false);
+      }
+    });
+
+    checkRecovery();
+
+    return () => subscription.unsubscribe();
   }, []);
 
   async function handleRequestReset(e: React.FormEvent) {
@@ -33,7 +56,7 @@ export default function AuthResetPassword() {
     setLoading(true);
     try {
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + "/reset-password",
+        redirectTo: getAppUrl() + "/reset-password",
       });
       if (resetError) {
         setError(resetError.message);
@@ -71,6 +94,18 @@ export default function AuthResetPassword() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (checkingSession) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <Card className="w-full max-w-sm">
+          <CardContent className="p-6 text-center text-muted-foreground text-sm">
+            Loading...
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   if (isRecoveryMode) {

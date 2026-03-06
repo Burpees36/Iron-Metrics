@@ -26,13 +26,15 @@ The application uses a dark steel/charcoal visual identity with a clean, neutral
 The system utilizes React, Vite, Tailwind CSS, shadcn/ui, and Recharts for the frontend. The backend is built with Express.js, Drizzle ORM, and PostgreSQL. Authentication is handled by Supabase Auth (email/password with JWT tokens), with wouter for frontend routing and Express for backend routes.
 
 ### Authentication Architecture (Supabase Auth)
-- **Frontend**: `@supabase/supabase-js` client handles login, signup, password reset, and automatic token refresh. Auth state managed via `supabase.auth.onAuthStateChange()` in the `useAuth` hook.
+- **Frontend**: `@supabase/supabase-js` v2.98 client with PKCE flow (`flowType: "pkce"`, `detectSessionInUrl: true`). Handles login, signup, password reset, and automatic token refresh. Auth state managed exclusively via `supabase.auth.onAuthStateChange()` in the `useAuth` hook (handles `INITIAL_SESSION`, `SIGNED_IN`, `SIGNED_OUT`, `TOKEN_REFRESHED`, `PASSWORD_RECOVERY` events).
 - **Backend**: Stateless JWT verification via `supabase.auth.getUser(token)`. The `isAuthenticated` middleware extracts the Bearer token from the Authorization header, verifies it with Supabase, and upserts the user into the app `users` table. Sets `req.user = { id, email, firstName, lastName }`.
-- **User identity**: `req.user.id` (Supabase UUID) is the primary identity throughout the backend. Replaces the old `req.user.claims.sub` pattern.
+- **User identity**: `req.user.id` (Supabase UUID) is the primary identity throughout the backend.
 - **Demo mode**: Uses express-session cookies (separate from Supabase JWT flow). Demo user stored in `req.session.demoUser`.
 - **Staff invites**: `staff_invites` table with token-based invite flow. Owner creates invite → email sent via Supabase Admin API → invited user signs up and accepts invite → `gym_staff` record created.
-- **Frontend auth pages**: `/login`, `/signup`, `/reset-password`, `/invite/:token` (all client-side routes).
-- **Environment variables**: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (secrets); `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (shared env vars for frontend).
+- **Frontend auth pages**: `/login`, `/signup`, `/reset-password`, `/invite/:token` (all client-side routes, registered in both authenticated and unauthenticated route switches).
+- **PKCE callback**: Supabase redirects with `?code=...` after email verification/password reset. The Supabase JS client auto-detects and exchanges the code for a session via `detectSessionInUrl: true`.
+- **Environment variables**: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (secrets); `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (shared env vars for frontend — must be the anon/public key, never the service role key).
+- **Supabase dashboard**: Site URL must be `https://iron-metrics.replit.app`. Redirect URLs must include `https://iron-metrics.replit.app/**` and the dev domain.
 
 ### Feature Specifications
 Iron Metrics provides a Stability Command Center dashboard with key financial and retention metrics, encompassing:

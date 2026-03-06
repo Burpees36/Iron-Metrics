@@ -2919,7 +2919,9 @@ export async function registerRoutes(
       });
 
       try {
-        const appUrl = `${req.protocol}://${req.get("host")}`;
+        const forwardedHost = req.get("x-forwarded-host") || req.get("host");
+        const forwardedProto = req.get("x-forwarded-proto") || req.protocol;
+        const appUrl = `${forwardedProto}://${forwardedHost}`;
         const inviteLink = `${appUrl}/invite/${token}`;
         await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
           redirectTo: inviteLink,

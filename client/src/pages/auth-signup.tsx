@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { supabase } from "@/lib/supabase";
+import { supabase, getAppUrl } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -26,7 +26,10 @@ export default function AuthSignup() {
       const { data, error: authError } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { firstName, lastName } },
+        options: {
+          data: { firstName, lastName },
+          emailRedirectTo: getAppUrl(),
+        },
       });
 
       if (authError) {

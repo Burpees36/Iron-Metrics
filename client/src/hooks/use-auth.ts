@@ -38,55 +38,38 @@ export function useAuth() {
   useEffect(() => {
     let mounted = true;
 
-    async function init() {
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
-
-      if (!mounted) return;
-
-      if (currentSession) {
-        setSession(currentSession);
-        try {
-          const profile = await fetchUserProfile(currentSession);
-          if (mounted) setUser(profile);
-        } catch (e) {
-          console.error("Failed to fetch profile:", e);
-        }
-      } else {
-        try {
-          const profile = await fetchUserProfile(null);
-          if (mounted && profile) {
-            setUser(profile);
-          }
-        } catch {
-        }
-      }
-
-      if (mounted) setIsLoading(false);
-    }
-
-    init();
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, newSession) => {
         if (!mounted) return;
+
         setSession(newSession);
 
-        if (event === "SIGNED_IN" && newSession) {
+        if (newSession && (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION")) {
           try {
             const profile = await fetchUserProfile(newSession);
             if (mounted) {
               setUser(profile);
-              queryClient.invalidateQueries();
+              if (event === "SIGNED_IN") {
+                queryClient.invalidateQueries();
+              }
             }
           } catch (e) {
-            console.error("Failed to fetch profile on sign in:", e);
+            console.error("Failed to fetch profile:", e);
           }
         } else if (event === "SIGNED_OUT") {
           setUser(null);
           queryClient.clear();
-        } else if (event === "TOKEN_REFRESHED" && newSession) {
-          setSession(newSession);
+        } else if (event === "INITIAL_SESSION" && !newSession) {
+          try {
+            const profile = await fetchUserProfile(null);
+            if (mounted && profile) {
+              setUser(profile);
+            }
+          } catch {
+          }
         }
+
+        if (mounted) setIsLoading(false);
       }
     );
 
