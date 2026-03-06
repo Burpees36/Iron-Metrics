@@ -318,6 +318,8 @@ export async function registerRoutes(
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
       if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const member = await storage.getMemberById(req.params.memberId);
+      if (!member || member.gymId !== req.params.id) return res.status(404).json({ message: "Member not found" });
       const contacts = await storage.getContactsForMember(req.params.memberId);
       res.json(contacts);
     } catch (error) {
@@ -806,6 +808,8 @@ export async function registerRoutes(
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
       if (!checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const member = await storage.getMemberById(req.params.memberId);
+      if (!member || member.gymId !== req.params.id) return res.status(404).json({ message: "Member not found" });
 
       const contact = await storage.logContact({
         memberId: req.params.memberId,
@@ -2602,7 +2606,7 @@ export async function registerRoutes(
       const memberIdToUse = memberId || req.params.memberId;
 
       const member = await storage.getMemberById(memberIdToUse);
-      if (!member) return res.status(404).json({ message: "Member not found" });
+      if (!member || member.gymId !== req.params.id) return res.status(404).json({ message: "Member not found" });
 
       const monthStr = billingMonth || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-01`;
       const rate = Number(member.monthlyRate) || 0;
