@@ -1,7 +1,7 @@
 # Iron Metrics
 
 ## Overview
-Iron Metrics is a financial resilience operating system for CrossFit gyms, designed to stabilize revenue, improve member retention, reduce owner stress, and foster community longevity. It acts as a decision engine, focusing on retention as the core business driver, rather than just an analytics or reporting tool. The project aims to provide precise, actionable insights with a declarative, calm, and minimal tone.
+Iron Metrics is a financial resilience operating system designed for CrossFit gyms. Its primary purpose is to stabilize revenue, enhance member retention, alleviate owner stress, and foster community longevity by acting as a decision engine. The project aims to deliver precise, actionable insights with a declarative, calm, and minimal tone, focusing on retention as the core business driver.
 
 ## User Preferences
 Not an analytics dashboard. Not a reporting tool. A decision engine.
@@ -20,69 +20,49 @@ If it does not drive action, it is not shown.
 ## System Architecture
 
 ### UI/UX Decisions
-The application features a dark steel/charcoal visual identity with a clean, neutral palette. It uses Inter, Libre Baskerville, and JetBrains Mono fonts. Red is used minimally for risk alerts. Border radii are consistently applied (0.625rem, 0.5rem, 0.375rem). The design is mobile-responsive and includes print-friendly CSS.
+The application uses a dark steel/charcoal visual identity with a clean, neutral palette. Fonts include Inter, Libre Baskerville, and JetBrains Mono. Red is reserved for risk alerts. Consistent border radii (0.625rem, 0.5rem, 0.375rem) are applied. The design is mobile-responsive and includes print-friendly CSS.
 
 ### Technical Implementations
-The system is built with React, Vite, Tailwind CSS, shadcn/ui, and Recharts for the frontend, and Express.js with Drizzle ORM and PostgreSQL for the backend. Authentication is handled via Replit Auth (OpenID Connect), and routing uses wouter on the frontend and Express routes on the backend.
+The system utilizes React, Vite, Tailwind CSS, shadcn/ui, and Recharts for the frontend. The backend is built with Express.js, Drizzle ORM, and PostgreSQL. Authentication is handled by Replit Auth (OpenID Connect), with wouter for frontend routing and Express for backend routes.
 
 ### Feature Specifications
-Iron Metrics includes a Stability Command Center dashboard with key financial and retention metrics. Core modules include:
--   **Retention Stability Index (RSI)**: A composite score indicating financial health.
+Iron Metrics provides a Stability Command Center dashboard with key financial and retention metrics, encompassing:
+-   **Retention Stability Index (RSI)**: A composite score for financial health.
 -   **Revenue Stability Panel**: Monitors churn, growth, and revenue per member.
 -   **Member Risk Radar**: Predicts churn and prioritizes interventions.
--   **Lifetime Value Engine (LTVE)**: Calculates LTV and models revenue impact of churn changes.
--   **Predictive Intelligence Stack**: Provides member-level churn probability, cohort analysis, revenue scenarios, and strategic recommendations.
--   **Ranked Intervention Engine**: Mathematically scores recommendations based on expected revenue impact, confidence, and urgency, surfacing top priorities.
--   **Sales Intelligence**: Comprehensive sales operations dashboard with: sales funnel analytics, conversion rates, bottleneck detection, Data Quality Score (0-100 with 7-factor evaluation), Stale Leads section (untouched/unconfirmed/no-show recovery/stale categories with quick follow-up actions), operational follow-up tracking (last contact date, next action date, follow-up notes), refined Sales Health Score (6-factor weighted composite: conversion rates 30%, speed 15%, stage efficiency 15%, data quality 15%, lead freshness 15%, funnel balance 10% — clickable breakdown dialog), source/coach breakdowns, and trend charts. Nightly recalculation with cache safety (`server/sales-cache.ts`) prevents silent data drift.
--   **Lead Pipeline**: A CRM-style Kanban board at `/gyms/:id/pipeline` with 5 stages (New, Booked, Showed, Won, Lost). Supports creating leads, stage transitions with validation dialogs (consult date for booking, sale price for won, reason for lost), and auto-creates consult/membership/payment records. Won leads automatically populate Sales Intelligence. Demo mode includes 20 seeded leads across all stages.
--   **Resources Library**: A curated collection of gym operations playbooks (onboarding, nutrition challenges, referral systems, coaching development, etc.) organized by category with expandable phases and actionable steps. Located at `/gyms/:id/resources`.
--   **AI Operator**: A workflow assistant that turns Iron Metrics signals into action plans, outreach drafts, task lists, scripts, and playbooks. Located at `/gyms/:id/operator`. Features 5 context pills (Retention, Sales, Coaching, Community, Owner Protection), 5 task types (7-day plan, Member outreach drafts, Sales follow-up sequence, Staff coaching note, Event plan), context preview drawer showing aggregated metrics (no PII), consent checkbox + disclaimer on all outputs, RBAC permission system (gym_owner/analyst/coach_view), audit logging via `ai_operator_runs` table, generation history view, output cards with copy/mark-reviewed/edit-draft actions. Entry points from Member Risk, Sales Intelligence, and gym overview pages. Scope contract at `docs/ai-operator/scope.md`. Backend: `server/ai-operator-stub.ts` (deterministic fallback), `server/operator-generator.ts` (GPT-4o-mini LLM generator with Sprint 3 hardening), `server/routes.ts` for API routes.
-    - **Sprint 3 — Security & Intelligence Hardening**: Tiered context engine (`server/operator-context.ts`) with mode-locked pill access (each focus area only sees relevant metric tiers), gym archetype detection (growth/stable/declining/startup), and data completeness scoring. Prompt injection protection (`server/operator-sanitizer.ts`) with injection pattern detection, HTML/markdown/URL stripping, and doctrine sanitization. Computed confidence engine (`server/operator-confidence.ts`) scoring 0-100 based on data completeness, signal strength, stability, and recency. Output risk filter (`server/operator-risk-filter.ts`) rejecting legal claims, medical language, guarantee phrasing, and doctrine source mentions. In-memory rate limiter (`server/operator-rate-limiter.ts`) with per-user (10/10min) and per-gym (20/10min) limits. Generator V2 integrates all systems: tiered context → sanitized doctrine → LLM generation → schema validation → risk filter → polished output, with retry logic and stub fallback. Full audit trail stored per run: promptVersion, doctrineVersion, reasoningSummary, riskFilterTriggered, confidenceScore, dataCompletenessScore. Frontend shows confidence score indicator, reasoning summary, data completeness bar, gym archetype badge, and rate limit feedback.
-    - **Sprint 4 — Workflow Integration & Quantified Impact**: Quantified Impact Engine (`server/operator-impact.ts`) computes projected revenue impact per pill using formula: `membersAffected × ARM × monthsRemaining × estimatedLiftPct × urgencyMultiplier`. Impact tiers: High (≥$2k), Moderate (≥$500), Low (<$500). Urgency multiplier up to 1.5× based on churn trend, RSI decline, and gym archetype. `operator_tasks` table enables converting AI Operator outputs into trackable action items with status lifecycle (pending → in_progress → complete), impact estimates, and outcome recording (execution_result, observed_impact). `intervention_outcomes` table tracks actual results. Active Tasks Dashboard at `/gyms/:id/operator/active` shows total projected impact in-flight, pill breakdown, completion rate, inline status updates, and completion feedback dialog. Auto-Prioritized Weekly Plan collapsible section on AI Operator page ranks pills by projected impact and lays out a 7-day execution calendar. Owner Protection Mode activates stabilization plan when RSI<60, churn rising, MRR declining, or archetype=declining. Output heading renamed to "Strategic Execution Brief" with pill/impact/confidence tag bar, archetype reasoning line, and "Convert to Tasks" flow. Prompt version bumped to 4.0.0.
--   **Billing Intelligence**: Member payment tracking and collection schedule at `/gyms/:id/billing`. Shows per-member billing status (paid/pending/overdue) with color-coded flags, collection schedule bar chart showing expected payments by day of month, summary cards (total expected, collected, pending, overdue), collection progress with projected end-of-month revenue, and inline status updates. Billing day derived from member join date. Data stored in `member_billing` table. Backend: `server/billing-engine.ts` computes billing data; API routes in `server/routes.ts` with Zod-validated PATCH endpoint.
--   **Attendance-Based Disengagement Detection**: Identifies at-risk members using attendance data, with fallback to contact-based detection.
--   **Robust Data Ingestion System**: A multi-step CSV import wizard with intelligent column auto-detection, validation, and idempotent upsert. Includes both member import (`/gyms/:id/import`) and lead/sales import (`/gyms/:id/leads/import`) with stage normalization, source standardization, deduplication (email+date or name+date matching), custom stage mapping, import audit history, and batch processing for large files.
--   **Wodify Integration**: Direct API connection for data synchronization, including backfill and incremental sync.
--   **Demo Mode**: Unauthenticated visitors can click "Try Demo" on the landing page to explore the full app with real sample data (read-only). Demo users see a persistent banner and cannot modify any data. Backend uses `isDemoUser()` check and `demoReadOnlyGuard` middleware. Demo gym ID: `f2d3ff6b-ced8-4735-847e-4f65b4cad721`.
+-   **Lifetime Value Engine (LTVE)**: Calculates LTV and models revenue impact.
+-   **Predictive Intelligence Stack**: Offers member-level churn probability, cohort analysis, revenue scenarios, and strategic recommendations.
+-   **Ranked Intervention Engine**: Scores recommendations based on revenue impact, confidence, and urgency.
+-   **Sales Intelligence**: A comprehensive dashboard with sales funnel analytics, conversion rates, bottleneck detection, Data Quality Score, Stale Leads recovery, operational follow-up tracking, and a refined Sales Health Score.
+-   **Lead Pipeline**: A CRM-style Kanban board for managing leads through 5 stages, supporting creation, transitions, and automatic record generation.
+-   **Resources Library**: A curated collection of gym operations playbooks organized by category.
+-   **AI Operator**: A workflow assistant generating action plans, outreach drafts, and playbooks based on Iron Metrics signals. It features tiered context, prompt injection protection, a computed confidence engine, output risk filtering, and rate limiting. It integrates with a Quantified Impact Engine to project revenue impact for tasks and provides an Active Tasks Dashboard.
+-   **Billing Intelligence**: Tracks member payments, collection schedules, and provides a summary of expected, collected, pending, and overdue payments.
+-   **Attendance-Based Disengagement Detection**: Identifies at-risk members using attendance data.
+-   **Robust Data Ingestion System**: A multi-step CSV import wizard for members and leads, with auto-detection, validation, and deduplication.
+-   **Wodify Integration**: Direct API connection for data synchronization.
+-   **Demo Mode**: Allows unauthenticated users to explore the app with sample data in read-only mode.
 
 ### Multi-User Gym Access (Authorization Model)
--   **`gym_staff` table**: Maps users to gyms with roles. Schema: `id`, `gym_id` (FK→gyms), `user_id` (FK→users), `role` (owner/admin/coach), `created_at`. Unique constraint on `(gym_id, user_id)`.
--   **Roles**: `owner` (full access including billing, settings, staff management), `admin` (read/write data, AI operator, no billing/settings), `coach` (read-only).
--   **`checkGymAccess()`**: Async function in `server/routes.ts` — checks `gym.ownerId` first (backward compat), then queries `gym_staff` table. A user with any role gets access.
--   **`getUserGymRole()`**: Returns the user's `GymStaffRole` for a gym, used for fine-grained permission checks.
--   **`getOperatorRole()`**: Maps `GymStaffRole` → `OperatorRole` for AI Operator permission gates.
--   **Staff API**: `GET/POST /api/gyms/:id/staff`, `PATCH/DELETE /api/gyms/:id/staff/:userId` — owner-only management. Cannot remove last owner.
--   **Gym listing**: `getGymsForUser()` in storage queries `gym_staff` JOIN `gyms` so users see all gyms they have any role in.
--   **Gym creation**: Auto-inserts `gym_staff` row with `role: "owner"` alongside the gym record.
--   **Backward compatibility**: `gyms.ownerId` column preserved. Both `ownerId` match and `gym_staff` lookup grant access.
+The system supports `owner`, `admin`, and `coach` roles, managed via a `gym_staff` table. `owner` has full access, `admin` has read/write data access (excluding billing/settings), and `coach` has read-only access. Access is granted based on `gym.ownerId` or `gym_staff` role. Fine-grained permissions are enforced at the route level for all mutating operations.
 
 ### Production Readiness & Security
--   **Security Headers**: `helmet` middleware provides CSP, HSTS, X-Frame-Options, X-Content-Type-Options, and other security headers. CSP and COEP are disabled to allow Replit's proxy and embedding to work.
--   **API Rate Limiting**: Global rate limiting via `express-rate-limit` at 100 requests/minute per IP on all `/api` routes. AI Operator has additional per-user (10/10min) and per-gym (20/10min) limits.
--   **Tenant Isolation**: All gym-scoped routes validate ownership via `checkGymAccess()`. Knowledge base management routes require gym ownership. Sales recalc-status route includes gym access check.
--   **Health Endpoint**: `GET /api/health` with database connectivity check for uptime monitoring.
--   **Database Pool Error Handling**: `pool.on("error")` listener prevents unhandled pool errors from crashing the process.
--   **React Error Boundary**: Global `ErrorBoundary` component wrapping the app catches render errors and shows a friendly fallback UI with reload button.
--   **Stripe Subscription Infrastructure**: `subscriptions` table tracks gym subscription state (plan, status, trial_ends_at, current_period_end). Stripe Checkout session creation, Customer Portal, and webhook handler for lifecycle events. 14-day free trial auto-created on gym creation. Subscription status API at `GET /api/gyms/:id/subscription`. Stripe integration pending connector setup.
--   **Pricing Page**: Landing page includes pricing section with Starter ($149/mo) and Pro ($249/mo) plan cards.
--   **Onboarding Wizard**: Multi-step onboarding at `/gyms/onboarding` — gym name/location entry, data source selection (CSV/Wodify/Sample), and quick feature tour.
--   **Legal Pages**: Terms of Service at `/terms` and Privacy Policy at `/privacy` with footer links throughout the app.
--   **Data Export**: CSV export endpoints for members, leads, metrics, and billing at `/api/gyms/:id/export/*`. Export buttons in gym settings.
+Security headers are implemented via `helmet`. API rate limiting is applied globally and specifically for the AI Operator. Tenant isolation is ensured through ownership validation. A health endpoint monitors database connectivity. Error handling includes database pool error listeners and a global React ErrorBoundary. Stripe integration manages subscriptions with a 14-day free trial. The application includes an onboarding wizard, legal pages, and data export functionalities.
 
 ### Intelligence Philosophy
-All insights are presented as Iron Metrics intelligence, embedding coaching concepts without external attribution. Strategic briefs are limited to the top 3 ranked recommendations, focusing on distinct execution categories with concise checklists and action items. Language is direct and gym-owner-friendly, avoiding jargon. Recommendations are validated against the project's core objectives: improving financial stability, retention clarity, reducing owner stress, and strengthening community longevity.
+All insights are presented as Iron Metrics intelligence, embedding coaching concepts. Strategic briefs are limited to the top 3 ranked recommendations, focusing on distinct execution categories with concise checklists and action items, using direct, gym-owner-friendly language. Recommendations align with improving financial stability, retention clarity, reducing owner stress, and strengthening community longevity.
 
 ## External Dependencies
--   **Replit Auth**: For user authentication (OpenID Connect).
--   **PostgreSQL**: Primary database for all application data.
--   **Stripe**: Payment processing for SaaS subscriptions (via Replit integration connector).
--   **Wodify**: Third-party gym management platform for attendance and membership data integration.
+-   **Replit Auth**: User authentication (OpenID Connect).
+-   **PostgreSQL**: Primary database.
+-   **Stripe**: Payment processing for SaaS subscriptions.
+-   **Wodify**: Third-party gym management platform integration.
 -   **Tailwind CSS**: Utility-first CSS framework.
 -   **shadcn/ui**: UI component library.
--   **Recharts**: React charting library for data visualization.
+-   **Recharts**: React charting library.
 -   **Vite**: Frontend build tool.
 -   **Express.js**: Backend web application framework.
--   **Drizzle ORM**: TypeScript ORM for database interaction.
--   **wouter**: Small routing library for React.
+-   **Drizzle ORM**: TypeScript ORM.
+-   **wouter**: React routing library.
 -   **helmet**: Security headers middleware.
 -   **express-rate-limit**: API rate limiting.

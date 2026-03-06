@@ -37,10 +37,9 @@ async function checkGymAccess(req: any, gym: { ownerId: string; id: string }): P
 
 async function getUserGymRole(req: any, gym: { ownerId: string; id: string }): Promise<GymStaffRole | null> {
   if (isDemoUser(req) && gym.id === DEMO_GYM_ID) return "owner";
-  const role = await storage.getGymStaffRole(gym.id, req.user.claims.sub);
-  if (role) return role;
   if (gym.ownerId === req.user.claims.sub) return "owner";
-  return null;
+  const role = await storage.getGymStaffRole(gym.id, req.user.claims.sub);
+  return role;
 }
 
 function getOperatorRole(staffRole: GymStaffRole): OperatorRole {
@@ -98,6 +97,8 @@ export async function registerRoutes(
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
       if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const roleCheckout = await getUserGymRole(req, gym);
+      if (roleCheckout !== "owner") return res.status(403).json({ message: "Only owners can manage subscriptions" });
 
       const { plan } = req.body;
       if (!plan || !["starter", "pro"].includes(plan)) {
@@ -119,6 +120,8 @@ export async function registerRoutes(
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
       if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const rolePortal = await getUserGymRole(req, gym);
+      if (rolePortal !== "owner") return res.status(403).json({ message: "Only owners can manage subscriptions" });
 
       const returnUrl = `${req.protocol}://${req.get("host")}/gyms/${req.params.id}/settings`;
       const session = await createCustomerPortalSession(req.params.id, returnUrl);
@@ -344,6 +347,8 @@ export async function registerRoutes(
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
       if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const importPreviewRole = await getUserGymRole(req, gym);
+      if (importPreviewRole === "coach") return res.status(403).json({ message: "Coaches have read-only access" });
 
       if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
@@ -374,6 +379,8 @@ export async function registerRoutes(
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
       if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const importCommitRole = await getUserGymRole(req, gym);
+      if (importCommitRole === "coach") return res.status(403).json({ message: "Coaches have read-only access" });
 
       if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
@@ -499,6 +506,8 @@ export async function registerRoutes(
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
       if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const importMembersRole = await getUserGymRole(req, gym);
+      if (importMembersRole === "coach") return res.status(403).json({ message: "Coaches have read-only access" });
 
       if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
@@ -903,6 +912,8 @@ export async function registerRoutes(
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
       if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const settingsRole = await getUserGymRole(req, gym);
+      if (settingsRole !== "owner") return res.status(403).json({ message: "Only owners can update gym settings" });
 
       const { name, location } = req.body;
       const updates: any = {};
@@ -987,7 +998,8 @@ export async function registerRoutes(
       const userRole = await getUserGymRole(req, gym);
       if (userRole !== "owner") return res.status(403).json({ message: "Only owners can manage staff" });
 
-      if (req.params.userId === req.user.claims.sub) {
+      const targetRole = await storage.getGymStaffRole(req.params.id, req.params.userId);
+      if (targetRole === "owner") {
         const allStaff = await storage.getGymStaff(req.params.id);
         const owners = allStaff.filter(s => s.role === "owner");
         if (owners.length <= 1) return res.status(400).json({ message: "Cannot remove the last owner" });
@@ -1307,6 +1319,8 @@ export async function registerRoutes(
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
       if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const wodifyTestRole = await getUserGymRole(req, gym);
+      if (wodifyTestRole === "coach") return res.status(403).json({ message: "Coaches have read-only access" });
 
       const { apiKey } = req.body;
       if (!apiKey || typeof apiKey !== "string") {
@@ -1326,6 +1340,8 @@ export async function registerRoutes(
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
       if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const wodifyConnectRole = await getUserGymRole(req, gym);
+      if (wodifyConnectRole === "coach") return res.status(403).json({ message: "Coaches have read-only access" });
 
       const { apiKey, locationName, programName } = req.body;
       if (!apiKey || typeof apiKey !== "string") {
@@ -1369,6 +1385,8 @@ export async function registerRoutes(
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
       if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const wodifyDisconnectRole = await getUserGymRole(req, gym);
+      if (wodifyDisconnectRole === "coach") return res.status(403).json({ message: "Coaches have read-only access" });
 
       await storage.deleteWodifyConnection(req.params.id);
       res.json({ message: "Wodify disconnected successfully" });
@@ -1415,6 +1433,8 @@ export async function registerRoutes(
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
       if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const wodifySyncRole = await getUserGymRole(req, gym);
+      if (wodifySyncRole === "coach") return res.status(403).json({ message: "Coaches have read-only access" });
 
       const runType = req.body?.runType === "backfill" ? "backfill" : "incremental";
 
@@ -1765,6 +1785,8 @@ export async function registerRoutes(
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
       if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const followUpRole = await getUserGymRole(req, gym);
+      if (followUpRole === "coach") return res.status(403).json({ message: "Coaches have read-only access" });
 
       const lead = await storage.getLeadById(req.params.leadId);
       if (!lead || lead.gymId !== req.params.id) return res.status(404).json({ message: "Lead not found" });
@@ -1802,6 +1824,8 @@ export async function registerRoutes(
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
       if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const createLeadRole = await getUserGymRole(req, gym);
+      if (createLeadRole === "coach") return res.status(403).json({ message: "Coaches have read-only access" });
 
       const data = insertLeadSchema.parse({ ...req.body, gymId: req.params.id });
       const lead = await storage.createLead(data);
@@ -1818,6 +1842,8 @@ export async function registerRoutes(
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
       if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const consultRole = await getUserGymRole(req, gym);
+      if (consultRole === "coach") return res.status(403).json({ message: "Coaches have read-only access" });
 
       const data = insertConsultSchema.parse({ ...req.body, gymId: req.params.id });
       const consult = await storage.createConsult(data);
@@ -1833,6 +1859,8 @@ export async function registerRoutes(
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
       if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const salesMembershipRole = await getUserGymRole(req, gym);
+      if (salesMembershipRole === "coach") return res.status(403).json({ message: "Coaches have read-only access" });
 
       const data = insertSalesMembershipSchema.parse({ ...req.body, gymId: req.params.id });
       const membership = await storage.createSalesMembership(data);
@@ -1877,6 +1905,8 @@ export async function registerRoutes(
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
       if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const updateLeadRole = await getUserGymRole(req, gym);
+      if (updateLeadRole === "coach") return res.status(403).json({ message: "Coaches have read-only access" });
 
       const lead = await storage.getLeadById(req.params.leadId);
       if (!lead || lead.gymId !== req.params.id) return res.status(404).json({ message: "Lead not found" });
@@ -1900,6 +1930,8 @@ export async function registerRoutes(
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
       if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const stageRole = await getUserGymRole(req, gym);
+      if (stageRole === "coach") return res.status(403).json({ message: "Coaches have read-only access" });
 
       const lead = await storage.getLeadById(req.params.leadId);
       if (!lead || lead.gymId !== req.params.id) return res.status(404).json({ message: "Lead not found" });
@@ -2002,6 +2034,8 @@ export async function registerRoutes(
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
       if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const leadImportPreviewRole = await getUserGymRole(req, gym);
+      if (leadImportPreviewRole === "coach") return res.status(403).json({ message: "Coaches have read-only access" });
 
       if (!req.file) return res.status(400).json({ message: "No file uploaded" });
       const csvText = req.file.buffer.toString("utf-8");
@@ -2040,6 +2074,8 @@ export async function registerRoutes(
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
       if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const leadImportCommitRole = await getUserGymRole(req, gym);
+      if (leadImportCommitRole === "coach") return res.status(403).json({ message: "Coaches have read-only access" });
 
       if (!req.file) return res.status(400).json({ message: "No file uploaded" });
       const csvText = req.file.buffer.toString("utf-8");
@@ -2459,6 +2495,8 @@ export async function registerRoutes(
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
       if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const createTaskRole = await getUserGymRole(req, gym);
+      if (createTaskRole === "coach") return res.status(403).json({ message: "Coaches have read-only access" });
 
       const { runId, tasks } = req.body;
       if (!runId || !Array.isArray(tasks) || tasks.length === 0) {
@@ -2524,6 +2562,8 @@ export async function registerRoutes(
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
       if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const updateTaskRole = await getUserGymRole(req, gym);
+      if (updateTaskRole === "coach") return res.status(403).json({ message: "Coaches have read-only access" });
 
       const existingTasks = await storage.getOperatorTasksByGym(gym.id);
       const task = existingTasks.find(t => t.id === req.params.taskId);
@@ -2599,6 +2639,8 @@ export async function registerRoutes(
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
       if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const deleteTasksRole = await getUserGymRole(req, gym);
+      if (deleteTasksRole === "coach") return res.status(403).json({ message: "Coaches have read-only access" });
 
       const deletedCount = await storage.deleteOperatorTasksByGym(gym.id);
       res.json({ deleted: deletedCount });
@@ -2697,6 +2739,8 @@ export async function registerRoutes(
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
       if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const billingRole = await getUserGymRole(req, gym);
+      if (billingRole !== "owner") return res.status(403).json({ message: "Only owners can modify billing" });
 
       const parsed = billingUpdateSchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: "Invalid request", errors: parsed.error.errors });
@@ -2729,34 +2773,6 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error updating billing record:", error);
       res.status(500).json({ message: "Failed to update billing record" });
-    }
-  });
-
-  app.get("/api/gyms/:id/export/members", isAuthenticated, async (req: any, res) => {
-    try {
-      const gym = await storage.getGym(req.params.id);
-      if (!gym) return res.status(404).json({ message: "Gym not found" });
-      if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
-
-      const rows = await storage.getMembersByGym(req.params.id);
-      const header = "Name,Email,Status,Join Date,Cancel Date,Last Attended Date,Monthly Rate";
-      const csvRows = rows.map(r => [
-        escapeCsvField(r.name),
-        escapeCsvField(r.email || ""),
-        escapeCsvField(r.status),
-        escapeCsvField(r.joinDate),
-        escapeCsvField(r.cancelDate || ""),
-        escapeCsvField(r.lastAttendedDate || ""),
-        escapeCsvField(r.monthlyRate),
-      ].join(","));
-      const csv = [header, ...csvRows].join("\n");
-
-      res.setHeader("Content-Type", "text/csv");
-      res.setHeader("Content-Disposition", `attachment; filename="members-${req.params.id}.csv"`);
-      res.send(csv);
-    } catch (error) {
-      console.error("Error exporting members:", error);
-      res.status(500).json({ message: "Failed to export members" });
     }
   });
 
