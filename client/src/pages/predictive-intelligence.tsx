@@ -1646,7 +1646,7 @@ function PredictiveMemberDrawer({ member, prediction, gymId, onClose }: { member
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
-        window.location.href = "/api/login";
+        window.location.href = "/login";
         return;
       }
       toast({ title: "Error", description: "Failed to log contact.", variant: "destructive" });

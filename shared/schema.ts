@@ -63,6 +63,34 @@ export const insertGymStaffSchema = createInsertSchema(gymStaff).omit({ id: true
 export type InsertGymStaff = z.infer<typeof insertGymStaffSchema>;
 export type GymStaff = typeof gymStaff.$inferSelect;
 
+export const INVITE_STATUSES = ["pending", "accepted", "expired", "cancelled"] as const;
+export type InviteStatus = typeof INVITE_STATUSES[number];
+
+export const staffInvites = pgTable("staff_invites", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gymId: varchar("gym_id").notNull().references(() => gyms.id),
+  email: text("email").notNull(),
+  role: text("role").notNull(),
+  invitedBy: varchar("invited_by").notNull().references(() => users.id),
+  token: varchar("token").notNull().unique(),
+  status: text("status").notNull().default("pending"),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_staff_invites_token").on(table.token),
+  index("idx_staff_invites_email").on(table.email),
+  index("idx_staff_invites_gym").on(table.gymId),
+]);
+
+export const staffInvitesRelations = relations(staffInvites, ({ one }) => ({
+  gym: one(gyms, { fields: [staffInvites.gymId], references: [gyms.id] }),
+  inviter: one(users, { fields: [staffInvites.invitedBy], references: [users.id] }),
+}));
+
+export const insertStaffInviteSchema = createInsertSchema(staffInvites).omit({ id: true, createdAt: true });
+export type InsertStaffInvite = z.infer<typeof insertStaffInviteSchema>;
+export type StaffInvite = typeof staffInvites.$inferSelect;
+
 export const members = pgTable("members", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   gymId: varchar("gym_id").notNull().references(() => gyms.id),

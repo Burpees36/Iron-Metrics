@@ -142,7 +142,7 @@ export default function LandingPage() {
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <a href="/api/login">
+            <a href="/login">
               <Button
                 data-testid="button-login"
               >
@@ -168,7 +168,7 @@ export default function LandingPage() {
                 <p>Iron Metrics turns your member data into retention intelligence, churn predictions, and ranked interventions - so you know exactly what to do next.</p>
               </div>
               <div className="flex flex-wrap items-center gap-3 animate-fade-in-up animation-delay-300">
-                <a href="/api/login">
+                <a href="/login">
                   <Button
                     size="lg"
                     className="pl-[32px] pr-[32px] pt-[16px] pb-[16px]"
@@ -374,7 +374,7 @@ export default function LandingPage() {
                       </li>
                     ))}
                   </ul>
-                  <a href="/api/login" className="block">
+                  <a href="/login" className="block">
                     <Button className="w-full" variant="outline" data-testid="button-get-started-starter">
                       Get Started
                       <ArrowRight className="w-4 h-4 ml-1" />
@@ -408,7 +408,7 @@ export default function LandingPage() {
                       </li>
                     ))}
                   </ul>
-                  <a href="/api/login" className="block">
+                  <a href="/login" className="block">
                     <Button className="w-full" data-testid="button-get-started-pro">
                       Get Started
                       <ArrowRight className="w-4 h-4 ml-1" />
@@ -436,7 +436,7 @@ export default function LandingPage() {
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Your gym's stability is in your hands.</h2>
             <p className="text-muted-foreground leading-relaxed">Import your members. See your risks. Act on what matters.</p>
           </div>
-          <a href="/api/login">
+          <a href="/login">
             <Button
               size="lg"
               className="pt-[12px] pb-[12px] mt-[6px] mb-[6px]"

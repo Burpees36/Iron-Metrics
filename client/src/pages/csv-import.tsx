@@ -147,7 +147,7 @@ export default function CsvImport() {
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
         toast({ title: "Session expired", description: "Logging in again...", variant: "destructive" });
-        setTimeout(() => { window.location.href = "/api/login"; }, 500);
+        setTimeout(() => { window.location.href = "/login"; }, 500);
         return;
       }
       toast({ title: "Preview failed", description: error.message, variant: "destructive" });
@@ -199,7 +199,7 @@ export default function CsvImport() {
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
         toast({ title: "Session expired", description: "Logging in again...", variant: "destructive" });
-        setTimeout(() => { window.location.href = "/api/login"; }, 500);
+        setTimeout(() => { window.location.href = "/login"; }, 500);
         return;
       }
       toast({ title: "Import failed", description: error.message, variant: "destructive" });

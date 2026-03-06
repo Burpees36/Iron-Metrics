@@ -7,7 +7,9 @@ import { parseMembersCsv, previewCsv, parseAllRows, computeFileHash, type Column
 import { recomputeAllMetrics, computeMonthlyMetrics, generateMetricReports, generateForecast, generateTrendIntelligence } from "./metrics";
 import { generatePredictiveIntelligence } from "./predictive";
 import { ensureRecommendationCards, getOwnerActions, getPeriodStart, getRecommendationExecutionState, logOwnerAction, runLearningUpdate, toggleChecklistItem } from "./recommendation-learning";
-import { insertGymSchema, insertKnowledgeSourceSchema, insertLeadSchema, insertConsultSchema, insertSalesMembershipSchema, insertPaymentSchema } from "@shared/schema";
+import { insertGymSchema, insertKnowledgeSourceSchema, insertLeadSchema, insertConsultSchema, insertSalesMembershipSchema, insertPaymentSchema, staffInvites, GYM_STAFF_ROLES } from "@shared/schema";
+import { randomBytes } from "crypto";
+import { supabaseAdmin } from "./supabaseAuth";
 import multer from "multer";
 import { encryptApiKey, generateFingerprint, testWodifyConnection } from "./wodify-connector";
 import { runWodifySync } from "./wodify-sync";
@@ -33,21 +35,21 @@ const PLATFORM_ADMIN_IDS = new Set(
 );
 
 function isPlatformAdmin(req: any): boolean {
-  const userId = req.user?.claims?.sub;
+  const userId = req.user?.id;
   return !!userId && PLATFORM_ADMIN_IDS.has(userId);
 }
 
 async function checkGymAccess(req: any, gym: { ownerId: string; id: string }): Promise<boolean> {
   if (isDemoUser(req) && gym.id === DEMO_GYM_ID) return true;
-  if (gym.ownerId === req.user.claims.sub) return true;
-  const role = await storage.getGymStaffRole(gym.id, req.user.claims.sub);
+  if (gym.ownerId === req.user.id) return true;
+  const role = await storage.getGymStaffRole(gym.id, req.user.id);
   return role !== null;
 }
 
 async function getUserGymRole(req: any, gym: { ownerId: string; id: string }): Promise<GymStaffRole | null> {
   if (isDemoUser(req) && gym.id === DEMO_GYM_ID) return "owner";
-  if (gym.ownerId === req.user.claims.sub) return "owner";
-  const role = await storage.getGymStaffRole(gym.id, req.user.claims.sub);
+  if (gym.ownerId === req.user.id) return "owner";
+  const role = await storage.getGymStaffRole(gym.id, req.user.id);
   return role;
 }
 
@@ -114,7 +116,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Invalid plan" });
       }
 
-      const userEmail = req.user?.claims?.email || "";
+      const userEmail = req.user?.email || "";
       const returnUrl = `${req.protocol}://${req.get("host")}/gyms/${req.params.id}/settings`;
       const session = await createCheckoutSession(req.params.id, plan, userEmail, returnUrl);
       res.json(session);
@@ -141,18 +143,25 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/demo", async (req: any, res, next) => {
+  app.post("/api/demo", async (req: any, res) => {
     try {
       await ensureDemoData();
     } catch (e) {
       console.error("[DEMO] Seed error:", e);
     }
     const demoUser = {
-      claims: { sub: DEMO_USER_ID, email: "demo@ironmetrics.app", first_name: "Demo", last_name: "User" },
-      expires_at: Math.floor(Date.now() / 1000) + 86400 * 365,
+      id: DEMO_USER_ID,
+      email: "demo@ironmetrics.app",
+      firstName: "Demo",
+      lastName: "User",
+      profileImageUrl: null,
     };
-    req.login(demoUser, (err: any) => {
-      if (err) return next(err);
+    (req.session as any).demoUser = demoUser;
+    req.session.save((err: any) => {
+      if (err) {
+        console.error("[DEMO] Session save error:", err);
+        return res.status(500).json({ message: "Failed to start demo" });
+      }
       res.json({ ok: true });
     });
   });
@@ -163,7 +172,7 @@ export async function registerRoutes(
         const demoGym = await storage.getGym(DEMO_GYM_ID);
         return res.json(demoGym ? [demoGym] : []);
       }
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const gyms = await storage.getGymsForUser(userId);
       res.json(gyms);
     } catch (error) {
@@ -186,7 +195,7 @@ export async function registerRoutes(
 
   app.post("/api/gyms", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const parsed = insertGymSchema.parse({ ...req.body, ownerId: userId });
       const gym = await storage.createGym(parsed);
       await storage.addGymStaff({ gymId: gym.id, userId, role: "owner" });
@@ -418,7 +427,7 @@ export async function registerRoutes(
       if (result.validRows === 0) {
         const job = await storage.createImportJob({
           gymId: req.params.id,
-          uploadedBy: req.user.claims.sub,
+          uploadedBy: req.user.id,
           filename: req.file.originalname || "import.csv",
           fileHash,
           rawCsv: csvText,
@@ -442,7 +451,7 @@ export async function registerRoutes(
 
       const job = await storage.createImportJob({
         gymId: req.params.id,
-        uploadedBy: req.user.claims.sub,
+        uploadedBy: req.user.id,
         filename: req.file.originalname || "import.csv",
         fileHash,
         rawCsv: csvText,
@@ -1477,7 +1486,7 @@ export async function registerRoutes(
 
   app.get("/api/knowledge/sources", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = isDemoUser(req) ? DEMO_USER_ID : req.user?.claims?.sub;
+      const userId = isDemoUser(req) ? DEMO_USER_ID : req.user?.id;
       if (!userId) return res.status(401).json({ message: "Unauthorized" });
       const gyms = isDemoUser(req) ? [await storage.getGym(DEMO_GYM_ID)] : await storage.getGymsForUser(userId);
       if (!gyms || gyms.length === 0) return res.json([]);
@@ -1610,7 +1619,7 @@ export async function registerRoutes(
 
   app.get("/api/knowledge/ingest-jobs", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = isDemoUser(req) ? DEMO_USER_ID : req.user?.claims?.sub;
+      const userId = isDemoUser(req) ? DEMO_USER_ID : req.user?.id;
       if (!userId) return res.status(401).json({ message: "Unauthorized" });
       const gyms = isDemoUser(req) ? [await storage.getGym(DEMO_GYM_ID)] : await storage.getGymsForUser(userId);
       if (!gyms || gyms.length === 0) return res.json([]);
@@ -2094,7 +2103,7 @@ export async function registerRoutes(
 
       const job = await storage.createImportJob({
         gymId: req.params.id,
-        uploadedBy: req.user?.claims?.sub || "unknown",
+        uploadedBy: req.user?.id || "unknown",
         filename: req.file.originalname || "leads.csv",
         fileHash,
         rawCsv: csvText.slice(0, 50000),
@@ -2370,7 +2379,7 @@ export async function registerRoutes(
         return res.status(403).json({ message: "Your role does not allow generation" });
       }
 
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
 
       const rateLimitResult = checkRateLimit(userId, gym.id);
       if (!rateLimitResult.allowed) {
@@ -2869,6 +2878,164 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error exporting billing:", error);
       res.status(500).json({ message: "Failed to export billing" });
+    }
+  });
+
+  app.post("/api/demo/logout", async (req: any, res) => {
+    if ((req.session as any)?.demoUser) {
+      delete (req.session as any).demoUser;
+    }
+    req.session.destroy((err: any) => {
+      if (err) console.error("[DEMO] Logout error:", err);
+      res.json({ ok: true });
+    });
+  });
+
+  app.post("/api/gyms/:id/staff/invite", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      const role = await getUserGymRole(req, gym);
+      if (role !== "owner") return res.status(403).json({ message: "Only owners can invite staff" });
+
+      const { email, role: inviteRole } = req.body;
+      if (!email || !inviteRole) return res.status(400).json({ message: "Email and role are required" });
+      if (!GYM_STAFF_ROLES.includes(inviteRole)) return res.status(400).json({ message: "Invalid role" });
+
+      const existingStaff = await storage.getGymStaffByEmail(gym.id, email);
+      if (existingStaff) return res.status(409).json({ message: "This email is already a staff member of this gym" });
+
+      const token = randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+      const invite = await storage.createStaffInvite({
+        gymId: gym.id,
+        email,
+        role: inviteRole,
+        invitedBy: req.user.id,
+        token,
+        status: "pending",
+        expiresAt,
+      });
+
+      try {
+        const appUrl = `${req.protocol}://${req.get("host")}`;
+        const inviteLink = `${appUrl}/invite/${token}`;
+        await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+          redirectTo: inviteLink,
+          data: {
+            inviteToken: token,
+            gymName: gym.name,
+            role: inviteRole,
+          },
+        });
+      } catch (emailErr: any) {
+        console.warn("[INVITE] Could not send invite email:", emailErr.message);
+      }
+
+      const { token: _token, ...safeInvite } = invite;
+      res.json(safeInvite);
+    } catch (error) {
+      console.error("Error creating invite:", error);
+      res.status(500).json({ message: "Failed to create invite" });
+    }
+  });
+
+  app.get("/api/invites/:token", async (req: any, res) => {
+    try {
+      const invite = await storage.getStaffInviteByToken(req.params.token);
+      if (!invite) return res.status(404).json({ message: "Invite not found" });
+      if (invite.status !== "pending") return res.status(410).json({ message: "This invite is no longer valid" });
+      if (new Date(invite.expiresAt) < new Date()) {
+        await storage.updateStaffInviteStatus(invite.id, "expired");
+        return res.status(410).json({ message: "This invite has expired" });
+      }
+
+      const gym = await storage.getGym(invite.gymId);
+      const inviter = await storage.getUser(invite.invitedBy);
+
+      res.json({
+        gymName: gym?.name || "Unknown Gym",
+        role: invite.role,
+        inviterName: inviter ? `${inviter.firstName || ""} ${inviter.lastName || ""}`.trim() : null,
+        email: invite.email,
+      });
+    } catch (error) {
+      console.error("Error fetching invite:", error);
+      res.status(500).json({ message: "Failed to fetch invite" });
+    }
+  });
+
+  app.post("/api/invites/:token/accept", isAuthenticated, async (req: any, res) => {
+    try {
+      if (isDemoUser(req)) return res.status(403).json({ message: "Demo users cannot accept invites" });
+
+      const invite = await storage.getStaffInviteByToken(req.params.token);
+      if (!invite) return res.status(404).json({ message: "Invite not found" });
+      if (invite.status !== "pending") return res.status(410).json({ message: "This invite is no longer valid" });
+      if (new Date(invite.expiresAt) < new Date()) {
+        await storage.updateStaffInviteStatus(invite.id, "expired");
+        return res.status(410).json({ message: "This invite has expired" });
+      }
+
+      const userEmail = (req.user.email || "").toLowerCase().trim();
+      const inviteEmail = (invite.email || "").toLowerCase().trim();
+      if (userEmail !== inviteEmail) {
+        return res.status(403).json({ message: "This invite was sent to a different email address" });
+      }
+
+      const existingRole = await storage.getGymStaffRole(invite.gymId, req.user.id);
+      if (existingRole) {
+        await storage.updateStaffInviteStatus(invite.id, "accepted");
+        return res.json({ message: "You are already a member of this gym", gymId: invite.gymId });
+      }
+
+      await storage.addGymStaff({
+        gymId: invite.gymId,
+        userId: req.user.id,
+        role: invite.role,
+      });
+      await storage.updateStaffInviteStatus(invite.id, "accepted");
+
+      res.json({ message: "Invite accepted", gymId: invite.gymId, role: invite.role });
+    } catch (error) {
+      console.error("Error accepting invite:", error);
+      res.status(500).json({ message: "Failed to accept invite" });
+    }
+  });
+
+  app.get("/api/gyms/:id/staff/invites", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      const role = await getUserGymRole(req, gym);
+      if (role !== "owner") return res.status(403).json({ message: "Only owners can view invites" });
+
+      const invites = await storage.getGymStaffInvites(gym.id);
+      const safeInvites = invites.map(({ token, ...rest }: any) => rest);
+      res.json(safeInvites);
+    } catch (error) {
+      console.error("Error fetching invites:", error);
+      res.status(500).json({ message: "Failed to fetch invites" });
+    }
+  });
+
+  app.delete("/api/gyms/:id/staff/invites/:inviteId", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      const role = await getUserGymRole(req, gym);
+      if (role !== "owner") return res.status(403).json({ message: "Only owners can cancel invites" });
+
+      const invites = await storage.getGymStaffInvites(gym.id);
+      const targetInvite = invites.find((inv: any) => inv.id === req.params.inviteId);
+      if (!targetInvite) return res.status(404).json({ message: "Invite not found for this gym" });
+
+      await storage.updateStaffInviteStatus(req.params.inviteId, "cancelled");
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Error cancelling invite:", error);
+      res.status(500).json({ message: "Failed to cancel invite" });
     }
   });
 

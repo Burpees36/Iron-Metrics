@@ -33,6 +33,10 @@ import OperatorDashboard from "@/pages/operator-dashboard";
 import BillingIntelligence from "@/pages/billing-intelligence";
 import TermsOfService from "@/pages/terms";
 import PrivacyPolicy from "@/pages/privacy";
+import AuthLogin from "@/pages/auth-login";
+import AuthSignup from "@/pages/auth-signup";
+import AuthResetPassword from "@/pages/auth-reset-password";
+import InviteAccept from "@/pages/invite-accept";
 import { NotificationBell } from "@/components/notification-bell";
 import { ErrorBoundary } from "@/components/error-boundary";
 
@@ -42,7 +46,7 @@ function DemoBanner() {
     <div className="bg-primary/10 border-b border-primary/25 px-4 py-2 text-center text-sm" data-testid="banner-demo">
       <span className="text-muted-foreground">You're viewing a demo with sample data — everything is read-only.</span>
       {" "}
-      <a href="/api/login" className="text-primary font-medium hover:underline" data-testid="link-demo-signup">
+      <a href="/signup" className="text-primary font-medium hover:underline" data-testid="link-demo-signup">
         Create Your Account
       </a>
     </div>
@@ -71,6 +75,10 @@ function AuthenticatedApp() {
           </header>
           <main className="flex-1 overflow-auto">
             <Switch>
+              <Route path="/login" component={AuthLogin} />
+              <Route path="/signup" component={AuthSignup} />
+              <Route path="/reset-password" component={AuthResetPassword} />
+              <Route path="/invite/:token" component={InviteAccept} />
               <Route path="/" component={Dashboard} />
               <Route path="/gyms/new" component={GymNew} />
               <Route path="/gyms/onboarding" component={Onboarding} />
@@ -116,6 +124,10 @@ function AppContent() {
   if (!user) {
     return (
       <Switch>
+        <Route path="/login" component={AuthLogin} />
+        <Route path="/signup" component={AuthSignup} />
+        <Route path="/reset-password" component={AuthResetPassword} />
+        <Route path="/invite/:token" component={InviteAccept} />
         <Route path="/terms" component={TermsOfService} />
         <Route path="/privacy" component={PrivacyPolicy} />
         <Route component={LandingPage} />

@@ -1054,7 +1054,7 @@ function FlaggedMemberCard({ member: m, gymId, monthDate }: { member: AtRiskMemb
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
-        window.location.href = "/api/login";
+        window.location.href = "/login";
         return;
       }
       toast({ title: "Error", description: "Failed to log contact. Try again.", variant: "destructive" });
@@ -1680,7 +1680,7 @@ function MemberDrawer({ member, gymId, onClose }: { member: EnrichedMember | nul
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
-        window.location.href = "/api/login";
+        window.location.href = "/login";
         return;
       }
       toast({ title: "Error", description: "Failed to log contact.", variant: "destructive" });

@@ -21,6 +21,13 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Settings,
   Save,
   Upload,
@@ -36,6 +43,9 @@ import {
   XCircle,
   Sparkles,
   ArrowUpRight,
+  UserPlus,
+  Mail,
+  Trash2,
 } from "lucide-react";
 import { Link } from "wouter";
 import { useGymData, GymPageShell, GymNotFound, GymDetailSkeleton, PageHeader } from "./gym-detail";
@@ -425,7 +435,7 @@ export default function GymSettings() {
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
         toast({ title: "Unauthorized", description: "Logging in again...", variant: "destructive" });
-        setTimeout(() => { window.location.href = "/api/login"; }, 500);
+        setTimeout(() => { window.location.href = "/login"; }, 500);
         return;
       }
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -445,7 +455,7 @@ export default function GymSettings() {
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
         toast({ title: "Unauthorized", description: "Logging in again...", variant: "destructive" });
-        setTimeout(() => { window.location.href = "/api/login"; }, 500);
+        setTimeout(() => { window.location.href = "/login"; }, 500);
         return;
       }
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -517,6 +527,8 @@ export default function GymSettings() {
         )}
 
         <SubscriptionSection gymId={gymId!} isDemoUser={isDemoUser} />
+
+        <StaffInvitesSection gymId={gymId!} isOwner={!isDemoUser && gym.ownerId === user?.id} />
 
         <div className="space-y-3 pt-2">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Data & Integrations</p>
@@ -601,6 +613,144 @@ export default function GymSettings() {
   );
 }
 
+interface StaffInvite {
+  id: string;
+  email: string;
+  role: string;
+  status: string;
+  expiresAt: string;
+  createdAt: string;
+}
+
+function StaffInvitesSection({ gymId, isOwner }: { gymId: string; isOwner: boolean }) {
+  const { toast } = useToast();
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("coach");
+
+  const { data: invites = [], isLoading } = useQuery<StaffInvite[]>({
+    queryKey: ["/api/gyms", gymId, "staff", "invites"],
+    enabled: isOwner,
+  });
+
+  const inviteMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/gyms/${gymId}/staff/invite`, {
+        email: inviteEmail,
+        role: inviteRole,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/gyms", gymId, "staff", "invites"] });
+      toast({ title: "Invite sent", description: `Invitation sent to ${inviteEmail}.` });
+      setInviteEmail("");
+      setInviteRole("coach");
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to send invite", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: async (inviteId: string) => {
+      await apiRequest("DELETE", `/api/gyms/${gymId}/staff/invites/${inviteId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/gyms", gymId, "staff", "invites"] });
+      toast({ title: "Invite cancelled" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to cancel invite", description: error.message, variant: "destructive" });
+    },
+  });
+
+  if (!isOwner) return null;
+
+  const pendingInvites = invites.filter((inv) => inv.status === "pending");
+
+  return (
+    <div className="space-y-3 pt-2">
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Staff Invitations</p>
+      <Card>
+        <CardContent className="p-4 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-md bg-primary/10">
+              <UserPlus className="w-4 h-4 text-primary" />
+            </div>
+            <div>
+              <p className="text-sm font-medium">Invite Staff</p>
+              <p className="text-xs text-muted-foreground">Add coaches or admins to your gym by email.</p>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Input
+              type="email"
+              placeholder="Email address"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              className="flex-1"
+              data-testid="input-invite-email"
+            />
+            <Select value={inviteRole} onValueChange={setInviteRole}>
+              <SelectTrigger className="w-full sm:w-[120px]" data-testid="select-invite-role">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="coach">Coach</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              onClick={() => inviteMutation.mutate()}
+              disabled={!inviteEmail || inviteMutation.isPending}
+              data-testid="button-send-invite"
+            >
+              <Mail className="w-4 h-4 mr-1" />
+              {inviteMutation.isPending ? "Sending..." : "Invite"}
+            </Button>
+          </div>
+
+          {isLoading && <Skeleton className="h-10 w-full" />}
+
+          {pendingInvites.length > 0 && (
+            <div className="space-y-2 pt-2 border-t border-border">
+              <p className="text-xs font-medium text-muted-foreground pt-2">Pending Invitations</p>
+              {pendingInvites.map((invite) => (
+                <div
+                  key={invite.id}
+                  className="flex items-center justify-between py-2 px-3 rounded-md bg-muted/50"
+                  data-testid={`invite-row-${invite.id}`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm truncate" data-testid={`text-invite-email-${invite.id}`}>{invite.email}</p>
+                      <p className="text-xs text-muted-foreground">
+                        <Badge variant="outline" className="text-[10px] mr-1">{invite.role}</Badge>
+                        Expires {new Date(invite.expiresAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => cancelMutation.mutate(invite.id)}
+                    disabled={cancelMutation.isPending}
+                    data-testid={`button-cancel-invite-${invite.id}`}
+                  >
+                    <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 function ExportButton({ gymId, type, label }: { gymId: string; type: string; label: string }) {
   const [downloading, setDownloading] = useState(false);
   const { toast } = useToast();
@@ -608,7 +758,13 @@ function ExportButton({ gymId, type, label }: { gymId: string; type: string; lab
   const handleExport = async () => {
     setDownloading(true);
     try {
-      const response = await fetch(`/api/gyms/${gymId}/export/${type}`, { credentials: "include" });
+      const { supabase } = await import("@/lib/supabase");
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        headers["Authorization"] = `Bearer ${session.access_token}`;
+      }
+      const response = await fetch(`/api/gyms/${gymId}/export/${type}`, { credentials: "include", headers });
       if (!response.ok) {
         const err = await response.json().catch(() => ({ message: "Export failed" }));
         throw new Error(err.message);

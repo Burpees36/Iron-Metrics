@@ -6,9 +6,11 @@ import {
   recommendationChunkAudit, ingestJobs,
   leads, consults, salesMemberships, payments,
   aiOperatorRuns, operatorTasks, interventionOutcomes,
-  gymStaff,
+  gymStaff, staffInvites, users,
   type Gym, type InsertGym,
   type GymStaff, type InsertGymStaff, type GymStaffRole,
+  type StaffInvite, type InsertStaffInvite,
+  type User,
   type Member, type InsertMember,
   type GymMonthlyMetrics, type InsertGymMonthlyMetrics,
   type MemberContact, type InsertMemberContact,
@@ -167,6 +169,13 @@ export interface IStorage {
   addGymStaff(staff: InsertGymStaff): Promise<GymStaff>;
   removeGymStaff(gymId: string, userId: string): Promise<void>;
   updateGymStaffRole(gymId: string, userId: string, role: GymStaffRole): Promise<GymStaff>;
+
+  getUser(id: string): Promise<User | undefined>;
+  getGymStaffByEmail(gymId: string, email: string): Promise<GymStaff | undefined>;
+  createStaffInvite(invite: InsertStaffInvite): Promise<StaffInvite>;
+  getStaffInviteByToken(token: string): Promise<StaffInvite | undefined>;
+  updateStaffInviteStatus(id: string, status: string): Promise<void>;
+  getGymStaffInvites(gymId: string): Promise<StaffInvite[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1004,6 +1013,40 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(gymStaff.gymId, gymId), eq(gymStaff.userId, userId)))
       .returning();
     return updated;
+  }
+
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async getGymStaffByEmail(gymId: string, email: string): Promise<GymStaff | undefined> {
+    const result = await db
+      .select({ gymStaff })
+      .from(gymStaff)
+      .innerJoin(users, eq(gymStaff.userId, users.id))
+      .where(and(eq(gymStaff.gymId, gymId), eq(users.email, email)));
+    return result[0]?.gymStaff;
+  }
+
+  async createStaffInvite(invite: InsertStaffInvite): Promise<StaffInvite> {
+    const [created] = await db.insert(staffInvites).values(invite).returning();
+    return created;
+  }
+
+  async getStaffInviteByToken(token: string): Promise<StaffInvite | undefined> {
+    const [invite] = await db.select().from(staffInvites).where(eq(staffInvites.token, token));
+    return invite;
+  }
+
+  async updateStaffInviteStatus(id: string, status: string): Promise<void> {
+    await db.update(staffInvites).set({ status }).where(eq(staffInvites.id, id));
+  }
+
+  async getGymStaffInvites(gymId: string): Promise<StaffInvite[]> {
+    return db.select().from(staffInvites)
+      .where(eq(staffInvites.gymId, gymId))
+      .orderBy(desc(staffInvites.createdAt));
   }
 }
 

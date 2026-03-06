@@ -23,7 +23,16 @@ If it does not drive action, it is not shown.
 The application uses a dark steel/charcoal visual identity with a clean, neutral palette. Fonts include Inter, Libre Baskerville, and JetBrains Mono. Red is reserved for risk alerts. Consistent border radii (0.625rem, 0.5rem, 0.375rem) are applied. The design is mobile-responsive and includes print-friendly CSS.
 
 ### Technical Implementations
-The system utilizes React, Vite, Tailwind CSS, shadcn/ui, and Recharts for the frontend. The backend is built with Express.js, Drizzle ORM, and PostgreSQL. Authentication is handled by Replit Auth (OpenID Connect), with wouter for frontend routing and Express for backend routes.
+The system utilizes React, Vite, Tailwind CSS, shadcn/ui, and Recharts for the frontend. The backend is built with Express.js, Drizzle ORM, and PostgreSQL. Authentication is handled by Supabase Auth (email/password with JWT tokens), with wouter for frontend routing and Express for backend routes.
+
+### Authentication Architecture (Supabase Auth)
+- **Frontend**: `@supabase/supabase-js` client handles login, signup, password reset, and automatic token refresh. Auth state managed via `supabase.auth.onAuthStateChange()` in the `useAuth` hook.
+- **Backend**: Stateless JWT verification via `supabase.auth.getUser(token)`. The `isAuthenticated` middleware extracts the Bearer token from the Authorization header, verifies it with Supabase, and upserts the user into the app `users` table. Sets `req.user = { id, email, firstName, lastName }`.
+- **User identity**: `req.user.id` (Supabase UUID) is the primary identity throughout the backend. Replaces the old `req.user.claims.sub` pattern.
+- **Demo mode**: Uses express-session cookies (separate from Supabase JWT flow). Demo user stored in `req.session.demoUser`.
+- **Staff invites**: `staff_invites` table with token-based invite flow. Owner creates invite → email sent via Supabase Admin API → invited user signs up and accepts invite → `gym_staff` record created.
+- **Frontend auth pages**: `/login`, `/signup`, `/reset-password`, `/invite/:token` (all client-side routes).
+- **Environment variables**: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (secrets); `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (shared env vars for frontend).
 
 ### Feature Specifications
 Iron Metrics provides a Stability Command Center dashboard with key financial and retention metrics, encompassing:
@@ -53,7 +62,7 @@ Security headers are implemented via `helmet`. API rate limiting is applied glob
 All insights are presented as Iron Metrics intelligence, embedding coaching concepts. Strategic briefs are limited to the top 3 ranked recommendations, focusing on distinct execution categories with concise checklists and action items, using direct, gym-owner-friendly language. Recommendations align with improving financial stability, retention clarity, reducing owner stress, and strengthening community longevity.
 
 ## External Dependencies
--   **Replit Auth**: User authentication (OpenID Connect).
+-   **Supabase Auth**: User authentication (email/password, JWT tokens, password reset, invite-by-email).
 -   **PostgreSQL**: Primary database.
 -   **Stripe**: Payment processing for SaaS subscriptions.
 -   **Wodify**: Third-party gym management platform integration.
