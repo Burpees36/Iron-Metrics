@@ -6,7 +6,9 @@ import {
   recommendationChunkAudit, ingestJobs,
   leads, consults, salesMemberships, payments,
   aiOperatorRuns, operatorTasks, interventionOutcomes,
+  gymStaff,
   type Gym, type InsertGym,
+  type GymStaff, type InsertGymStaff, type GymStaffRole,
   type Member, type InsertMember,
   type GymMonthlyMetrics, type InsertGymMonthlyMetrics,
   type MemberContact, type InsertMemberContact,
@@ -158,6 +160,13 @@ export interface IStorage {
   getSubscriptionByStripeSubscriptionId(stripeSubscriptionId: string): Promise<Subscription | undefined>;
   createSubscription(sub: InsertSubscription): Promise<Subscription>;
   updateSubscription(id: string, updates: Partial<Subscription>): Promise<Subscription>;
+
+  getGymStaffRole(gymId: string, userId: string): Promise<GymStaffRole | null>;
+  getGymsForUser(userId: string): Promise<Gym[]>;
+  getGymStaff(gymId: string): Promise<GymStaff[]>;
+  addGymStaff(staff: InsertGymStaff): Promise<GymStaff>;
+  removeGymStaff(gymId: string, userId: string): Promise<void>;
+  updateGymStaffRole(gymId: string, userId: string, role: GymStaffRole): Promise<GymStaff>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -949,6 +958,50 @@ export class DatabaseStorage implements IStorage {
     const [updated] = await db.update(subscriptions)
       .set({ ...updates, updatedAt: new Date() })
       .where(eq(subscriptions.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getGymStaffRole(gymId: string, userId: string): Promise<GymStaffRole | null> {
+    const [row] = await db.select({ role: gymStaff.role })
+      .from(gymStaff)
+      .where(and(eq(gymStaff.gymId, gymId), eq(gymStaff.userId, userId)));
+    return row ? (row.role as GymStaffRole) : null;
+  }
+
+  async getGymsForUser(userId: string): Promise<Gym[]> {
+    const staffGyms = await db
+      .select({ gym: gyms })
+      .from(gymStaff)
+      .innerJoin(gyms, eq(gymStaff.gymId, gyms.id))
+      .where(eq(gymStaff.userId, userId));
+    const staffGymIds = new Set(staffGyms.map(r => r.gym.id));
+    const ownedGyms = await db.select().from(gyms).where(eq(gyms.ownerId, userId));
+    const result = staffGyms.map(r => r.gym);
+    for (const g of ownedGyms) {
+      if (!staffGymIds.has(g.id)) result.push(g);
+    }
+    return result;
+  }
+
+  async getGymStaff(gymId: string): Promise<GymStaff[]> {
+    return db.select().from(gymStaff).where(eq(gymStaff.gymId, gymId));
+  }
+
+  async addGymStaff(staff: InsertGymStaff): Promise<GymStaff> {
+    const [created] = await db.insert(gymStaff).values(staff).returning();
+    return created;
+  }
+
+  async removeGymStaff(gymId: string, userId: string): Promise<void> {
+    await db.delete(gymStaff)
+      .where(and(eq(gymStaff.gymId, gymId), eq(gymStaff.userId, userId)));
+  }
+
+  async updateGymStaffRole(gymId: string, userId: string, role: GymStaffRole): Promise<GymStaff> {
+    const [updated] = await db.update(gymStaff)
+      .set({ role })
+      .where(and(eq(gymStaff.gymId, gymId), eq(gymStaff.userId, userId)))
       .returning();
     return updated;
   }

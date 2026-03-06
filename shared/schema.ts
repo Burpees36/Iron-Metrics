@@ -33,11 +33,35 @@ export const gymsRelations = relations(gyms, ({ one, many }) => ({
   owner: one(users, { fields: [gyms.ownerId], references: [users.id] }),
   members: many(members),
   monthlyMetrics: many(gymMonthlyMetrics),
+  staff: many(gymStaff),
 }));
 
 export const insertGymSchema = createInsertSchema(gyms).omit({ id: true, createdAt: true });
 export type InsertGym = z.infer<typeof insertGymSchema>;
 export type Gym = typeof gyms.$inferSelect;
+
+export const GYM_STAFF_ROLES = ["owner", "admin", "coach"] as const;
+export type GymStaffRole = typeof GYM_STAFF_ROLES[number];
+
+export const gymStaff = pgTable("gym_staff", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gymId: varchar("gym_id").notNull().references(() => gyms.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  role: text("role").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  uniqueIndex("idx_gym_staff_unique").on(table.gymId, table.userId),
+  index("idx_gym_staff_user").on(table.userId),
+]);
+
+export const gymStaffRelations = relations(gymStaff, ({ one }) => ({
+  gym: one(gyms, { fields: [gymStaff.gymId], references: [gyms.id] }),
+  user: one(users, { fields: [gymStaff.userId], references: [users.id] }),
+}));
+
+export const insertGymStaffSchema = createInsertSchema(gymStaff).omit({ id: true, createdAt: true });
+export type InsertGymStaff = z.infer<typeof insertGymStaffSchema>;
+export type GymStaff = typeof gymStaff.$inferSelect;
 
 export const members = pgTable("members", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

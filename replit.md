@@ -45,6 +45,17 @@ Iron Metrics includes a Stability Command Center dashboard with key financial an
 -   **Wodify Integration**: Direct API connection for data synchronization, including backfill and incremental sync.
 -   **Demo Mode**: Unauthenticated visitors can click "Try Demo" on the landing page to explore the full app with real sample data (read-only). Demo users see a persistent banner and cannot modify any data. Backend uses `isDemoUser()` check and `demoReadOnlyGuard` middleware. Demo gym ID: `f2d3ff6b-ced8-4735-847e-4f65b4cad721`.
 
+### Multi-User Gym Access (Authorization Model)
+-   **`gym_staff` table**: Maps users to gyms with roles. Schema: `id`, `gym_id` (FK→gyms), `user_id` (FK→users), `role` (owner/admin/coach), `created_at`. Unique constraint on `(gym_id, user_id)`.
+-   **Roles**: `owner` (full access including billing, settings, staff management), `admin` (read/write data, AI operator, no billing/settings), `coach` (read-only).
+-   **`checkGymAccess()`**: Async function in `server/routes.ts` — checks `gym.ownerId` first (backward compat), then queries `gym_staff` table. A user with any role gets access.
+-   **`getUserGymRole()`**: Returns the user's `GymStaffRole` for a gym, used for fine-grained permission checks.
+-   **`getOperatorRole()`**: Maps `GymStaffRole` → `OperatorRole` for AI Operator permission gates.
+-   **Staff API**: `GET/POST /api/gyms/:id/staff`, `PATCH/DELETE /api/gyms/:id/staff/:userId` — owner-only management. Cannot remove last owner.
+-   **Gym listing**: `getGymsForUser()` in storage queries `gym_staff` JOIN `gyms` so users see all gyms they have any role in.
+-   **Gym creation**: Auto-inserts `gym_staff` row with `role: "owner"` alongside the gym record.
+-   **Backward compatibility**: `gyms.ownerId` column preserved. Both `ownerId` match and `gym_staff` lookup grant access.
+
 ### Production Readiness & Security
 -   **Security Headers**: `helmet` middleware provides CSP, HSTS, X-Frame-Options, X-Content-Type-Options, and other security headers. CSP and COEP are disabled to allow Replit's proxy and embedding to work.
 -   **API Rate Limiting**: Global rate limiting via `express-rate-limit` at 100 requests/minute per IP on all `/api` routes. AI Operator has additional per-user (10/10min) and per-gym (20/10min) limits.
