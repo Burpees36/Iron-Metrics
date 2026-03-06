@@ -28,6 +28,15 @@ import { createCheckoutSession, createCustomerPortalSession, getSubscriptionStat
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
+const PLATFORM_ADMIN_IDS = new Set(
+  (process.env.PLATFORM_ADMIN_IDS || "54700016").split(",").map(s => s.trim()).filter(Boolean)
+);
+
+function isPlatformAdmin(req: any): boolean {
+  const userId = req.user?.claims?.sub;
+  return !!userId && PLATFORM_ADMIN_IDS.has(userId);
+}
+
 async function checkGymAccess(req: any, gym: { ownerId: string; id: string }): Promise<boolean> {
   if (isDemoUser(req) && gym.id === DEMO_GYM_ID) return true;
   if (gym.ownerId === req.user.claims.sub) return true;
@@ -1018,6 +1027,8 @@ export async function registerRoutes(
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
       if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const exportMembersRole = await getUserGymRole(req, gym);
+      if (exportMembersRole === "coach") return res.status(403).json({ message: "Coaches cannot export member data" });
 
       const membersList = await storage.getMembersByGym(req.params.id);
       const contacts = await storage.getLatestContacts(req.params.id);
@@ -1480,10 +1491,7 @@ export async function registerRoutes(
 
   app.post("/api/knowledge/sources", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
     try {
-      const userId = req.user?.claims?.sub;
-      if (!userId) return res.status(401).json({ message: "Unauthorized" });
-      const gyms = await storage.getGymsForUser(userId);
-      if (!gyms || gyms.length === 0) return res.status(403).json({ message: "Forbidden" });
+      if (!isPlatformAdmin(req)) return res.status(403).json({ message: "Platform admin access required" });
       const parsed = insertKnowledgeSourceSchema.parse(req.body);
       const source = await storage.createKnowledgeSource(parsed);
       res.status(201).json(source);
@@ -1495,10 +1503,7 @@ export async function registerRoutes(
 
   app.delete("/api/knowledge/sources/:id", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
     try {
-      const userId = req.user?.claims?.sub;
-      if (!userId) return res.status(401).json({ message: "Unauthorized" });
-      const gyms = await storage.getGymsForUser(userId);
-      if (!gyms || gyms.length === 0) return res.status(403).json({ message: "Forbidden" });
+      if (!isPlatformAdmin(req)) return res.status(403).json({ message: "Platform admin access required" });
       await storage.deleteKnowledgeSource(req.params.id);
       res.json({ message: "Source deleted" });
     } catch (error) {
@@ -1509,10 +1514,7 @@ export async function registerRoutes(
 
   app.post("/api/knowledge/sources/:id/ingest", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
     try {
-      const userId = req.user?.claims?.sub;
-      if (!userId) return res.status(401).json({ message: "Unauthorized" });
-      const gyms = await storage.getGymsForUser(userId);
-      if (!gyms || gyms.length === 0) return res.status(403).json({ message: "Forbidden" });
+      if (!isPlatformAdmin(req)) return res.status(403).json({ message: "Platform admin access required" });
       const source = await storage.getKnowledgeSource(req.params.id);
       if (!source) return res.status(404).json({ message: "Source not found" });
 
@@ -1593,10 +1595,7 @@ export async function registerRoutes(
 
   app.post("/api/knowledge/seed", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
     try {
-      const userId = req.user?.claims?.sub;
-      if (!userId) return res.status(401).json({ message: "Unauthorized" });
-      const gyms = await storage.getGymsForUser(userId);
-      if (!gyms || gyms.length === 0) return res.status(403).json({ message: "Forbidden" });
+      if (!isPlatformAdmin(req)) return res.status(403).json({ message: "Platform admin access required" });
       res.json({ message: "Seeding started" });
       seedKnowledgeBase().then(result => {
         console.log("[SEED] Result:", JSON.stringify(result));
@@ -2781,6 +2780,8 @@ export async function registerRoutes(
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
       if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const exportLeadsRole = await getUserGymRole(req, gym);
+      if (exportLeadsRole === "coach") return res.status(403).json({ message: "Coaches cannot export lead data" });
 
       const rows = await storage.getLeadsByGymAllTime(req.params.id);
       const header = "Name,Email,Phone,Source,Status,Created At,Sale Price,Won At,Lost At,Lost Reason,Notes";
@@ -2845,6 +2846,8 @@ export async function registerRoutes(
       const gym = await storage.getGym(req.params.id);
       if (!gym) return res.status(404).json({ message: "Gym not found" });
       if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const exportBillingRole = await getUserGymRole(req, gym);
+      if (exportBillingRole !== "owner") return res.status(403).json({ message: "Only owners can export billing data" });
 
       const rows = await storage.getAllMemberBillingByGym(req.params.id);
       const header = "Member ID,Billing Month,Amount Due,Amount Paid,Status,Due Date,Paid At,Notes";
