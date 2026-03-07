@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,7 @@ import { Label } from "@/components/ui/label";
 export default function AuthLogin() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
+  const { setDemoUser } = useAuth();
   const { toast } = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -50,8 +52,12 @@ export default function AuthLogin() {
         setError(data.message || "Failed to start demo");
         return;
       }
-      queryClient.invalidateQueries();
-      setLocation(redirectTo);
+      const profileRes = await fetch("/api/auth/user", { credentials: "include" });
+      if (profileRes.ok) {
+        const profile = await profileRes.json();
+        setDemoUser(profile);
+        setLocation(redirectTo);
+      }
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred");
     } finally {

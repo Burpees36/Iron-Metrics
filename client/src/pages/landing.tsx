@@ -14,7 +14,8 @@ import {
 } from "lucide-react";
 import { IronMetricsLogoCompact, IronMetricsWordmark } from "@/components/brand-logos";
 import { useQueryClient } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import { useAuth } from "@/hooks/use-auth";
 
 interface GymScenario {
   name: string;
@@ -99,13 +100,20 @@ export default function LandingPage() {
   const [demoLoading, setDemoLoading] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const queryClient = useQueryClient();
+  const { setDemoUser } = useAuth();
+  const [, setLocation] = useLocation();
 
   const startDemo = async () => {
     setDemoLoading(true);
     try {
       const res = await fetch("/api/demo", { method: "POST", credentials: "include" });
       if (res.ok) {
-        await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+        const profileRes = await fetch("/api/auth/user", { credentials: "include" });
+        if (profileRes.ok) {
+          const profile = await profileRes.json();
+          setDemoUser(profile);
+          setLocation("/");
+        }
       } else {
         setDemoLoading(false);
       }
@@ -142,13 +150,13 @@ export default function LandingPage() {
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <a href="/login">
+            <Link href="/login">
               <Button
                 data-testid="button-login"
               >
                 Log In
               </Button>
-            </a>
+            </Link>
           </div>
         </div>
       </nav>
@@ -168,7 +176,7 @@ export default function LandingPage() {
                 <p>Iron Metrics turns your member data into retention intelligence, churn predictions, and ranked interventions - so you know exactly what to do next.</p>
               </div>
               <div className="flex flex-wrap items-center gap-3 animate-fade-in-up animation-delay-300">
-                <a href="/login">
+                <Link href="/signup">
                   <Button
                     size="lg"
                     className="pl-[32px] pr-[32px] pt-[16px] pb-[16px]"
@@ -177,7 +185,7 @@ export default function LandingPage() {
                     Get Started
                     <ArrowRight className="w-4 h-4 ml-1" />
                   </Button>
-                </a>
+                </Link>
                 <Button
                   size="lg"
                   variant="outline"
@@ -374,12 +382,12 @@ export default function LandingPage() {
                       </li>
                     ))}
                   </ul>
-                  <a href="/login" className="block">
+                  <Link href="/signup" className="block">
                     <Button className="w-full" variant="outline" data-testid="button-get-started-starter">
                       Get Started
                       <ArrowRight className="w-4 h-4 ml-1" />
                     </Button>
-                  </a>
+                  </Link>
                 </CardContent>
               </Card>
             </FadeInCard>
@@ -408,12 +416,12 @@ export default function LandingPage() {
                       </li>
                     ))}
                   </ul>
-                  <a href="/login" className="block">
+                  <Link href="/signup" className="block">
                     <Button className="w-full" data-testid="button-get-started-pro">
                       Get Started
                       <ArrowRight className="w-4 h-4 ml-1" />
                     </Button>
-                  </a>
+                  </Link>
                 </CardContent>
               </Card>
             </FadeInCard>
@@ -436,7 +444,7 @@ export default function LandingPage() {
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Your gym's stability is in your hands.</h2>
             <p className="text-muted-foreground leading-relaxed">Import your members. See your risks. Act on what matters.</p>
           </div>
-          <a href="/login">
+          <Link href="/signup">
             <Button
               size="lg"
               className="pt-[12px] pb-[12px] mt-[6px] mb-[6px]"
@@ -445,7 +453,7 @@ export default function LandingPage() {
               Get Started
               <ArrowRight className="w-4 h-4 ml-1" />
             </Button>
-          </a>
+          </Link>
         </div>
       </section>
       <footer className="border-t border-border/50 py-10">

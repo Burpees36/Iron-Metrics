@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { supabase, getAppUrl } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
@@ -7,7 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 
-export default function AuthResetPassword() {
+interface Props {
+  forceRecovery?: boolean;
+}
+
+export default function AuthResetPassword({ forceRecovery = false }: Props) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [email, setEmail] = useState("");
@@ -15,40 +19,6 @@ export default function AuthResetPassword() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [emailSent, setEmailSent] = useState(false);
-  const [isRecoveryMode, setIsRecoveryMode] = useState(false);
-  const [checkingSession, setCheckingSession] = useState(true);
-
-  useEffect(() => {
-    async function checkRecovery() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        const params = new URLSearchParams(window.location.search);
-        const hashParams = new URLSearchParams(window.location.hash.replace("#", ""));
-        if (params.get("type") === "recovery" || hashParams.get("type") === "recovery") {
-          setIsRecoveryMode(true);
-        } else {
-          const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-            if (event === "PASSWORD_RECOVERY") {
-              setIsRecoveryMode(true);
-            }
-            subscription.unsubscribe();
-          });
-        }
-      }
-      setCheckingSession(false);
-    }
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") {
-        setIsRecoveryMode(true);
-        setCheckingSession(false);
-      }
-    });
-
-    checkRecovery();
-
-    return () => subscription.unsubscribe();
-  }, []);
 
   async function handleRequestReset(e: React.FormEvent) {
     e.preventDefault();
@@ -88,7 +58,8 @@ export default function AuthResetPassword() {
         title: "Password updated",
         description: "Your password has been updated successfully.",
       });
-      setLocation("/login");
+      await supabase.auth.signOut();
+      window.location.href = "/login";
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred");
     } finally {
@@ -96,19 +67,7 @@ export default function AuthResetPassword() {
     }
   }
 
-  if (checkingSession) {
-    return (
-      <div className="flex min-h-screen items-center justify-center p-4">
-        <Card className="w-full max-w-sm">
-          <CardContent className="p-6 text-center text-muted-foreground text-sm">
-            Loading...
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (isRecoveryMode) {
+  if (forceRecovery) {
     return (
       <div className="flex min-h-screen items-center justify-center p-4">
         <Card className="w-full max-w-sm">

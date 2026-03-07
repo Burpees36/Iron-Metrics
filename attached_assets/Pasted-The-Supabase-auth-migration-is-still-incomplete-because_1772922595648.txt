@@ -1,0 +1,30 @@
+The Supabase auth migration is still incomplete because the old Replit Auth flow is still being used in parts of the app.
+
+Observed issues:
+1. After clicking the Supabase signup verification link, I land on the landing page instead of being redirected into the authenticated app
+2. The landing page "Get Started" / login flow is still sending me to Replit Auth
+3. Password reset links land on the app, but do not show the reset-password flow; instead I end up on the landing page and get pushed into Replit Auth
+4. I can log in with Supabase on a separate sign-in page, so Supabase auth itself is partially working
+
+I need you to fully remove the remaining customer-facing Replit Auth paths and finish the Supabase auth routing/session flow.
+
+Inspect and fix all of these:
+
+1. Find every frontend CTA, link, redirect, helper, and route that still points to Replit Auth (/api/login, old login helpers, old logout helpers, old auth middleware assumptions)
+2. Replace all customer-facing login/signup/get-started flows so they use the Supabase auth pages only
+3. Ensure that after Supabase verification, if the user session is established, the app redirects away from the landing page to the authenticated app or onboarding
+4. Ensure password reset links land on the correct reset-password route and show the password reset form
+5. Ensure recovery links do not drop the user onto the generic landing page
+6. Ensure authenticated users cannot get stuck on the public landing page unless they explicitly log out
+7. Verify logout uses Supabase logout, not Replit logout
+8. Identify any old Replit Auth code paths still active in the UI or routing and remove or disable them for customer auth
+9. Keep demo mode working, but make sure demo mode does not redirect real users into Replit Auth
+10. Return the exact files changed and explain why the landing page was still appearing
+
+After fixing, tell me the expected behavior for:
+- signup + verification
+- login
+- logout
+- password reset
+- invite acceptance
+- demo mode

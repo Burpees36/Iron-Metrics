@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useContext, createContext } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { User } from "@shared/models/auth";
@@ -29,11 +29,26 @@ async function fetchUserProfile(session: Session | null): Promise<User | null> {
   return response.json();
 }
 
-export function useAuth() {
+interface AuthState {
+  user: User | null;
+  isLoading: boolean;
+  isAuthenticated: boolean;
+  isDemo: boolean;
+  isRecovery: boolean;
+  session: Session | null;
+  logout: () => Promise<void>;
+  setDemoUser: (demoUser: User) => void;
+  isLoggingOut: boolean;
+}
+
+const AuthContext = createContext<AuthState | null>(null);
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
+  const [isRecovery, setIsRecovery] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -43,6 +58,12 @@ export function useAuth() {
         if (!mounted) return;
 
         setSession(newSession);
+
+        if (event === "PASSWORD_RECOVERY") {
+          setIsRecovery(true);
+          if (mounted) setIsLoading(false);
+          return;
+        }
 
         if (newSession && (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION")) {
           try {
@@ -58,6 +79,7 @@ export function useAuth() {
           }
         } else if (event === "SIGNED_OUT") {
           setUser(null);
+          setIsRecovery(false);
           queryClient.clear();
         } else if (event === "INITIAL_SESSION" && !newSession) {
           try {
@@ -100,14 +122,29 @@ export function useAuth() {
     setIsLoading(false);
   }, []);
 
-  return {
+  const value: AuthState = {
     user,
     isLoading,
     isAuthenticated: !!user,
     isDemo: user?.id === DEMO_USER_ID,
+    isRecovery,
     session,
     logout,
     setDemoUser,
     isLoggingOut: false,
   };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth(): AuthState {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
 }

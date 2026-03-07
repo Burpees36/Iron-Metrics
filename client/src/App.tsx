@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, Link } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -6,7 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LuxuryThemeShell } from "@/components/luxury-theme-shell";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth, AuthProvider } from "@/hooks/use-auth";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -46,9 +46,9 @@ function DemoBanner() {
     <div className="bg-primary/10 border-b border-primary/25 px-4 py-2 text-center text-sm" data-testid="banner-demo">
       <span className="text-muted-foreground">You're viewing a demo with sample data — everything is read-only.</span>
       {" "}
-      <a href="/signup" className="text-primary font-medium hover:underline" data-testid="link-demo-signup">
+      <Link href="/signup" className="text-primary font-medium hover:underline" data-testid="link-demo-signup">
         Create Your Account
-      </a>
+      </Link>
     </div>
   );
 }
@@ -108,7 +108,7 @@ function AuthenticatedApp() {
 }
 
 function AppContent() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, isRecovery } = useAuth();
 
   if (isLoading) {
     return (
@@ -119,6 +119,10 @@ function AppContent() {
         </div>
       </div>
     );
+  }
+
+  if (isRecovery) {
+    return <AuthResetPassword forceRecovery />;
   }
 
   if (!user) {
@@ -142,14 +146,16 @@ function App() {
   return (
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <LuxuryThemeShell>
-            <ErrorBoundary>
-              <AppContent />
-            </ErrorBoundary>
-          </LuxuryThemeShell>
-          <Toaster />
-        </TooltipProvider>
+        <AuthProvider>
+          <TooltipProvider>
+            <LuxuryThemeShell>
+              <ErrorBoundary>
+                <AppContent />
+              </ErrorBoundary>
+            </LuxuryThemeShell>
+            <Toaster />
+          </TooltipProvider>
+        </AuthProvider>
       </QueryClientProvider>
     </ThemeProvider>
   );
