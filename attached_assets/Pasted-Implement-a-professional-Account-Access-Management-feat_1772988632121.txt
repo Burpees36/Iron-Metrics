@@ -1,0 +1,172 @@
+Implement a professional Account Access Management feature for gym owners and redesign the Settings page so it feels polished, organized, and ready for real customers.
+
+Context:
+- This is Iron Metrics
+- We already have multi-user gym access with roles: owner, admin, coach
+- We already have invite staff working
+- Owners need to be able to see who has access, change roles, revoke access, and handle real-life situations like a coach leaving or partners splitting up
+- The Settings page currently works but feels too plain and loosely organized
+- Keep the app’s existing emerald / silver professional tone
+- Do not break demo mode
+- Do not break current auth, gym_staff authorization, or invite flow
+
+Goals:
+1. Add a full “Access & Team” management section to Settings
+2. Make Settings feel more professional and structured using best practices
+3. Preserve current functionality while improving layout, hierarchy, and usability
+
+FEATURES TO IMPLEMENT
+
+Part 1 — Access & Team Management
+Add a dedicated team management area within Settings that includes:
+
+A. Current Team Members list
+For each user with access to the gym, show:
+- name
+- email
+- role
+- status if relevant
+- who the primary owner is if that concept exists
+- joined date if available
+- clear action menu
+
+B. Owner actions
+Owners should be able to:
+- invite a new user
+- change a user’s role
+- remove a user from the gym
+- transfer ownership only through a protected flow if supported
+- see clear warnings before removing an owner or changing permissions
+- be prevented from removing the last owner
+- be prevented from locking themselves out accidentally
+
+C. Role management UX
+Support these roles clearly:
+- owner
+- admin
+- coach
+
+Role descriptions should be visible in the UI:
+- Owner: full access including billing, settings, staff, and sensitive exports
+- Admin: operational management without subscription/staff ownership controls
+- Coach: mostly read-only access with limited member interaction
+
+D. Removal / revocation UX
+When removing a user:
+- require confirmation
+- explain what access they will lose
+- if the user is an owner, show stronger warning text
+- block the action if it would remove the last owner
+
+E. Invite section
+Keep invite-by-email, but integrate it into the new team management section so it feels like one coherent system rather than a separate loose card
+
+Part 2 — Settings Page Redesign
+Redesign the Settings page into a more professional SaaS layout.
+
+Use this structure:
+
+1. Page header
+- Title: Settings
+- concise subtitle explaining this is where the owner manages gym profile, team access, billing, and integrations
+
+2. Section: Gym Profile
+- gym name
+- location
+- created date
+- save changes action
+- clean card layout with tighter spacing and better hierarchy
+
+3. Section: Team & Access
+- invite user form
+- current team member list/table/cards
+- role management
+- remove access actions
+- ownership protections
+- this should be one of the primary sections on the page
+
+4. Section: Subscription & Billing
+- current plan
+- billing status
+- owner-only actions clearly separated
+- if not fully active yet, present it professionally as “Billing setup in progress” or similar, not as a rough placeholder
+
+5. Section: Data & Integrations
+- CSV import
+- Wodify integration
+- recompute metrics
+- group these under a clean operational tools section
+
+6. Section: Data Export
+- exports grouped cleanly
+- explain what each export contains
+- only show actions allowed for the user’s role
+- owner/admin/coach visibility must follow existing backend permissions
+
+DESIGN / UX REQUIREMENTS
+- Improve spacing, typography hierarchy, and visual grouping
+- Reduce the “stack of unrelated cards” feeling
+- Use section grouping and card consistency
+- Use stronger headers and helper text
+- Make destructive actions feel deliberate and clearly separated
+- Prefer a clean SaaS admin/settings pattern
+- Keep the page calm, modern, and premium — not flashy
+- Preserve mobile responsiveness
+- Make it obvious what is editable vs informational
+- Add empty/loading/error states where needed
+- Do not overload the page with too much text
+
+AUTHORIZATION REQUIREMENTS
+- Owners can invite, change roles, and remove users
+- Admins and coaches can see the team list if appropriate, but must not get owner controls
+- Respect all current backend role rules
+- Do not expose owner-only actions in the UI to non-owners
+- Backend must remain the source of truth even if the UI hides actions
+
+BACKEND REQUIREMENTS
+Inspect the existing gym_staff routes and extend them as needed, but do not rebuild what already works if current endpoints can support this feature.
+
+Use the current backend where possible:
+- GET team members
+- POST invite/add staff
+- PATCH role
+- DELETE/remove staff
+
+If anything is missing, add the minimum clean backend support required.
+Return real success/failure messages.
+Do not allow silent failures.
+
+FRONTEND REQUIREMENTS
+Inspect the current Settings page and refactor it into reusable sections/components if appropriate.
+Improve the page architecture rather than just adding another card.
+
+Possible component breakdown:
+- SettingsHeader
+- GymProfileCard
+- TeamAccessCard
+- TeamMemberTable or TeamMemberList
+- InviteMemberForm
+- BillingCard
+- IntegrationsCard
+- ExportCard
+
+DELIVERABLES
+I want you to:
+1. Inspect the current Settings page implementation
+2. Design the improved page architecture using the existing codebase
+3. Implement the team/access management feature
+4. Refactor the Settings page to look more professional
+5. Keep existing behavior working
+6. Show me:
+   - files changed
+   - routes/endpoints used or added
+   - the new Settings page structure
+   - the final permission behavior for owner/admin/coach
+   - anything still missing for a fully production-ready account management experience
+
+IMPORTANT
+- Do not give generic advice
+- Inspect and modify the actual current code
+- Do not break demo mode
+- Do not weaken existing authorization
+- Keep the result founder-demo ready for Monday
