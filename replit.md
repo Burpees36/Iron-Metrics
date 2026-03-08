@@ -35,7 +35,7 @@ The system utilizes React, Vite, Tailwind CSS, shadcn/ui, and Recharts for the f
 - **Frontend auth pages**: `/login`, `/signup`, `/reset-password`, `/invite/:token` (all client-side routes, registered in both authenticated and unauthenticated route switches). Landing page "Get Started" CTAs link to `/signup`; nav "Log In" links to `/login`.
 - **Password recovery**: `PASSWORD_RECOVERY` event sets `isRecovery` in auth context → `AppContent` renders `AuthResetPassword` with `forceRecovery` prop → user sees "set new password" form immediately.
 - **Environment variables**: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (secrets); `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (shared env vars for frontend — must be the anon/public key, never the service role key).
-- **Supabase dashboard**: Site URL must be `https://iron-metrics.replit.app`. Redirect URLs must include `https://iron-metrics.replit.app/**` and the dev domain.
+- **Supabase dashboard**: Site URL must be `https://ironmetrics.app`. Redirect URLs must include `https://ironmetrics.app/**`, `https://iron-metrics.replit.app/**`, and the dev domain.
 
 ### Feature Specifications
 Iron Metrics provides a Stability Command Center dashboard with key financial and retention metrics, encompassing:
