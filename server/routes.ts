@@ -2918,12 +2918,14 @@ export async function registerRoutes(
         expiresAt,
       });
 
+      let emailSent = false;
+      let emailError: string | null = null;
+
       try {
-        const forwardedHost = req.get("x-forwarded-host") || req.get("host");
-        const forwardedProto = req.get("x-forwarded-proto") || req.protocol;
-        const appUrl = `${forwardedProto}://${forwardedHost}`;
+        const appUrl = process.env.APP_URL || "https://ironmetrics.app";
         const inviteLink = `${appUrl}/invite/${token}`;
-        await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+
+        const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
           redirectTo: inviteLink,
           data: {
             inviteToken: token,
@@ -2931,12 +2933,34 @@ export async function registerRoutes(
             role: inviteRole,
           },
         });
+
+        if (inviteError) {
+          if (inviteError.message?.includes("already been registered")) {
+            console.log(`[INVITE] User ${email} already registered — sending magic link to invite page`);
+            const { error: otpError } = await supabaseAdmin.auth.signInWithOtp({
+              email,
+              options: {
+                shouldCreateUser: false,
+                emailRedirectTo: inviteLink,
+              },
+            });
+            if (otpError) {
+              throw otpError;
+            }
+          } else {
+            throw inviteError;
+          }
+        }
+
+        emailSent = true;
+        console.log(`[INVITE] Email sent successfully to ${email} for gym "${gym.name}"`);
       } catch (emailErr: any) {
-        console.warn("[INVITE] Could not send invite email:", emailErr.message);
+        emailError = emailErr.message || "Unknown email error";
+        console.error("[INVITE] Failed to send invite email:", emailError);
       }
 
       const { token: _token, ...safeInvite } = invite;
-      res.json(safeInvite);
+      res.json({ ...safeInvite, emailSent, emailError: emailSent ? undefined : emailError });
     } catch (error) {
       console.error("Error creating invite:", error);
       res.status(500).json({ message: "Failed to create invite" });

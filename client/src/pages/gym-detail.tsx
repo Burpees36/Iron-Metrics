@@ -61,6 +61,7 @@ import {
   CheckCircle2,
   Brain,
   Zap,
+  Plug,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import {
@@ -1214,13 +1215,30 @@ function OnboardingChecklist({ gymId, month }: { gymId: string; month: string })
 
   const hasMembers = members && members.length > 0;
 
+  const importOptions = [
+    {
+      id: "csv",
+      label: "Import CSV",
+      description: "Upload a roster from any gym management system.",
+      href: `/gyms/${gymId}/import`,
+      icon: Upload,
+    },
+    {
+      id: "wodify",
+      label: "Connect Wodify",
+      description: "Sync directly with your Wodify account.",
+      href: `/gyms/${gymId}/wodify`,
+      icon: Plug,
+    },
+  ];
+
   const steps = [
     {
       id: "import",
-      label: "Import your member roster",
-      description: "Upload a CSV from Wodify, PushPress, Zen Planner, or any spreadsheet.",
+      label: "Connect your member data",
+      description: "Import a CSV file or connect your Wodify account.",
       done: !!hasMembers,
-      href: `/gyms/${gymId}/import`,
+      importOptions: !hasMembers ? importOptions : undefined,
       icon: Upload,
     },
     {
@@ -1304,8 +1322,20 @@ function OnboardingChecklist({ gymId, month }: { gymId: string; month: string })
                     {step.label}
                   </p>
                   <p className="text-xs text-muted-foreground">{step.description}</p>
-                  {!step.done && i === completedCount && step.href && (
-                    <Link href={step.href}>
+                  {!step.done && i === completedCount && step.importOptions && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {step.importOptions.map((opt) => (
+                        <Link key={opt.id} href={opt.href}>
+                          <Button size="sm" variant={opt.id === "csv" ? "default" : "outline"} data-testid={`button-${opt.id}`}>
+                            <opt.icon className="w-3.5 h-3.5 mr-1" />
+                            {opt.label}
+                          </Button>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                  {!step.done && i === completedCount && !step.importOptions && (step as any).href && (
+                    <Link href={(step as any).href}>
                       <Button size="sm" className="mt-2" data-testid={`button-${step.id}`}>
                         <step.icon className="w-3.5 h-3.5 mr-1" />
                         Get Started

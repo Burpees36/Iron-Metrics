@@ -640,9 +640,17 @@ function StaffInvitesSection({ gymId, isOwner }: { gymId: string; isOwner: boole
       });
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/gyms", gymId, "staff", "invites"] });
-      toast({ title: "Invite sent", description: `Invitation sent to ${inviteEmail}.` });
+      if (data.emailSent) {
+        toast({ title: "Invite sent", description: `Invitation email sent to ${inviteEmail}.` });
+      } else {
+        toast({
+          title: "Invite created — email not sent",
+          description: data.emailError || "The invitation was saved but the email could not be delivered. You may need to share the invite manually.",
+          variant: "destructive",
+        });
+      }
       setInviteEmail("");
       setInviteRole("coach");
     },
