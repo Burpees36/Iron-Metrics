@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { ArrowLeft } from "lucide-react";
 
 export default function AuthSignup() {
   const [, setLocation] = useLocation();
@@ -97,6 +98,15 @@ export default function AuthSignup() {
     <div className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="space-y-1 text-center">
+          <a
+            href="/"
+            onClick={(e) => { e.preventDefault(); setLocation("/"); }}
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors mb-2"
+            data-testid="link-home"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            Home
+          </a>
           <CardTitle className="text-xl tracking-tight">Iron Metrics</CardTitle>
           <CardDescription>Create your account</CardDescription>
         </CardHeader>

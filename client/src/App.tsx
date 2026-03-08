@@ -37,6 +37,7 @@ import AuthLogin from "@/pages/auth-login";
 import AuthSignup from "@/pages/auth-signup";
 import AuthResetPassword from "@/pages/auth-reset-password";
 import InviteAccept from "@/pages/invite-accept";
+import AccountPassword from "@/pages/account-password";
 import { NotificationBell } from "@/components/notification-bell";
 import { ErrorBoundary } from "@/components/error-boundary";
 
@@ -80,6 +81,7 @@ function AuthenticatedApp() {
               <Route path="/reset-password" component={AuthResetPassword} />
               <Route path="/invite/:token" component={InviteAccept} />
               <Route path="/" component={Dashboard} />
+              <Route path="/account/password" component={AccountPassword} />
               <Route path="/gyms/new" component={GymNew} />
               <Route path="/gyms/onboarding" component={Onboarding} />
               <Route path="/gyms/:id/import" component={CsvImport} />

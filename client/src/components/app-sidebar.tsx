@@ -34,6 +34,7 @@ import {
   Zap,
   ListChecks,
   Receipt,
+  KeyRound,
 } from "lucide-react";
 
 export function AppSidebar() {
@@ -160,6 +161,29 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+
+      {!activeGym && (
+        <>
+          <SidebarSeparator />
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-[10px] uppercase tracking-wider">
+              Account
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location === "/account/password"}>
+                    <Link href="/account/password">
+                      <KeyRound className="w-4 h-4" />
+                      <span>Change Password</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </>
+      )}
 
       <SidebarFooter className="p-3 border-t border-sidebar-border">
         <div className="flex items-center gap-3">
