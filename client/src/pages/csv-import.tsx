@@ -28,6 +28,7 @@ import {
   ChevronDown,
   ChevronUp,
   RefreshCw,
+  Plug,
 } from "lucide-react";
 
 interface ColumnMapping {
@@ -321,6 +322,7 @@ export default function CsvImport() {
 
       {step === "upload" && (
         <UploadStep
+          gymId={gymId || ""}
           dragOver={dragOver}
           setDragOver={setDragOver}
           handleDrop={handleDrop}
@@ -409,6 +411,7 @@ function StepIndicator({ currentStep }: { currentStep: WizardStep }) {
 }
 
 function UploadStep({
+  gymId,
   dragOver,
   setDragOver,
   handleDrop,
@@ -417,6 +420,7 @@ function UploadStep({
   isLoading,
   error,
 }: {
+  gymId: string;
   dragOver: boolean;
   setDragOver: (v: boolean) => void;
   handleDrop: (e: React.DragEvent) => void;
@@ -426,76 +430,103 @@ function UploadStep({
   error: Error | null;
 }) {
   return (
-    <Card>
-      <CardContent className="p-6 space-y-5">
-        <div className="space-y-2">
-          <h3 className="font-semibold text-sm" data-testid="text-upload-heading">Upload Your Member Data</h3>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Upload a CSV export from your gym management software. We support exports from Wodify, PushPress, Zen Planner, and most other platforms.
-            The system will automatically detect your column format and guide you through mapping.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {[
-            { label: "Name", note: "required" },
-            { label: "Email", note: "optional" },
-            { label: "Status", note: "optional" },
-            { label: "Join Date", note: "required" },
-            { label: "Cancel Date", note: "optional" },
-            { label: "Monthly Rate", note: "optional" },
-          ].map((f) => (
-            <div key={f.label} className="flex items-center gap-1.5 text-xs">
-              <div className={`w-1.5 h-1.5 rounded-full ${f.note === "required" ? "bg-primary" : "bg-muted-foreground/40"}`} />
-              <span className="text-muted-foreground">{f.label}</span>
-              {f.note === "required" && <span className="text-[10px] text-primary font-medium">required</span>}
-            </div>
-          ))}
-        </div>
-
-        <div
-          className={`border-2 border-dashed rounded-md p-8 text-center transition-colors cursor-pointer ${
-            dragOver ? "border-primary bg-primary/5" : "border-border"
-          } ${isLoading ? "opacity-60 pointer-events-none" : ""}`}
-          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
-          data-testid="dropzone-csv"
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleFile(file);
-            }}
-            data-testid="input-file-csv"
-          />
-          {isLoading ? (
-            <div className="flex flex-col items-center gap-2">
-              <RefreshCw className="w-8 h-8 text-primary animate-spin" />
-              <p className="text-sm font-medium">Analyzing your file...</p>
-            </div>
-          ) : (
-            <>
-              <Upload className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-              <p className="text-sm font-medium">Drop your CSV here or click to browse</p>
-              <p className="text-xs text-muted-foreground mt-1">Supports .csv files up to 10 MB</p>
-            </>
-          )}
-        </div>
-
-        {error && (
-          <div className="p-3 rounded-md bg-red-50 dark:bg-red-950/30 flex items-start gap-2" data-testid="upload-error">
-            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-red-700 dark:text-red-300">{error.message}</p>
+    <div className="space-y-4">
+      <Card>
+        <CardContent className="p-6 space-y-5">
+          <div className="space-y-2">
+            <h3 className="font-semibold text-sm" data-testid="text-upload-heading">Upload Your Member Data</h3>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Upload a CSV export from your gym management software. We support exports from Wodify, PushPress, Zen Planner, and most other platforms.
+              The system will automatically detect your column format and guide you through mapping.
+            </p>
           </div>
-        )}
-      </CardContent>
-    </Card>
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {[
+              { label: "Name", note: "required" },
+              { label: "Email", note: "optional" },
+              { label: "Status", note: "optional" },
+              { label: "Join Date", note: "required" },
+              { label: "Cancel Date", note: "optional" },
+              { label: "Monthly Rate", note: "optional" },
+            ].map((f) => (
+              <div key={f.label} className="flex items-center gap-1.5 text-xs">
+                <div className={`w-1.5 h-1.5 rounded-full ${f.note === "required" ? "bg-primary" : "bg-muted-foreground/40"}`} />
+                <span className="text-muted-foreground">{f.label}</span>
+                {f.note === "required" && <span className="text-[10px] text-primary font-medium">required</span>}
+              </div>
+            ))}
+          </div>
+
+          <div
+            className={`border-2 border-dashed rounded-md p-8 text-center transition-colors cursor-pointer ${
+              dragOver ? "border-primary bg-primary/5" : "border-border"
+            } ${isLoading ? "opacity-60 pointer-events-none" : ""}`}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+            data-testid="dropzone-csv"
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleFile(file);
+              }}
+              data-testid="input-file-csv"
+            />
+            {isLoading ? (
+              <div className="flex flex-col items-center gap-2">
+                <RefreshCw className="w-8 h-8 text-primary animate-spin" />
+                <p className="text-sm font-medium">Analyzing your file...</p>
+              </div>
+            ) : (
+              <>
+                <Upload className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+                <p className="text-sm font-medium">Drop your CSV here or click to browse</p>
+                <p className="text-xs text-muted-foreground mt-1">Supports .csv files up to 10 MB</p>
+              </>
+            )}
+          </div>
+
+          {error && (
+            <div className="p-3 rounded-md bg-red-50 dark:bg-red-950/30 flex items-start gap-2" data-testid="upload-error">
+              <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-700 dark:text-red-300">{error.message}</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="flex items-center gap-3">
+        <div className="flex-1 h-px bg-border" />
+        <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">or</span>
+        <div className="flex-1 h-px bg-border" />
+      </div>
+
+      <Card>
+        <CardContent className="p-6">
+          <Link href={`/gyms/${gymId}/wodify`}>
+            <div className="flex items-center gap-4 cursor-pointer group" data-testid="link-wodify-integration">
+              <div className="p-3 rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors">
+                <Plug className="w-5 h-5 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold group-hover:text-primary transition-colors">Connect Wodify</p>
+                <p className="text-xs text-muted-foreground">
+                  Sync your member data directly from your Wodify account. No file export needed.
+                </p>
+              </div>
+              <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+            </div>
+          </Link>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
