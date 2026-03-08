@@ -952,7 +952,20 @@ export async function registerRoutes(
       if (!gym) return res.status(404).json({ message: "Gym not found" });
       if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
       const staffList = await storage.getGymStaff(req.params.id);
-      res.json(staffList);
+
+      const enriched = await Promise.all(
+        staffList.map(async (s) => {
+          const user = await storage.getUser(s.userId);
+          return {
+            ...s,
+            userName: user ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.email : "Unknown",
+            userEmail: user?.email ?? "Unknown",
+            isGymOwner: gym.ownerId === s.userId,
+          };
+        })
+      );
+
+      res.json(enriched);
     } catch (error) {
       console.error("Error fetching staff:", error);
       res.status(500).json({ message: "Failed to fetch staff" });
