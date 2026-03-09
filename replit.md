@@ -53,6 +53,7 @@ Iron Metrics provides a Stability Command Center dashboard with key financial an
 -   **Attendance-Based Disengagement Detection**: Identifies at-risk members using attendance data.
 -   **Robust Data Ingestion System**: A multi-step CSV import wizard for members and leads, with auto-detection, validation, and deduplication.
 -   **Wodify Integration**: Direct API connection for data synchronization.
+-   **Stripe Billing Integration**: Gym owners connect their own Stripe account (restricted API key, AES-256-CBC encrypted) to ingest payment history. Syncs customers, subscriptions, invoices, charges, and refunds into `stripeBillingRecords`. Includes webhook endpoint with signature verification, sync history tracking, and admin debug panel. Owner-only for connect/disconnect/sync operations. Tables: `stripeConnections`, `stripeSyncRuns`, `stripeBillingRecords`, `stripeWebhookEvents`. Route: `/gyms/:id/stripe-billing`. Backend: `server/stripe-billing-sync.ts`.
 -   **Demo Mode**: Allows unauthenticated users to explore the app with sample data in read-only mode.
 
 ### Multi-User Gym Access (Authorization Model)

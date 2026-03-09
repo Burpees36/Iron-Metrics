@@ -13,6 +13,13 @@ import { supabaseAdmin } from "./supabaseAuth";
 import multer from "multer";
 import { encryptApiKey, generateFingerprint, testWodifyConnection } from "./wodify-connector";
 import { runWodifySync } from "./wodify-sync";
+import {
+  encryptApiKey as encryptStripeKey,
+  fingerprintApiKey as fingerprintStripeKey,
+  decryptApiKey as decryptStripeKey,
+  testStripeConnection,
+  syncStripePaymentHistory,
+} from "./stripe-billing-sync";
 import { ingestSource, reprocessDocument, TAXONOMY_TAGS } from "./knowledge-ingestion";
 import { searchKnowledge } from "./knowledge-retrieval";
 import { seedKnowledgeBase } from "./seed-knowledge";
@@ -1496,6 +1503,188 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("Error fetching sync history:", error);
       res.status(500).json({ message: "Failed to fetch sync history" });
+    }
+  });
+
+  // ── Stripe Billing Integration Routes ──
+
+  app.post("/api/gyms/:id/stripe/connect", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      const role = await getUserGymRole(req, gym);
+      if (role !== "owner") return res.status(403).json({ message: "Only the gym owner can connect Stripe" });
+
+      const { apiKey } = req.body;
+      if (!apiKey || typeof apiKey !== "string" || !apiKey.startsWith("sk_")) {
+        return res.status(400).json({ message: "Invalid Stripe API key. Must start with sk_test_ or sk_live_" });
+      }
+
+      const testResult = await testStripeConnection(apiKey);
+      if (!testResult.valid) {
+        return res.status(400).json({ message: `Stripe connection failed: ${testResult.error}` });
+      }
+
+      const encrypted = encryptStripeKey(apiKey);
+      const fingerprint = fingerprintStripeKey(apiKey);
+
+      const connection = await storage.upsertStripeConnection({
+        gymId: req.params.id,
+        status: "connected",
+        stripeAccountId: testResult.accountId || null,
+        apiKeyEncrypted: encrypted,
+        apiKeyFingerprint: fingerprint,
+      });
+
+      console.log(`[stripe-billing] Connected Stripe for gym ${req.params.id}, account: ${testResult.accountId}`);
+
+      res.json({
+        connected: true,
+        stripeAccountId: testResult.accountId,
+        accountName: testResult.accountName,
+        fingerprint,
+        connectionId: connection.id,
+      });
+    } catch (error: any) {
+      console.error("Error connecting Stripe:", error);
+      res.status(500).json({ message: "Failed to connect Stripe" });
+    }
+  });
+
+  app.delete("/api/gyms/:id/stripe/connect", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      const role = await getUserGymRole(req, gym);
+      if (role !== "owner") return res.status(403).json({ message: "Only the gym owner can disconnect Stripe" });
+
+      await storage.deleteStripeConnection(req.params.id);
+      console.log(`[stripe-billing] Disconnected Stripe for gym ${req.params.id}`);
+      res.json({ disconnected: true });
+    } catch (error: any) {
+      console.error("Error disconnecting Stripe:", error);
+      res.status(500).json({ message: "Failed to disconnect Stripe" });
+    }
+  });
+
+  app.get("/api/gyms/:id/stripe/status", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const connection = await storage.getStripeConnection(req.params.id);
+      if (!connection) {
+        return res.json({ connected: false, status: "disconnected" });
+      }
+
+      const recordCount = await storage.getStripeBillingRecordCount(req.params.id);
+
+      res.json({
+        connected: connection.status === "connected",
+        status: connection.status,
+        stripeAccountId: connection.stripeAccountId,
+        apiKeyFingerprint: connection.apiKeyFingerprint,
+        connectedAt: connection.connectedAt,
+        lastSyncAt: connection.lastSyncAt,
+        lastErrorAt: connection.lastErrorAt,
+        lastErrorMessage: connection.lastErrorMessage,
+        recordsSynced: recordCount,
+      });
+    } catch (error: any) {
+      console.error("Error fetching Stripe status:", error);
+      res.status(500).json({ message: "Failed to fetch Stripe status" });
+    }
+  });
+
+  app.post("/api/gyms/:id/stripe/sync", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      const role = await getUserGymRole(req, gym);
+      if (role !== "owner") return res.status(403).json({ message: "Only the gym owner can trigger sync" });
+
+      const connection = await storage.getStripeConnection(req.params.id);
+      if (!connection || connection.status !== "connected") {
+        return res.status(400).json({ message: "Stripe is not connected" });
+      }
+
+      const apiKey = decryptStripeKey(connection.apiKeyEncrypted);
+
+      res.json({ message: "Sync started", connectionId: connection.id });
+
+      syncStripePaymentHistory(req.params.id, connection.id, apiKey).catch((err) => {
+        console.error(`[stripe-billing] Background sync failed for gym ${req.params.id}:`, err.message);
+      });
+    } catch (error: any) {
+      console.error("Error starting Stripe sync:", error);
+      res.status(500).json({ message: "Failed to start sync" });
+    }
+  });
+
+  app.get("/api/gyms/:id/stripe/billing-records", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const limit = Math.min(Number(req.query.limit) || 50, 200);
+      const offset = Number(req.query.offset) || 0;
+      const status = req.query.status as string | undefined;
+
+      const records = await storage.getStripeBillingRecords(req.params.id, { limit, offset, status });
+      const total = await storage.getStripeBillingRecordCount(req.params.id);
+
+      res.json({ records, total, limit, offset });
+    } catch (error: any) {
+      console.error("Error fetching billing records:", error);
+      res.status(500).json({ message: "Failed to fetch billing records" });
+    }
+  });
+
+  app.get("/api/gyms/:id/stripe/sync-runs", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const limit = Math.min(Number(req.query.limit) || 10, 50);
+      const syncRuns = await storage.getStripeSyncRuns(req.params.id, limit);
+      res.json(syncRuns);
+    } catch (error: any) {
+      console.error("Error fetching Stripe sync runs:", error);
+      res.status(500).json({ message: "Failed to fetch sync history" });
+    }
+  });
+
+  app.get("/api/gyms/:id/stripe/debug", isAuthenticated, async (req: any, res) => {
+    try {
+      if (!isPlatformAdmin(req)) return res.status(403).json({ message: "Platform admin access required" });
+
+      const connection = await storage.getStripeConnection(req.params.id);
+      const recordCount = await storage.getStripeBillingRecordCount(req.params.id);
+      const syncRuns = await storage.getStripeSyncRuns(req.params.id, 5);
+      const webhookEvents = await storage.getStripeWebhookEvents(req.params.id, 20);
+
+      res.json({
+        connection: connection ? {
+          id: connection.id,
+          status: connection.status,
+          stripeAccountId: connection.stripeAccountId,
+          apiKeyFingerprint: connection.apiKeyFingerprint,
+          connectedAt: connection.connectedAt,
+          lastSyncAt: connection.lastSyncAt,
+          lastErrorAt: connection.lastErrorAt,
+          lastErrorMessage: connection.lastErrorMessage,
+          recordsSynced: connection.recordsSynced,
+        } : null,
+        totalBillingRecords: recordCount,
+        recentSyncRuns: syncRuns,
+        recentWebhookEvents: webhookEvents,
+      });
+    } catch (error: any) {
+      console.error("Error fetching Stripe debug info:", error);
+      res.status(500).json({ message: "Failed to fetch debug info" });
     }
   });
 

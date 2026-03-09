@@ -35,6 +35,14 @@ import {
   type MemberBilling, type InsertMemberBilling,
   subscriptions,
   type Subscription, type InsertSubscription,
+  stripeConnections,
+  type StripeConnection, type InsertStripeConnection,
+  stripeSyncRuns,
+  type StripeSyncRun, type InsertStripeSyncRun,
+  stripeBillingRecords,
+  type StripeBillingRecord, type InsertStripeBillingRecord,
+  stripeWebhookEvents,
+  type StripeWebhookEvent, type InsertStripeWebhookEvent,
 } from "@shared/schema";
 import { db } from "./db";
 import { pool } from "./db";
@@ -176,6 +184,24 @@ export interface IStorage {
   getStaffInviteByToken(token: string): Promise<StaffInvite | undefined>;
   updateStaffInviteStatus(id: string, status: string): Promise<void>;
   getGymStaffInvites(gymId: string): Promise<StaffInvite[]>;
+
+  getStripeConnection(gymId: string): Promise<StripeConnection | undefined>;
+  upsertStripeConnection(connection: InsertStripeConnection): Promise<StripeConnection>;
+  updateStripeConnection(id: string, updates: Partial<StripeConnection>): Promise<StripeConnection>;
+  deleteStripeConnection(gymId: string): Promise<void>;
+
+  createStripeSyncRun(run: InsertStripeSyncRun): Promise<StripeSyncRun>;
+  updateStripeSyncRun(id: string, updates: Partial<StripeSyncRun>): Promise<StripeSyncRun>;
+  getStripeSyncRuns(gymId: string, limit?: number): Promise<StripeSyncRun[]>;
+
+  upsertStripeBillingRecord(record: InsertStripeBillingRecord): Promise<StripeBillingRecord>;
+  getStripeBillingRecords(gymId: string, options?: { limit?: number; offset?: number; status?: string }): Promise<StripeBillingRecord[]>;
+  getStripeBillingRecordCount(gymId: string): Promise<number>;
+
+  createStripeWebhookEvent(event: InsertStripeWebhookEvent): Promise<StripeWebhookEvent>;
+  getStripeWebhookEvent(stripeEventId: string): Promise<StripeWebhookEvent | undefined>;
+  getStripeWebhookEvents(gymId: string, limit?: number): Promise<StripeWebhookEvent[]>;
+  updateStripeWebhookEventStatus(stripeEventId: string, status: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1050,6 +1076,122 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(staffInvites)
       .where(eq(staffInvites.gymId, gymId))
       .orderBy(desc(staffInvites.createdAt));
+  }
+
+  async getStripeConnection(gymId: string): Promise<StripeConnection | undefined> {
+    const [conn] = await db.select().from(stripeConnections).where(eq(stripeConnections.gymId, gymId));
+    return conn;
+  }
+
+  async upsertStripeConnection(connection: InsertStripeConnection): Promise<StripeConnection> {
+    const [result] = await db
+      .insert(stripeConnections)
+      .values(connection)
+      .onConflictDoUpdate({
+        target: [stripeConnections.gymId],
+        set: {
+          status: connection.status,
+          stripeAccountId: connection.stripeAccountId,
+          apiKeyEncrypted: connection.apiKeyEncrypted,
+          apiKeyFingerprint: connection.apiKeyFingerprint,
+          webhookSecret: connection.webhookSecret,
+        },
+      })
+      .returning();
+    return result;
+  }
+
+  async updateStripeConnection(id: string, updates: Partial<StripeConnection>): Promise<StripeConnection> {
+    const [updated] = await db.update(stripeConnections).set(updates).where(eq(stripeConnections.id, id)).returning();
+    return updated;
+  }
+
+  async deleteStripeConnection(gymId: string): Promise<void> {
+    await db.delete(stripeWebhookEvents).where(eq(stripeWebhookEvents.gymId, gymId));
+    await db.delete(stripeBillingRecords).where(eq(stripeBillingRecords.gymId, gymId));
+    await db.delete(stripeSyncRuns).where(eq(stripeSyncRuns.gymId, gymId));
+    await db.delete(stripeConnections).where(eq(stripeConnections.gymId, gymId));
+  }
+
+  async createStripeSyncRun(run: InsertStripeSyncRun): Promise<StripeSyncRun> {
+    const [created] = await db.insert(stripeSyncRuns).values(run).returning();
+    return created;
+  }
+
+  async updateStripeSyncRun(id: string, updates: Partial<StripeSyncRun>): Promise<StripeSyncRun> {
+    const [updated] = await db.update(stripeSyncRuns).set(updates).where(eq(stripeSyncRuns.id, id)).returning();
+    return updated;
+  }
+
+  async getStripeSyncRuns(gymId: string, limit = 10): Promise<StripeSyncRun[]> {
+    return db.select().from(stripeSyncRuns)
+      .where(eq(stripeSyncRuns.gymId, gymId))
+      .orderBy(desc(stripeSyncRuns.startedAt))
+      .limit(limit);
+  }
+
+  async upsertStripeBillingRecord(record: InsertStripeBillingRecord): Promise<StripeBillingRecord> {
+    const [result] = await db
+      .insert(stripeBillingRecords)
+      .values(record)
+      .onConflictDoUpdate({
+        target: [stripeBillingRecords.gymId, stripeBillingRecords.stripeInvoiceId],
+        set: {
+          amount: record.amount,
+          currency: record.currency,
+          status: record.status,
+          paymentDate: record.paymentDate,
+          dueDate: record.dueDate,
+          description: record.description,
+          customerEmail: record.customerEmail,
+          customerName: record.customerName,
+          memberId: record.memberId,
+          stripeChargeId: record.stripeChargeId,
+        },
+      })
+      .returning();
+    return result;
+  }
+
+  async getStripeBillingRecords(gymId: string, options?: { limit?: number; offset?: number; status?: string }): Promise<StripeBillingRecord[]> {
+    const conditions = [eq(stripeBillingRecords.gymId, gymId)];
+    if (options?.status) {
+      conditions.push(eq(stripeBillingRecords.status, options.status));
+    }
+    let query = db.select().from(stripeBillingRecords)
+      .where(and(...conditions))
+      .orderBy(desc(stripeBillingRecords.paymentDate))
+      .limit(options?.limit ?? 100)
+      .offset(options?.offset ?? 0);
+    return query;
+  }
+
+  async getStripeBillingRecordCount(gymId: string): Promise<number> {
+    const [result] = await db.select({ count: sql<number>`count(*)` }).from(stripeBillingRecords).where(eq(stripeBillingRecords.gymId, gymId));
+    return Number(result?.count ?? 0);
+  }
+
+  async createStripeWebhookEvent(event: InsertStripeWebhookEvent): Promise<StripeWebhookEvent> {
+    const [created] = await db.insert(stripeWebhookEvents).values(event).returning();
+    return created;
+  }
+
+  async getStripeWebhookEvent(stripeEventId: string): Promise<StripeWebhookEvent | undefined> {
+    const [event] = await db.select().from(stripeWebhookEvents).where(eq(stripeWebhookEvents.stripeEventId, stripeEventId));
+    return event;
+  }
+
+  async getStripeWebhookEvents(gymId: string, limit = 20): Promise<StripeWebhookEvent[]> {
+    return db.select().from(stripeWebhookEvents)
+      .where(eq(stripeWebhookEvents.gymId, gymId))
+      .orderBy(desc(stripeWebhookEvents.processedAt))
+      .limit(limit);
+  }
+
+  async updateStripeWebhookEventStatus(stripeEventId: string, status: string): Promise<void> {
+    await db.update(stripeWebhookEvents)
+      .set({ status, processedAt: new Date() })
+      .where(eq(stripeWebhookEvents.stripeEventId, stripeEventId));
   }
 }
 

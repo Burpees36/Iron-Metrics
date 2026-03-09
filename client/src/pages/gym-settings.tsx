@@ -414,6 +414,23 @@ export default function GymSettings() {
                 </CardContent>
               </Card>
             </Link>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider pt-3">Billing Integrations</p>
+            <Link href={`/gyms/${gymId}/stripe-billing`}>
+              <Card className="hover-elevate transition-all duration-300 cursor-pointer group" data-testid="link-stripe-billing">
+                <CardContent className="p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-md bg-primary/10">
+                      <CreditCard className="w-4 h-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">Stripe Billing</p>
+                      <p className="text-xs text-muted-foreground">Import payment history and track billing outcomes from Stripe.</p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                </CardContent>
+              </Card>
+            </Link>
             <Card
               className={`hover-elevate transition-all duration-300 group ${isDemoUser ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
               data-testid="button-recompute"

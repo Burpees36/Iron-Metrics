@@ -6,6 +6,9 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import { WebhookHandlers } from "./webhookHandlers";
 import { initStripeCheck } from "./stripe";
+import { processWebhookEvent, decryptApiKey } from "./stripe-billing-sync";
+import { storage } from "./storage";
+import Stripe from "stripe";
 
 const app = express();
 const httpServer = createServer(app);
@@ -28,7 +31,7 @@ const apiLimiter = rateLimit({
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => req.path === "/api/stripe/webhook" || req.path === "/api/health",
+  skip: (req) => req.path === "/api/stripe/webhook" || req.path.startsWith("/api/stripe/billing-webhook/") || req.path === "/api/health",
   message: { message: "Too many requests, please try again later." },
 });
 app.use("/api", apiLimiter);
@@ -47,6 +50,38 @@ app.post(
       res.status(200).json({ received: true });
     } catch (error: any) {
       console.error('Webhook error:', error.message);
+      res.status(400).json({ error: 'Webhook processing error' });
+    }
+  }
+);
+
+app.post(
+  '/api/stripe/billing-webhook/:gymId',
+  express.raw({ type: 'application/json' }),
+  async (req, res) => {
+    const gymId = req.params.gymId;
+    const signature = req.headers['stripe-signature'];
+    if (!signature) {
+      return res.status(400).json({ error: 'Missing stripe-signature' });
+    }
+    try {
+      const connection = await storage.getStripeConnection(gymId);
+      if (!connection || connection.status !== 'connected') {
+        return res.status(404).json({ error: 'No Stripe connection for this gym' });
+      }
+
+      if (!connection.webhookSecret) {
+        return res.status(400).json({ error: 'Webhook secret not configured. Set up webhook signing in Stripe integration settings.' });
+      }
+
+      const stripe = new Stripe(decryptApiKey(connection.apiKeyEncrypted), { apiVersion: '2024-12-18.acacia' as any });
+      const sig = Array.isArray(signature) ? signature[0] : signature;
+      const event = stripe.webhooks.constructEvent(req.body as Buffer, sig, connection.webhookSecret);
+
+      await processWebhookEvent(gymId, event);
+      res.status(200).json({ received: true });
+    } catch (error: any) {
+      console.error(`[stripe-billing] Webhook error for gym ${gymId}:`, error.message);
       res.status(400).json({ error: 'Webhook processing error' });
     }
   }

@@ -738,6 +738,118 @@ export const insertMemberBillingSchema = createInsertSchema(memberBilling).omit(
 export type InsertMemberBilling = z.infer<typeof insertMemberBillingSchema>;
 export type MemberBilling = typeof memberBilling.$inferSelect;
 
+// Stripe Billing Integration (gym's own Stripe account for member payments)
+export const stripeConnections = pgTable("stripe_connections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gymId: varchar("gym_id").notNull().references(() => gyms.id),
+  status: text("status").notNull().default("disconnected"),
+  stripeAccountId: text("stripe_account_id"),
+  apiKeyEncrypted: text("api_key_encrypted").notNull(),
+  apiKeyFingerprint: text("api_key_fingerprint").notNull(),
+  webhookSecret: text("webhook_secret"),
+  connectedAt: timestamp("connected_at").defaultNow(),
+  lastSyncAt: timestamp("last_sync_at"),
+  lastErrorAt: timestamp("last_error_at"),
+  lastErrorMessage: text("last_error_message"),
+  recordsSynced: integer("records_synced").notNull().default(0),
+}, (table) => [
+  uniqueIndex("idx_stripe_connection_gym").on(table.gymId),
+]);
+
+export const stripeConnectionsRelations = relations(stripeConnections, ({ one }) => ({
+  gym: one(gyms, { fields: [stripeConnections.gymId], references: [gyms.id] }),
+}));
+
+export const insertStripeConnectionSchema = createInsertSchema(stripeConnections).omit({
+  id: true, connectedAt: true, lastSyncAt: true, lastErrorAt: true, lastErrorMessage: true, recordsSynced: true,
+});
+export type InsertStripeConnection = z.infer<typeof insertStripeConnectionSchema>;
+export type StripeConnection = typeof stripeConnections.$inferSelect;
+
+export const stripeSyncRuns = pgTable("stripe_sync_runs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gymId: varchar("gym_id").notNull().references(() => gyms.id),
+  connectionId: varchar("connection_id").notNull().references(() => stripeConnections.id),
+  runType: text("run_type").notNull().default("full"),
+  status: text("status").notNull().default("running"),
+  startedAt: timestamp("started_at").defaultNow(),
+  finishedAt: timestamp("finished_at"),
+  customersFound: integer("customers_found").notNull().default(0),
+  subscriptionsFound: integer("subscriptions_found").notNull().default(0),
+  invoicesFound: integer("invoices_found").notNull().default(0),
+  chargesFound: integer("charges_found").notNull().default(0),
+  refundsFound: integer("refunds_found").notNull().default(0),
+  recordsCreated: integer("records_created").notNull().default(0),
+  recordsUpdated: integer("records_updated").notNull().default(0),
+  errorCount: integer("error_count").notNull().default(0),
+  errorDetails: text("error_details"),
+}, (table) => [
+  index("idx_stripe_sync_runs_gym").on(table.gymId),
+  index("idx_stripe_sync_runs_connection").on(table.connectionId),
+]);
+
+export const stripeSyncRunsRelations = relations(stripeSyncRuns, ({ one }) => ({
+  gym: one(gyms, { fields: [stripeSyncRuns.gymId], references: [gyms.id] }),
+  connection: one(stripeConnections, { fields: [stripeSyncRuns.connectionId], references: [stripeConnections.id] }),
+}));
+
+export const insertStripeSyncRunSchema = createInsertSchema(stripeSyncRuns).omit({ id: true, startedAt: true, finishedAt: true });
+export type InsertStripeSyncRun = z.infer<typeof insertStripeSyncRunSchema>;
+export type StripeSyncRun = typeof stripeSyncRuns.$inferSelect;
+
+export const STRIPE_BILLING_STATUSES = ["payment_succeeded", "failed", "refunded", "overdue"] as const;
+export type StripeBillingStatus = typeof STRIPE_BILLING_STATUSES[number];
+
+export const stripeBillingRecords = pgTable("stripe_billing_records", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gymId: varchar("gym_id").notNull().references(() => gyms.id),
+  memberId: varchar("member_id").references(() => members.id),
+  stripeCustomerId: text("stripe_customer_id").notNull(),
+  stripeInvoiceId: text("stripe_invoice_id"),
+  stripeChargeId: text("stripe_charge_id"),
+  amount: integer("amount").notNull(),
+  currency: text("currency").notNull().default("usd"),
+  status: text("status").notNull(),
+  paymentDate: timestamp("payment_date"),
+  dueDate: timestamp("due_date"),
+  description: text("description"),
+  customerEmail: text("customer_email"),
+  customerName: text("customer_name"),
+  source: text("source").notNull().default("stripe"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_stripe_billing_records_gym").on(table.gymId),
+  index("idx_stripe_billing_records_customer").on(table.stripeCustomerId),
+  index("idx_stripe_billing_records_member").on(table.memberId),
+  uniqueIndex("idx_stripe_billing_record_invoice").on(table.gymId, table.stripeInvoiceId),
+]);
+
+export const stripeBillingRecordsRelations = relations(stripeBillingRecords, ({ one }) => ({
+  gym: one(gyms, { fields: [stripeBillingRecords.gymId], references: [gyms.id] }),
+  member: one(members, { fields: [stripeBillingRecords.memberId], references: [members.id] }),
+}));
+
+export const insertStripeBillingRecordSchema = createInsertSchema(stripeBillingRecords).omit({ id: true, createdAt: true });
+export type InsertStripeBillingRecord = z.infer<typeof insertStripeBillingRecordSchema>;
+export type StripeBillingRecord = typeof stripeBillingRecords.$inferSelect;
+
+export const stripeWebhookEvents = pgTable("stripe_webhook_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gymId: varchar("gym_id").notNull().references(() => gyms.id),
+  stripeEventId: text("stripe_event_id").notNull(),
+  eventType: text("event_type").notNull(),
+  payload: jsonb("payload").notNull(),
+  processedAt: timestamp("processed_at").defaultNow(),
+  status: text("status").notNull().default("processed"),
+}, (table) => [
+  uniqueIndex("idx_stripe_webhook_event_unique").on(table.stripeEventId),
+  index("idx_stripe_webhook_events_gym").on(table.gymId),
+]);
+
+export const insertStripeWebhookEventSchema = createInsertSchema(stripeWebhookEvents).omit({ id: true, processedAt: true });
+export type InsertStripeWebhookEvent = z.infer<typeof insertStripeWebhookEventSchema>;
+export type StripeWebhookEvent = typeof stripeWebhookEvents.$inferSelect;
+
 export const SUBSCRIPTION_PLANS = ["starter", "pro"] as const;
 export type SubscriptionPlan = typeof SUBSCRIPTION_PLANS[number];
 

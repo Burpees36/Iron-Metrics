@@ -18,6 +18,7 @@ import GymNew from "@/pages/gym-new";
 import Onboarding from "@/pages/onboarding";
 import CsvImport from "@/pages/csv-import";
 import WodifyIntegration from "@/pages/wodify-integration";
+import StripeBillingIntegration from "@/pages/stripe-billing-integration";
 import GymTrends from "@/pages/gym-trends";
 import GymStrategy from "@/pages/gym-strategy";
 import GymMemberRisk from "@/pages/gym-member-risk";
@@ -86,6 +87,7 @@ function AuthenticatedApp() {
               <Route path="/gyms/onboarding" component={Onboarding} />
               <Route path="/gyms/:id/import" component={CsvImport} />
               <Route path="/gyms/:id/wodify" component={WodifyIntegration} />
+              <Route path="/gyms/:id/stripe-billing" component={StripeBillingIntegration} />
               <Route path="/gyms/:id/trends" component={GymTrends} />
               <Route path="/gyms/:id/strategy" component={GymStrategy} />
               <Route path="/gyms/:id/member-risk" component={GymMemberRisk} />
