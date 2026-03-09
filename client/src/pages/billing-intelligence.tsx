@@ -1,3 +1,4 @@
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute } from "wouter";
 import type { Gym } from "@shared/schema";
@@ -50,7 +51,6 @@ import {
   Users,
   TrendingUp,
 } from "lucide-react";
-import { useState, useMemo } from "react";
 import {
   BarChart,
   Bar,
@@ -67,6 +67,7 @@ interface BillingRecord {
   memberId: string;
   memberName: string;
   memberEmail: string | null;
+  membershipType: string | null;
   monthlyRate: number;
   billingDay: number;
   dueDate: string;
@@ -432,6 +433,7 @@ export default function BillingIntelligence() {
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
   const [editRecord, setEditRecord] = useState<BillingRecord | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
@@ -444,11 +446,29 @@ export default function BillingIntelligence() {
     enabled: !!params?.id,
   });
 
+  const membershipTypes = useMemo(() => {
+    if (!billingData?.records) return [];
+    const types = new Set<string>();
+    billingData.records.forEach((r) => {
+      if (r.membershipType) types.add(r.membershipType);
+    });
+    return Array.from(types).sort();
+  }, [billingData?.records]);
+
+  useEffect(() => {
+    if (typeFilter !== "all" && membershipTypes.length > 0 && !membershipTypes.includes(typeFilter)) {
+      setTypeFilter("all");
+    }
+  }, [membershipTypes, typeFilter]);
+
   const filteredRecords = useMemo(() => {
     if (!billingData?.records) return [];
     let filtered = billingData.records;
     if (statusFilter !== "all") {
       filtered = filtered.filter((r) => r.status === statusFilter);
+    }
+    if (typeFilter !== "all") {
+      filtered = filtered.filter((r) => (r.membershipType || "Unknown") === typeFilter);
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -457,7 +477,7 @@ export default function BillingIntelligence() {
       );
     }
     return filtered;
-  }, [billingData?.records, statusFilter, searchQuery]);
+  }, [billingData?.records, statusFilter, typeFilter, searchQuery]);
 
   const goToPrevMonth = () => {
     if (selectedMonth === 0) {
@@ -681,6 +701,19 @@ export default function BillingIntelligence() {
                       <SelectItem value="overdue">Overdue</SelectItem>
                     </SelectContent>
                   </Select>
+                  {membershipTypes.length > 0 && (
+                    <Select value={typeFilter} onValueChange={setTypeFilter}>
+                      <SelectTrigger className="h-9 w-[140px]" data-testid="select-type-filter">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Plans</SelectItem>
+                        {membershipTypes.map((t) => (
+                          <SelectItem key={t} value={t}>{t}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               </div>
             </CardHeader>
@@ -690,6 +723,7 @@ export default function BillingIntelligence() {
                   <TableHeader>
                     <TableRow className="border-border/50">
                       <TableHead className="text-xs">Member</TableHead>
+                      <TableHead className="text-xs">Plan</TableHead>
                       <TableHead className="text-xs">Rate</TableHead>
                       <TableHead className="text-xs">Billing Day</TableHead>
                       <TableHead className="text-xs">Due Date</TableHead>
@@ -701,7 +735,7 @@ export default function BillingIntelligence() {
                   <TableBody>
                     {filteredRecords.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">
+                        <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-8">
                           {billingData?.records.length === 0
                             ? "No active members with billing for this month."
                             : "No members match your filters."}
@@ -723,6 +757,9 @@ export default function BillingIntelligence() {
                                 <p className="text-xs text-muted-foreground">{record.memberEmail}</p>
                               )}
                             </div>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground" data-testid={`text-plan-${record.memberId}`}>
+                            {record.membershipType || "—"}
                           </TableCell>
                           <TableCell className="text-sm" data-testid={`text-rate-${record.memberId}`}>
                             {formatCurrency(record.monthlyRate)}/mo

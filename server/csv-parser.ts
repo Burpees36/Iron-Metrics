@@ -6,6 +6,7 @@ export interface ParsedMember {
   cancelDate: string | null;
   lastAttendedDate: string | null;
   monthlyRate: string;
+  membershipType: string | null;
 }
 
 export interface ColumnMapping {
@@ -16,6 +17,7 @@ export interface ColumnMapping {
   cancelDate: number;
   lastAttendedDate: number;
   monthlyRate: number;
+  membershipType: number;
 }
 
 export interface RowError {
@@ -55,6 +57,7 @@ const HEADER_SYNONYMS: Record<string, string[]> = {
   cancelDate: ["cancel_date", "cancelled", "end_date", "cancel date", "end date", "cancellation_date", "canceled_date", "cancelled_date", "termination_date", "cancel", "canceled", "left_date", "churn_date", "drop_date"],
   lastAttendedDate: ["last_attended_date", "last_attended", "last attended", "last_visit", "last visit", "last_class", "last class", "last_checkin", "last checkin", "last_check_in", "last check in", "last_attendance", "last attendance", "last_seen", "last seen", "last_active", "last active", "last_activity", "last activity", "last_workout", "last workout"],
   monthlyRate: ["monthly_rate", "rate", "price", "monthly_price", "monthly rate", "amount", "monthly_amount", "monthly amount", "membership_rate", "membership rate", "dues", "monthly_dues", "fee", "monthly_fee", "plan_price", "plan price", "revenue"],
+  membershipType: ["membership_type", "membership type", "plan", "plan_name", "plan name", "membership", "membership_name", "membership name", "program", "program_name", "program name", "package", "tier", "level"],
 };
 
 const VENDOR_PRESETS: Record<string, Record<string, string[]>> = {
@@ -66,6 +69,7 @@ const VENDOR_PRESETS: Record<string, Record<string, string[]>> = {
     cancelDate: ["end_date", "cancel_date"],
     lastAttendedDate: ["last_attended", "last_visit", "last_checkin"],
     monthlyRate: ["rate", "price", "amount"],
+    membershipType: ["membership_type", "plan", "membership_name", "program"],
   },
   pushpress: {
     name: ["name", "full_name", "member_name"],
@@ -75,6 +79,7 @@ const VENDOR_PRESETS: Record<string, Record<string, string[]>> = {
     cancelDate: ["cancel_date", "cancelled_date"],
     lastAttendedDate: ["last_visit", "last_checkin", "last_attended"],
     monthlyRate: ["amount", "monthly_rate", "price"],
+    membershipType: ["plan", "membership_type", "plan_name"],
   },
   zenplanner: {
     name: ["member", "name", "member_name"],
@@ -84,6 +89,7 @@ const VENDOR_PRESETS: Record<string, Record<string, string[]>> = {
     cancelDate: ["cancelled", "end_date"],
     lastAttendedDate: ["last_seen", "last_visit", "last_attended"],
     monthlyRate: ["dues", "rate", "amount"],
+    membershipType: ["membership", "plan", "program"],
   },
 };
 
@@ -99,7 +105,7 @@ export function parseHeaders(csvText: string): { headers: string[]; lines: strin
 
 export function detectMapping(headers: string[]): { mapping: ColumnMapping; confidence: Record<string, "high" | "medium" | "low" | "unmapped"> } {
   const lowerHeaders = headers.map(h => h.toLowerCase().trim());
-  const mapping: ColumnMapping = { name: -1, email: -1, status: -1, joinDate: -1, cancelDate: -1, lastAttendedDate: -1, monthlyRate: -1 };
+  const mapping: ColumnMapping = { name: -1, email: -1, status: -1, joinDate: -1, cancelDate: -1, lastAttendedDate: -1, monthlyRate: -1, membershipType: -1 };
   const confidence: Record<string, "high" | "medium" | "low" | "unmapped"> = {};
 
   for (const [field, synonyms] of Object.entries(HEADER_SYNONYMS)) {
@@ -235,6 +241,7 @@ function normalizeAndValidateRow(
   const rawCancelDate = mapping.cancelDate >= 0 ? (cols[mapping.cancelDate] || "").trim() : "";
   const rawLastAttended = mapping.lastAttendedDate >= 0 ? (cols[mapping.lastAttendedDate] || "").trim() : "";
   const rawRate = mapping.monthlyRate >= 0 ? (cols[mapping.monthlyRate] || "").trim() : "";
+  const rawMembershipType = mapping.membershipType >= 0 ? (cols[mapping.membershipType] || "").trim() : "";
 
   const name = sanitizeText(rawName);
   if (!name) {
@@ -271,13 +278,14 @@ function normalizeAndValidateRow(
 
   const status = normalizeStatus(rawStatus);
   const monthlyRate = parseRate(rawRate);
+  const membershipType = rawMembershipType ? sanitizeText(rawMembershipType) : null;
 
   if (errors.length > 0) {
     return { member: null, errors };
   }
 
   return {
-    member: { name, email, status, joinDate: joinDate!, cancelDate, lastAttendedDate, monthlyRate },
+    member: { name, email, status, joinDate: joinDate!, cancelDate, lastAttendedDate, monthlyRate, membershipType },
     errors: [],
   };
 }

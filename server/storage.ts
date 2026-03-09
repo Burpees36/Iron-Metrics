@@ -211,6 +211,9 @@ export class DatabaseStorage implements IStorage {
         if (member.lastAttendedDate !== undefined) {
           updates.lastAttendedDate = member.lastAttendedDate;
         }
+        if (member.membershipType !== undefined) {
+          updates.membershipType = member.membershipType;
+        }
         await db
           .update(members)
           .set(updates)

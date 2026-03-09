@@ -127,6 +127,7 @@ function generateDemoMembers(gymId: string, now: Date) {
   ];
 
   const rates = [149, 159, 169, 179, 189, 199, 209, 219, 229, 249, 275, 299];
+  const membershipTypes = ["Unlimited", "Unlimited", "Unlimited", "3x/Week", "3x/Week", "5x/Week", "Competitor", "Drop-In", "Fundamentals", "Unlimited", "Unlimited", "5x/Week"];
   const result: any[] = [];
 
   // 100 total members: 88 active, 12 cancelled
@@ -206,6 +207,7 @@ function generateDemoMembers(gymId: string, now: Date) {
     }
 
     const rate = rates[i % rates.length];
+    const membershipType = isCancelled ? null : membershipTypes[i % membershipTypes.length];
 
     result.push({
       gymId,
@@ -216,6 +218,7 @@ function generateDemoMembers(gymId: string, now: Date) {
       cancelDate: cancelStr,
       lastAttendedDate: lastAttendedStr,
       monthlyRate: rate.toString(),
+      membershipType,
     });
   }
 

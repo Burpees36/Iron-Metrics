@@ -175,6 +175,7 @@ export async function runWodifySync(
           joinDate: memberData.joinDate,
           cancelDate: memberData.cancelDate,
           monthlyRate: memberData.monthlyRate,
+          membershipType: memberData.membershipType,
           lastAttendedDate: lastAttended,
         });
         clientsUpserted++;

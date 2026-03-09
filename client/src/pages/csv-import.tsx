@@ -38,6 +38,7 @@ interface ColumnMapping {
   joinDate: number;
   cancelDate: number;
   monthlyRate: number;
+  membershipType: number;
 }
 
 interface RowError {
@@ -97,9 +98,10 @@ const FIELD_LABELS: Record<string, { label: string; required: boolean; descripti
   joinDate: { label: "Join Date", required: true, description: "When they signed up" },
   cancelDate: { label: "Cancel Date", required: false, description: "When they left (if applicable)" },
   monthlyRate: { label: "Monthly Rate", required: false, description: "Monthly membership fee" },
+  membershipType: { label: "Membership Type", required: false, description: "Plan or program name (e.g. Unlimited, 3x/week)" },
 };
 
-const FIELD_ORDER = ["name", "email", "status", "joinDate", "cancelDate", "monthlyRate"];
+const FIELD_ORDER = ["name", "email", "status", "joinDate", "cancelDate", "monthlyRate", "membershipType"];
 
 export default function CsvImport() {
   const [, params] = useRoute("/gyms/:id/import");

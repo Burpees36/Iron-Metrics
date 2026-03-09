@@ -435,6 +435,25 @@ function extractMonthlyRate(
   return "0";
 }
 
+function extractMembershipType(
+  client: WodifyClientRecord,
+  memberships: WodifyMembershipRecord[],
+): string | null {
+  const clientId = extractClientId(client);
+  const activeMembership = memberships.find((m) => {
+    const mClientId = String(m.client_id || m.clientId || m.user_id || "");
+    const mStatus = (m.membership_status || m.status || "").toLowerCase();
+    return mClientId === clientId && (mStatus.includes("active") || mStatus === "");
+  });
+
+  if (activeMembership) {
+    const name = activeMembership.membership_name || activeMembership.name || activeMembership.plan_name || activeMembership.program_name || "";
+    if (name) return String(name).trim();
+  }
+
+  return null;
+}
+
 export function transformWodifyClientToMember(
   client: WodifyClientRecord,
   gymId: string,
@@ -447,6 +466,7 @@ export function transformWodifyClientToMember(
   joinDate: string;
   cancelDate: string | null;
   monthlyRate: string;
+  membershipType: string | null;
 } {
   return {
     gymId,
@@ -456,5 +476,6 @@ export function transformWodifyClientToMember(
     joinDate: extractJoinDate(client),
     cancelDate: extractCancelDate(client),
     monthlyRate: extractMonthlyRate(client, memberships),
+    membershipType: extractMembershipType(client, memberships),
   };
 }

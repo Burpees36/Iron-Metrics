@@ -480,6 +480,7 @@ export async function registerRoutes(
             cancelDate: member.cancelDate,
             lastAttendedDate: member.lastAttendedDate,
             monthlyRate: member.monthlyRate,
+            membershipType: member.membershipType,
           });
           if (r.action === "inserted") imported++;
           else updated++;
@@ -546,6 +547,7 @@ export async function registerRoutes(
             joinDate: member.joinDate,
             cancelDate: member.cancelDate,
             monthlyRate: member.monthlyRate,
+            membershipType: member.membershipType,
           });
           if (result.action === "inserted") imported++;
           else updated++;

@@ -6,6 +6,7 @@ export interface BillingRecord {
   memberId: string;
   memberName: string;
   memberEmail: string | null;
+  membershipType: string | null;
   monthlyRate: number;
   billingDay: number;
   dueDate: string;
@@ -127,6 +128,7 @@ export async function generateBillingData(
       memberId: member.id,
       memberName: member.name,
       memberEmail: member.email,
+      membershipType: member.membershipType || null,
       monthlyRate: rate,
       billingDay,
       dueDate,
