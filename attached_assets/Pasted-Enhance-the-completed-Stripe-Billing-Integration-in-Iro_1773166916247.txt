@@ -1,0 +1,172 @@
+Enhance the completed Stripe Billing Integration in Iron Metrics so it is production-safe for beta onboarding and ready for a live gym connection session.
+
+Goal:
+Prepare the Stripe integration for a real gym onboarding by adding member matching, sync safety, data quality review, reconciliation readiness, and fallback handling. Do NOT build final owner-facing billing analytics yet.
+
+Context:
+The following already exists and should be extended, not rebuilt:
+- Stripe connection tables and CRUD
+- Stripe sync service
+- backend routes for connect/disconnect/status/sync/webhook
+- frontend Billing Integrations page
+- Settings entry point
+- admin debug panel
+
+Build the following enhancements:
+
+1. Member Matching Layer
+Create a member-to-Stripe matching system so imported Stripe billing records can be linked to Iron Metrics members safely.
+
+Requirements:
+- Add a dedicated mapping table for gym member ↔ Stripe customer relationships
+- Support these match states:
+  - auto_matched
+  - manually_matched
+  - unmatched
+  - ambiguous
+  - ignored
+- Implement initial auto-match rules in this order:
+  1. exact email match
+  2. normalized full name + email
+  3. normalized full name only as low-confidence candidate
+- Store match confidence score and match method
+- Never silently attach low-confidence matches
+- Create an admin-only review screen for unmatched and ambiguous records
+- Allow manual match, unmatch, ignore, and re-run matching
+- Show counts:
+  - matched members
+  - unmatched Stripe customers
+  - ambiguous matches
+  - ignored records
+
+2. Safe First Sync / Historical Backfill
+Make the first real Stripe sync safe and observable.
+
+Requirements:
+- Add a “historical sync window” option:
+  - 90 days
+  - 180 days
+  - 365 days
+  - all available
+- Add a dry-run mode before the first live import
+- Dry run should show:
+  - number of customers found
+  - number of subscriptions found
+  - number of invoices found
+  - number of charges found
+  - number of refunds found
+  - estimated number of new billing records
+  - estimated number of unmatched members
+- Require explicit confirmation before first live sync
+- Make all syncs idempotent so reruns do not duplicate records
+- Add better sync summaries:
+  - created
+  - updated
+  - skipped
+  - failed
+- Add per-sync warning messages for partial imports
+
+3. Billing Data Quality Panel
+Add a billing data quality/readiness panel so Iron Metrics can clearly show what is and is not usable after sync.
+
+Requirements:
+- Add a readiness score or status block for:
+  - Stripe connection
+  - webhook activity
+  - member matching coverage
+  - payment history coverage
+  - refund coverage
+  - subscription coverage
+- Display plain-language statuses such as:
+  - ready for billing intelligence
+  - needs member matching review
+  - partial payment data only
+  - fallback import recommended
+- Show percentages where useful:
+  - % of Stripe customers matched to members
+  - % of billing records linked to members
+  - % of recent webhook events processed successfully
+
+4. Reconciliation Readiness Dataset
+Prepare the system to compare expected billing from Wodify with actual payments from Stripe.
+
+Requirements:
+- Extend the billing records model or create supporting structures so each record can support future reconciliation fields:
+  - expected amount
+  - actual amount
+  - variance amount
+  - variance type
+  - expected billing date
+  - actual payment date
+  - billing period start
+  - billing period end
+- Do not build final owner dashboards yet
+- Build backend logic to support a future reconciliation pipeline
+- Add internal status fields for whether a billing record is:
+  - unreconciled
+  - matched to expected billing
+  - variance detected
+  - manual review needed
+
+5. Owner Onboarding UX Improvements
+Improve the Billing Integrations page so a gym owner can understand exactly what to do during onboarding.
+
+Requirements:
+- Add a simple step-by-step onboarding checklist:
+  1. Connect Wodify
+  2. Detect Wodify Payments
+  3. Connect Stripe
+  4. Run dry-run sync
+  5. Review member matching
+  6. Run live sync
+  7. Confirm billing data readiness
+- Add clear status badges for each step
+- Add friendly explanatory copy:
+  - Wodify provides expected billing/member structure
+  - Stripe provides actual payment outcomes
+  - Iron Metrics combines both for billing intelligence
+- Add a “next recommended action” callout on the page
+
+6. Partial Access / Fallback Handling
+Handle cases where Stripe access is incomplete or not sufficient for billing intelligence.
+
+Requirements:
+- Detect and surface partial-access conditions, such as:
+  - customers available but invoices missing
+  - invoices available but charges missing
+  - no refunds available
+  - old history unavailable
+- Add a recommended fallback state:
+  - direct Stripe sync usable
+  - direct Stripe sync partially usable
+  - fallback import recommended
+- Add a placeholder fallback import card if not already present, but do not build the full import pipeline in this task
+- Allow internal notes per gym explaining why fallback is needed
+
+7. Auditability / Beta Support Tools
+Make beta troubleshooting easier.
+
+Requirements:
+- Add an internal timeline/event log for:
+  - connection created
+  - first sync attempted
+  - dry run completed
+  - live sync completed
+  - webhook failures
+  - manual match changes
+- Add downloadable admin summary JSON or CSV for debugging connection health and sync outcomes
+- Ensure platform admin can inspect one gym’s entire billing integration state from a single view
+
+Constraints:
+- Do not rebuild the existing integration
+- Do not build owner-facing financial charts yet
+- Do not implement payment collection actions
+- Do not expose raw secrets in logs or UI
+- Keep UI professional and consistent with existing app design
+
+Definition of done:
+- The Stripe integration is ready for a real beta gym onboarding
+- A first sync can be tested safely before committing data
+- Stripe customers can be matched to Iron Metrics members
+- Data readiness is visible
+- The system is prepared for future reconciliation between Wodify expected billing and Stripe actual payments

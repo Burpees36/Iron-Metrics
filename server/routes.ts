@@ -20,6 +20,7 @@ import {
   testStripeConnection,
   syncStripePaymentHistory,
 } from "./stripe-billing-sync";
+import { runAutoMatching, manualMatch, unmatchRecord, ignoreRecord, rerunMatching } from "./stripe-member-matching";
 import { ingestSource, reprocessDocument, TAXONOMY_TAGS } from "./knowledge-ingestion";
 import { searchKnowledge } from "./knowledge-retrieval";
 import { seedKnowledgeBase } from "./seed-knowledge";
@@ -1538,6 +1539,13 @@ export async function registerRoutes(
 
       console.log(`[stripe-billing] Connected Stripe for gym ${req.params.id}, account: ${testResult.accountId}`);
 
+      await storage.createStripeIntegrationEvent({
+        gymId: req.params.id,
+        eventType: "connection_created",
+        details: { accountId: testResult.accountId, fingerprint },
+        createdBy: req.user.id,
+      });
+
       res.json({
         connected: true,
         stripeAccountId: testResult.accountId,
@@ -1558,6 +1566,12 @@ export async function registerRoutes(
       const role = await getUserGymRole(req, gym);
       if (role !== "owner") return res.status(403).json({ message: "Only the gym owner can disconnect Stripe" });
 
+      await storage.createStripeIntegrationEvent({
+        gymId: req.params.id,
+        eventType: "connection_deleted",
+        details: {},
+        createdBy: req.user.id,
+      });
       await storage.deleteStripeConnection(req.params.id);
       console.log(`[stripe-billing] Disconnected Stripe for gym ${req.params.id}`);
       res.json({ disconnected: true });
@@ -1610,11 +1624,49 @@ export async function registerRoutes(
       }
 
       const apiKey = decryptStripeKey(connection.apiKeyEncrypted);
+      const { dryRun, windowDays } = req.body || {};
+
+      if (dryRun) {
+        try {
+          const syncRunId = await syncStripePaymentHistory(req.params.id, connection.id, apiKey, { dryRun: true, windowDays });
+          const syncRun = await storage.getStripeSyncRuns(req.params.id, 1);
+          await storage.createStripeIntegrationEvent({
+            gymId: req.params.id,
+            eventType: "dry_run_completed",
+            details: { syncRunId, windowDays },
+            createdBy: req.user.id,
+          });
+          res.json({ message: "Dry run completed", syncRunId, dryRunSummary: syncRun[0]?.dryRunSummary, syncRun: syncRun[0] });
+        } catch (err: any) {
+          res.status(500).json({ message: "Dry run failed: " + err.message });
+        }
+        return;
+      }
+
+      await storage.createStripeIntegrationEvent({
+        gymId: req.params.id,
+        eventType: "live_sync_started",
+        details: { connectionId: connection.id, windowDays },
+        createdBy: req.user.id,
+      });
 
       res.json({ message: "Sync started", connectionId: connection.id });
 
-      syncStripePaymentHistory(req.params.id, connection.id, apiKey).catch((err) => {
+      syncStripePaymentHistory(req.params.id, connection.id, apiKey, { windowDays }).then(async (syncRunId) => {
+        await storage.createStripeIntegrationEvent({
+          gymId: req.params.id,
+          eventType: "live_sync_completed",
+          details: { syncRunId },
+          createdBy: req.user.id,
+        });
+      }).catch((err) => {
         console.error(`[stripe-billing] Background sync failed for gym ${req.params.id}:`, err.message);
+        storage.createStripeIntegrationEvent({
+          gymId: req.params.id,
+          eventType: "live_sync_failed",
+          details: { error: err.message },
+          createdBy: req.user?.id,
+        }).catch(() => {});
       });
     } catch (error: any) {
       console.error("Error starting Stripe sync:", error);
@@ -1685,6 +1737,291 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("Error fetching Stripe debug info:", error);
       res.status(500).json({ message: "Failed to fetch debug info" });
+    }
+  });
+
+  app.post("/api/gyms/:id/stripe/run-matching", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      const role = await getUserGymRole(req, gym);
+      if (role !== "owner") return res.status(403).json({ message: "Only the gym owner can run matching" });
+
+      const result = await runAutoMatching(req.params.id);
+      await storage.createStripeIntegrationEvent({
+        gymId: req.params.id,
+        eventType: "matching_run_completed",
+        details: result,
+        createdBy: req.user.id,
+      });
+      res.json(result);
+    } catch (error: any) {
+      console.error("Error running matching:", error);
+      res.status(500).json({ message: "Failed to run matching" });
+    }
+  });
+
+  app.get("/api/gyms/:id/stripe/match-counts", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const counts = await storage.getStripeMatchCounts(req.params.id);
+      res.json(counts);
+    } catch (error: any) {
+      res.status(500).json({ message: "Failed to fetch match counts" });
+    }
+  });
+
+  app.get("/api/gyms/:id/stripe/matches", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const status = req.query.status as string | undefined;
+      const search = req.query.search as string | undefined;
+      const limit = Math.min(Number(req.query.limit) || 100, 500);
+      const offset = Number(req.query.offset) || 0;
+
+      const matches = await storage.getStripeCustomerMatches(req.params.id, { status, search, limit, offset });
+      res.json(matches);
+    } catch (error: any) {
+      res.status(500).json({ message: "Failed to fetch matches" });
+    }
+  });
+
+  app.post("/api/gyms/:id/stripe/matches/:matchId/manual-match", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      const role = await getUserGymRole(req, gym);
+      if (role !== "owner") return res.status(403).json({ message: "Only the gym owner can manually match" });
+
+      const { memberId } = req.body;
+      if (!memberId) return res.status(400).json({ message: "memberId required" });
+
+      await manualMatch(req.params.matchId, memberId, req.user.id, req.params.id);
+      await storage.createStripeIntegrationEvent({
+        gymId: req.params.id,
+        eventType: "manual_match_change",
+        details: { matchId: req.params.matchId, memberId, action: "matched" },
+        createdBy: req.user.id,
+      });
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: "Failed to manually match" });
+    }
+  });
+
+  app.post("/api/gyms/:id/stripe/matches/:matchId/unmatch", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      const role = await getUserGymRole(req, gym);
+      if (role !== "owner") return res.status(403).json({ message: "Only the gym owner can unmatch" });
+
+      await unmatchRecord(req.params.matchId, req.user.id, req.params.id);
+      await storage.createStripeIntegrationEvent({
+        gymId: req.params.id,
+        eventType: "manual_match_change",
+        details: { matchId: req.params.matchId, action: "unmatched" },
+        createdBy: req.user.id,
+      });
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: "Failed to unmatch" });
+    }
+  });
+
+  app.post("/api/gyms/:id/stripe/matches/:matchId/ignore", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      const role = await getUserGymRole(req, gym);
+      if (role !== "owner") return res.status(403).json({ message: "Only the gym owner can ignore records" });
+
+      await ignoreRecord(req.params.matchId, req.user.id, req.params.id);
+      await storage.createStripeIntegrationEvent({
+        gymId: req.params.id,
+        eventType: "manual_match_change",
+        details: { matchId: req.params.matchId, action: "ignored" },
+        createdBy: req.user.id,
+      });
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: "Failed to ignore record" });
+    }
+  });
+
+  app.post("/api/gyms/:id/stripe/rerun-matching", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      const role = await getUserGymRole(req, gym);
+      if (role !== "owner") return res.status(403).json({ message: "Only the gym owner can rerun matching" });
+
+      const result = await rerunMatching(req.params.id);
+      await storage.createStripeIntegrationEvent({
+        gymId: req.params.id,
+        eventType: "matching_rerun_completed",
+        details: result,
+        createdBy: req.user.id,
+      });
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ message: "Failed to rerun matching" });
+    }
+  });
+
+  app.get("/api/gyms/:id/stripe/data-quality", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const connection = await storage.getStripeConnection(req.params.id);
+      const matchCounts = await storage.getStripeMatchCounts(req.params.id);
+      const recordCount = await storage.getStripeBillingRecordCount(req.params.id);
+      const recentSyncRuns = await storage.getStripeSyncRuns(req.params.id, 3);
+      const webhookEvents = await storage.getStripeWebhookEvents(req.params.id, 20);
+      const linkedCount = matchCounts.matched;
+      const totalCustomers = matchCounts.total;
+
+      const processedWebhooks = webhookEvents.filter(e => e.status === "processed").length;
+      const webhookSuccessRate = webhookEvents.length > 0 ? Math.round((processedWebhooks / webhookEvents.length) * 100) : null;
+
+      const latestSync = recentSyncRuns[0];
+      const hasInvoices = latestSync ? (latestSync.invoicesFound || 0) > 0 : false;
+      const hasCharges = latestSync ? (latestSync.chargesFound || 0) > 0 : false;
+      const hasRefunds = latestSync ? (latestSync.refundsFound || 0) > 0 : false;
+      const hasSubscriptions = latestSync ? (latestSync.subscriptionsFound || 0) > 0 : false;
+      const hasCustomers = latestSync ? (latestSync.customersFound || 0) > 0 : false;
+
+      const partialAccessIssues: string[] = [];
+      if (hasCustomers && !hasInvoices && !hasCharges) partialAccessIssues.push("Customers found but no payment data — API key may lack invoice/charge read permissions.");
+      if (hasInvoices && !hasCharges) partialAccessIssues.push("Invoices available but charges missing.");
+      if (!hasRefunds && (hasInvoices || hasCharges)) partialAccessIssues.push("No refund data available.");
+      if (!hasSubscriptions && (hasInvoices || hasCharges)) partialAccessIssues.push("Subscription data not available.");
+
+      const matchCoverage = totalCustomers > 0 ? Math.round((linkedCount / totalCustomers) * 100) : 0;
+      const billingLinked = recordCount > 0 ? Math.round((linkedCount / Math.max(totalCustomers, 1)) * 100) : 0;
+
+      let overallStatus: string;
+      let fallbackRecommendation: string;
+      if (!connection || connection.status !== "connected") {
+        overallStatus = "not_connected";
+        fallbackRecommendation = "fallback_import_recommended";
+      } else if (recordCount === 0) {
+        overallStatus = "awaiting_first_sync";
+        fallbackRecommendation = "direct_sync_usable";
+      } else if (partialAccessIssues.length > 0 && !hasInvoices && !hasCharges) {
+        overallStatus = "partial_data";
+        fallbackRecommendation = "fallback_import_recommended";
+      } else if (matchCoverage < 50) {
+        overallStatus = "needs_matching_review";
+        fallbackRecommendation = "direct_sync_partially_usable";
+      } else if (partialAccessIssues.length > 0) {
+        overallStatus = "partial_data";
+        fallbackRecommendation = "direct_sync_partially_usable";
+      } else {
+        overallStatus = "ready";
+        fallbackRecommendation = "direct_sync_usable";
+      }
+
+      res.json({
+        connectionStatus: connection?.status || "disconnected",
+        overallStatus,
+        fallbackRecommendation,
+        matchCoverage,
+        billingLinked,
+        webhookSuccessRate,
+        recordCount,
+        matchCounts,
+        hasInvoices,
+        hasCharges,
+        hasRefunds,
+        hasSubscriptions,
+        partialAccessIssues,
+        fallbackNotes: connection?.fallbackNotes || null,
+        lastSyncAt: connection?.lastSyncAt || null,
+        lastWebhookAt: webhookEvents[0]?.processedAt || null,
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: "Failed to fetch data quality" });
+    }
+  });
+
+  app.patch("/api/gyms/:id/stripe/fallback-notes", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      const role = await getUserGymRole(req, gym);
+      if (role !== "owner") return res.status(403).json({ message: "Only the gym owner can set fallback notes" });
+
+      const connection = await storage.getStripeConnection(req.params.id);
+      if (!connection) return res.status(404).json({ message: "No Stripe connection" });
+
+      await storage.updateStripeConnection(connection.id, { fallbackNotes: req.body.notes || null });
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: "Failed to update notes" });
+    }
+  });
+
+  app.get("/api/gyms/:id/stripe/events", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const limit = Math.min(Number(req.query.limit) || 50, 200);
+      const events = await storage.getStripeIntegrationEvents(req.params.id, limit);
+      res.json(events);
+    } catch (error: any) {
+      res.status(500).json({ message: "Failed to fetch events" });
+    }
+  });
+
+  app.get("/api/gyms/:id/stripe/admin-summary", isAuthenticated, async (req: any, res) => {
+    try {
+      if (!isPlatformAdmin(req)) return res.status(403).json({ message: "Platform admin access required" });
+
+      const connection = await storage.getStripeConnection(req.params.id);
+      const recordCount = await storage.getStripeBillingRecordCount(req.params.id);
+      const syncRuns = await storage.getStripeSyncRuns(req.params.id, 20);
+      const webhookEvents = await storage.getStripeWebhookEvents(req.params.id, 50);
+      const matchCounts = await storage.getStripeMatchCounts(req.params.id);
+      const events = await storage.getStripeIntegrationEvents(req.params.id, 100);
+      const matches = await storage.getStripeCustomerMatches(req.params.id, { limit: 500 });
+
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Content-Disposition", `attachment; filename="stripe-summary-${req.params.id}.json"`);
+      res.json({
+        exportedAt: new Date().toISOString(),
+        gymId: req.params.id,
+        connection: connection ? {
+          id: connection.id,
+          status: connection.status,
+          stripeAccountId: connection.stripeAccountId,
+          apiKeyFingerprint: connection.apiKeyFingerprint,
+          connectedAt: connection.connectedAt,
+          lastSyncAt: connection.lastSyncAt,
+          lastErrorAt: connection.lastErrorAt,
+          lastErrorMessage: connection.lastErrorMessage,
+          recordsSynced: connection.recordsSynced,
+          fallbackNotes: connection.fallbackNotes,
+        } : null,
+        totalBillingRecords: recordCount,
+        matchCounts,
+        syncRuns,
+        webhookEvents,
+        integrationEvents: events,
+        customerMatches: matches,
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: "Failed to generate admin summary" });
     }
   });
 

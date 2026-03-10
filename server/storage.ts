@@ -43,6 +43,10 @@ import {
   type StripeBillingRecord, type InsertStripeBillingRecord,
   stripeWebhookEvents,
   type StripeWebhookEvent, type InsertStripeWebhookEvent,
+  stripeCustomerMatches,
+  type StripeCustomerMatch, type InsertStripeCustomerMatch,
+  stripeIntegrationEvents,
+  type StripeIntegrationEvent, type InsertStripeIntegrationEvent,
 } from "@shared/schema";
 import { db } from "./db";
 import { pool } from "./db";
@@ -202,6 +206,18 @@ export interface IStorage {
   getStripeWebhookEvent(stripeEventId: string): Promise<StripeWebhookEvent | undefined>;
   getStripeWebhookEvents(gymId: string, limit?: number): Promise<StripeWebhookEvent[]>;
   updateStripeWebhookEventStatus(stripeEventId: string, status: string): Promise<void>;
+
+  getStripeCustomerMatches(gymId: string, options?: { status?: string; search?: string; limit?: number; offset?: number }): Promise<StripeCustomerMatch[]>;
+  upsertStripeCustomerMatch(data: InsertStripeCustomerMatch): Promise<StripeCustomerMatch>;
+  updateStripeCustomerMatch(id: string, updates: Partial<StripeCustomerMatch>): Promise<StripeCustomerMatch>;
+  getStripeMatchCounts(gymId: string): Promise<{ matched: number; unmatched: number; ambiguous: number; ignored: number; total: number }>;
+  deleteStripeCustomerMatches(gymId: string): Promise<void>;
+
+  createStripeIntegrationEvent(event: InsertStripeIntegrationEvent): Promise<StripeIntegrationEvent>;
+  getStripeIntegrationEvents(gymId: string, limit?: number): Promise<StripeIntegrationEvent[]>;
+
+  getUniqueStripeCustomers(gymId: string): Promise<Array<{ stripeCustomerId: string; customerEmail: string | null; customerName: string | null }>>;
+  updateStripeBillingRecordsMemberId(gymId: string, stripeCustomerId: string, memberId: string | null): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1107,9 +1123,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteStripeConnection(gymId: string): Promise<void> {
+    await db.delete(stripeCustomerMatches).where(eq(stripeCustomerMatches.gymId, gymId));
     await db.delete(stripeWebhookEvents).where(eq(stripeWebhookEvents.gymId, gymId));
     await db.delete(stripeBillingRecords).where(eq(stripeBillingRecords.gymId, gymId));
     await db.delete(stripeSyncRuns).where(eq(stripeSyncRuns.gymId, gymId));
+    await db.delete(stripeIntegrationEvents).where(eq(stripeIntegrationEvents.gymId, gymId));
     await db.delete(stripeConnections).where(eq(stripeConnections.gymId, gymId));
   }
 
@@ -1192,6 +1210,111 @@ export class DatabaseStorage implements IStorage {
     await db.update(stripeWebhookEvents)
       .set({ status, processedAt: new Date() })
       .where(eq(stripeWebhookEvents.stripeEventId, stripeEventId));
+  }
+
+  async getStripeCustomerMatches(gymId: string, options?: { status?: string; search?: string; limit?: number; offset?: number }): Promise<StripeCustomerMatch[]> {
+    const conditions = [eq(stripeCustomerMatches.gymId, gymId)];
+    if (options?.status) {
+      conditions.push(eq(stripeCustomerMatches.matchStatus, options.status));
+    }
+    if (options?.search) {
+      const searchLower = `%${options.search.toLowerCase()}%`;
+      conditions.push(
+        sql`(LOWER(${stripeCustomerMatches.stripeCustomerEmail}) LIKE ${searchLower} OR LOWER(${stripeCustomerMatches.stripeCustomerName}) LIKE ${searchLower})`
+      );
+    }
+    return db.select().from(stripeCustomerMatches)
+      .where(and(...conditions))
+      .orderBy(desc(stripeCustomerMatches.matchConfidence))
+      .limit(options?.limit ?? 100)
+      .offset(options?.offset ?? 0);
+  }
+
+  async upsertStripeCustomerMatch(data: InsertStripeCustomerMatch): Promise<StripeCustomerMatch> {
+    const [result] = await db
+      .insert(stripeCustomerMatches)
+      .values(data)
+      .onConflictDoUpdate({
+        target: [stripeCustomerMatches.gymId, stripeCustomerMatches.stripeCustomerId],
+        set: {
+          stripeCustomerEmail: data.stripeCustomerEmail,
+          stripeCustomerName: data.stripeCustomerName,
+          memberId: data.memberId,
+          matchStatus: data.matchStatus,
+          matchMethod: data.matchMethod,
+          matchConfidence: data.matchConfidence,
+          matchedAt: data.matchedAt || new Date(),
+          matchedBy: data.matchedBy,
+          notes: data.notes,
+        },
+      })
+      .returning();
+    return result;
+  }
+
+  async updateStripeCustomerMatch(id: string, updates: Partial<StripeCustomerMatch>): Promise<StripeCustomerMatch> {
+    const [updated] = await db.update(stripeCustomerMatches)
+      .set(updates)
+      .where(eq(stripeCustomerMatches.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getStripeMatchCounts(gymId: string): Promise<{ matched: number; unmatched: number; ambiguous: number; ignored: number; total: number }> {
+    const rows = await db.select({
+      status: stripeCustomerMatches.matchStatus,
+      count: sql<number>`count(*)`,
+    }).from(stripeCustomerMatches)
+      .where(eq(stripeCustomerMatches.gymId, gymId))
+      .groupBy(stripeCustomerMatches.matchStatus);
+
+    const counts = { matched: 0, unmatched: 0, ambiguous: 0, ignored: 0, total: 0 };
+    for (const row of rows) {
+      const c = Number(row.count);
+      counts.total += c;
+      if (row.status === "auto_matched" || row.status === "manually_matched") counts.matched += c;
+      else if (row.status === "unmatched") counts.unmatched += c;
+      else if (row.status === "ambiguous") counts.ambiguous += c;
+      else if (row.status === "ignored") counts.ignored += c;
+    }
+    return counts;
+  }
+
+  async deleteStripeCustomerMatches(gymId: string): Promise<void> {
+    await db.delete(stripeCustomerMatches).where(
+      and(eq(stripeCustomerMatches.gymId, gymId), sql`${stripeCustomerMatches.matchStatus} != 'manually_matched'`)
+    );
+  }
+
+  async createStripeIntegrationEvent(event: InsertStripeIntegrationEvent): Promise<StripeIntegrationEvent> {
+    const [created] = await db.insert(stripeIntegrationEvents).values(event).returning();
+    return created;
+  }
+
+  async getStripeIntegrationEvents(gymId: string, limit = 50): Promise<StripeIntegrationEvent[]> {
+    return db.select().from(stripeIntegrationEvents)
+      .where(eq(stripeIntegrationEvents.gymId, gymId))
+      .orderBy(desc(stripeIntegrationEvents.createdAt))
+      .limit(limit);
+  }
+
+  async getUniqueStripeCustomers(gymId: string): Promise<Array<{ stripeCustomerId: string; customerEmail: string | null; customerName: string | null }>> {
+    const rows = await db.selectDistinctOn([stripeBillingRecords.stripeCustomerId], {
+      stripeCustomerId: stripeBillingRecords.stripeCustomerId,
+      customerEmail: stripeBillingRecords.customerEmail,
+      customerName: stripeBillingRecords.customerName,
+    }).from(stripeBillingRecords)
+      .where(eq(stripeBillingRecords.gymId, gymId));
+    return rows;
+  }
+
+  async updateStripeBillingRecordsMemberId(gymId: string, stripeCustomerId: string, memberId: string | null): Promise<void> {
+    await db.update(stripeBillingRecords)
+      .set({ memberId })
+      .where(and(
+        eq(stripeBillingRecords.gymId, gymId),
+        eq(stripeBillingRecords.stripeCustomerId, stripeCustomerId),
+      ));
   }
 }
 

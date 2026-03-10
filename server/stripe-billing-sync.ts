@@ -68,13 +68,19 @@ async function findMemberByEmail(gymId: string, email: string | null): Promise<M
   return members.find(m => m.email?.toLowerCase() === email.toLowerCase());
 }
 
-export async function syncStripePaymentHistory(gymId: string, connectionId: string, apiKey: string): Promise<void> {
+export interface SyncOptions {
+  windowDays?: number;
+  dryRun?: boolean;
+}
+
+export async function syncStripePaymentHistory(gymId: string, connectionId: string, apiKey: string, options: SyncOptions = {}): Promise<string> {
   const stripe = createStripeClient(apiKey);
+  const { windowDays, dryRun = false } = options;
 
   const syncRun = await storage.createStripeSyncRun({
     gymId,
     connectionId,
-    runType: "full",
+    runType: dryRun ? "dry_run" : "full",
     status: "running",
     customersFound: 0,
     subscriptionsFound: 0,
@@ -83,10 +89,15 @@ export async function syncStripePaymentHistory(gymId: string, connectionId: stri
     refundsFound: 0,
     recordsCreated: 0,
     recordsUpdated: 0,
+    recordsSkipped: 0,
+    recordsFailed: 0,
     errorCount: 0,
+    syncWindowDays: windowDays || null,
+    isDryRun: dryRun,
   });
 
   const errors: string[] = [];
+  const warnings: string[] = [];
   let customersFound = 0;
   let subscriptionsFound = 0;
   let invoicesFound = 0;
@@ -94,6 +105,12 @@ export async function syncStripePaymentHistory(gymId: string, connectionId: stri
   let refundsFound = 0;
   let recordsCreated = 0;
   let recordsUpdated = 0;
+  let recordsSkipped = 0;
+  let recordsFailed = 0;
+
+  const cutoffTimestamp = windowDays
+    ? Math.floor(Date.now() / 1000) - (windowDays * 24 * 60 * 60)
+    : undefined;
 
   try {
     const customerEmailMap = new Map<string, { email: string | null; name: string | null }>();
@@ -106,14 +123,28 @@ export async function syncStripePaymentHistory(gymId: string, connectionId: stri
       });
     }
 
-    for await (const sub of stripe.subscriptions.list({ limit: 100, status: "all" })) {
-      subscriptionsFound++;
+    try {
+      for await (const sub of stripe.subscriptions.list({ limit: 100, status: "all" })) {
+        subscriptionsFound++;
+      }
+    } catch (err: any) {
+      warnings.push("Subscription data not available: " + (err.message || "access denied"));
     }
 
-    const twelveMonthsAgo = Math.floor(Date.now() / 1000) - (365 * 24 * 60 * 60);
+    const existingInvoiceIds = new Set<string>();
+    if (!dryRun) {
+      const existingRecords = await storage.getStripeBillingRecords(gymId, { limit: 10000 });
+      for (const r of existingRecords) {
+        if (r.stripeInvoiceId) existingInvoiceIds.add(r.stripeInvoiceId);
+      }
+    }
 
-    for await (const invoice of stripe.invoices.list({ limit: 100, created: { gte: twelveMonthsAgo } })) {
+    const invoiceListParams: any = { limit: 100 };
+    if (cutoffTimestamp) invoiceListParams.created = { gte: cutoffTimestamp };
+    for await (const invoice of stripe.invoices.list(invoiceListParams)) {
       invoicesFound++;
+      if (dryRun) continue;
+
       try {
         const custId = typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id || "";
         const custInfo = customerEmailMap.get(custId);
@@ -127,8 +158,7 @@ export async function syncStripePaymentHistory(gymId: string, connectionId: stri
           invoice.amount_paid || 0,
         );
 
-        const existing = await storage.getStripeBillingRecords(gymId, { limit: 1, offset: 0 });
-        const existingRecord = existing.find(r => r.stripeInvoiceId === invoice.id);
+        const isExisting = existingInvoiceIds.has(invoice.id);
 
         await storage.upsertStripeBillingRecord({
           gymId,
@@ -147,19 +177,26 @@ export async function syncStripePaymentHistory(gymId: string, connectionId: stri
           source: "stripe",
         });
 
-        if (existingRecord) {
+        if (isExisting) {
           recordsUpdated++;
         } else {
           recordsCreated++;
         }
       } catch (err: any) {
+        recordsFailed++;
         errors.push(`Invoice ${invoice.id}: ${err.message}`);
       }
     }
 
-    for await (const charge of stripe.charges.list({ limit: 100, created: { gte: twelveMonthsAgo } })) {
+    const chargeListParams: any = { limit: 100 };
+    if (cutoffTimestamp) chargeListParams.created = { gte: cutoffTimestamp };
+    for await (const charge of stripe.charges.list(chargeListParams)) {
       chargesFound++;
-      if (charge.invoice) continue;
+      if (charge.invoice) {
+        recordsSkipped++;
+        continue;
+      }
+      if (dryRun) continue;
 
       try {
         const custId = typeof charge.customer === "string" ? charge.customer : charge.customer?.id || "";
@@ -169,6 +206,7 @@ export async function syncStripePaymentHistory(gymId: string, connectionId: stri
         const member = await findMemberByEmail(gymId, email);
 
         const chargeInvoiceId = `charge_${charge.id}`;
+        const isExisting = existingInvoiceIds.has(chargeInvoiceId);
 
         await storage.upsertStripeBillingRecord({
           gymId,
@@ -186,40 +224,73 @@ export async function syncStripePaymentHistory(gymId: string, connectionId: stri
           customerName: name,
           source: "stripe",
         });
-        recordsCreated++;
+        if (isExisting) recordsUpdated++;
+        else recordsCreated++;
       } catch (err: any) {
+        recordsFailed++;
         errors.push(`Charge ${charge.id}: ${err.message}`);
       }
     }
 
-    const refundIds = new Set<string>();
-    for await (const refund of stripe.refunds.list({ limit: 100 })) {
-      refundsFound++;
-      refundIds.add(refund.id);
-      try {
-        const chargeId = typeof refund.charge === "string" ? refund.charge : refund.charge?.id;
-        if (chargeId) {
-          const records = await storage.getStripeBillingRecords(gymId, { limit: 1000 });
-          const matchingRecord = records.find(r => r.stripeChargeId === chargeId);
-          if (matchingRecord && matchingRecord.status !== "refunded") {
-            await storage.upsertStripeBillingRecord({
-              ...matchingRecord,
-              status: "refunded",
-              memberId: matchingRecord.memberId,
-              stripeInvoiceId: matchingRecord.stripeInvoiceId || `refund_${refund.id}`,
-            });
-            recordsUpdated++;
+    try {
+      for await (const refund of stripe.refunds.list({ limit: 100 })) {
+        refundsFound++;
+        if (dryRun) continue;
+        try {
+          const chargeId = typeof refund.charge === "string" ? refund.charge : refund.charge?.id;
+          if (chargeId) {
+            const records = await storage.getStripeBillingRecords(gymId, { limit: 10000 });
+            const matchingRecord = records.find(r => r.stripeChargeId === chargeId);
+            if (matchingRecord && matchingRecord.status !== "refunded") {
+              await storage.upsertStripeBillingRecord({
+                ...matchingRecord,
+                status: "refunded",
+                memberId: matchingRecord.memberId,
+                stripeInvoiceId: matchingRecord.stripeInvoiceId || `refund_${refund.id}`,
+              });
+              recordsUpdated++;
+            }
           }
+        } catch (err: any) {
+          recordsFailed++;
+          errors.push(`Refund ${refund.id}: ${err.message}`);
         }
-      } catch (err: any) {
-        errors.push(`Refund ${refund.id}: ${err.message}`);
       }
+    } catch (err: any) {
+      warnings.push("Refund data not available: " + (err.message || "access denied"));
     }
+
+    if (invoicesFound === 0 && chargesFound > 0) {
+      warnings.push("No invoices found but charges exist — invoice access may be restricted.");
+    }
+    if (customersFound > 0 && invoicesFound === 0 && chargesFound === 0) {
+      warnings.push("Customers found but no payment data — API key permissions may be too restricted.");
+    }
+
+    const estimatedUnmatched = dryRun ? (() => {
+      const emailSet = new Set(Array.from(customerEmailMap.values()).map(c => c.email?.toLowerCase()).filter(Boolean));
+      let unmatchable = 0;
+      for (const [, info] of customerEmailMap) {
+        if (!info.email) unmatchable++;
+      }
+      return unmatchable;
+    })() : 0;
+
+    const dryRunSummary = dryRun ? {
+      customersFound,
+      subscriptionsFound,
+      invoicesFound,
+      chargesFound,
+      refundsFound,
+      estimatedNewRecords: invoicesFound + Math.max(0, chargesFound - invoicesFound),
+      estimatedUnmatched,
+      warnings,
+    } : null;
 
     const totalRecords = recordsCreated + recordsUpdated;
 
     await storage.updateStripeSyncRun(syncRun.id, {
-      status: errors.length > 0 ? "completed_with_errors" : "completed",
+      status: dryRun ? "dry_run_completed" : (errors.length > 0 ? "completed_with_errors" : "completed"),
       finishedAt: new Date(),
       customersFound,
       subscriptionsFound,
@@ -228,16 +299,24 @@ export async function syncStripePaymentHistory(gymId: string, connectionId: stri
       refundsFound,
       recordsCreated,
       recordsUpdated,
+      recordsSkipped,
+      recordsFailed,
       errorCount: errors.length,
       errorDetails: errors.length > 0 ? errors.join("\n") : null,
+      warningMessages: warnings.length > 0 ? warnings.join("\n") : null,
+      dryRunSummary: dryRunSummary as any,
     });
 
-    await storage.updateStripeConnection(connectionId, {
-      lastSyncAt: new Date(),
-      recordsSynced: totalRecords,
-      lastErrorAt: errors.length > 0 ? new Date() : undefined,
-      lastErrorMessage: errors.length > 0 ? `${errors.length} errors during sync` : null,
-    });
+    if (!dryRun) {
+      await storage.updateStripeConnection(connectionId, {
+        lastSyncAt: new Date(),
+        recordsSynced: totalRecords,
+        lastErrorAt: errors.length > 0 ? new Date() : undefined,
+        lastErrorMessage: errors.length > 0 ? `${errors.length} errors during sync` : null,
+      });
+    }
+
+    return syncRun.id;
 
   } catch (err: any) {
     await storage.updateStripeSyncRun(syncRun.id, {
@@ -250,8 +329,11 @@ export async function syncStripePaymentHistory(gymId: string, connectionId: stri
       refundsFound,
       recordsCreated,
       recordsUpdated,
+      recordsSkipped,
+      recordsFailed,
       errorCount: 1,
       errorDetails: err.message,
+      warningMessages: warnings.length > 0 ? warnings.join("\n") : null,
     });
 
     await storage.updateStripeConnection(connectionId, {

@@ -752,6 +752,7 @@ export const stripeConnections = pgTable("stripe_connections", {
   lastErrorAt: timestamp("last_error_at"),
   lastErrorMessage: text("last_error_message"),
   recordsSynced: integer("records_synced").notNull().default(0),
+  fallbackNotes: text("fallback_notes"),
 }, (table) => [
   uniqueIndex("idx_stripe_connection_gym").on(table.gymId),
 ]);
@@ -781,8 +782,14 @@ export const stripeSyncRuns = pgTable("stripe_sync_runs", {
   refundsFound: integer("refunds_found").notNull().default(0),
   recordsCreated: integer("records_created").notNull().default(0),
   recordsUpdated: integer("records_updated").notNull().default(0),
+  recordsSkipped: integer("records_skipped").notNull().default(0),
+  recordsFailed: integer("records_failed").notNull().default(0),
   errorCount: integer("error_count").notNull().default(0),
   errorDetails: text("error_details"),
+  warningMessages: text("warning_messages"),
+  syncWindowDays: integer("sync_window_days"),
+  isDryRun: boolean("is_dry_run").notNull().default(false),
+  dryRunSummary: jsonb("dry_run_summary"),
 }, (table) => [
   index("idx_stripe_sync_runs_gym").on(table.gymId),
   index("idx_stripe_sync_runs_connection").on(table.connectionId),
@@ -816,6 +823,13 @@ export const stripeBillingRecords = pgTable("stripe_billing_records", {
   customerEmail: text("customer_email"),
   customerName: text("customer_name"),
   source: text("source").notNull().default("stripe"),
+  expectedAmount: integer("expected_amount"),
+  varianceAmount: integer("variance_amount"),
+  varianceType: text("variance_type").default("none"),
+  expectedBillingDate: timestamp("expected_billing_date"),
+  billingPeriodStart: timestamp("billing_period_start"),
+  billingPeriodEnd: timestamp("billing_period_end"),
+  reconciliationStatus: text("reconciliation_status").notNull().default("unreconciled"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("idx_stripe_billing_records_gym").on(table.gymId),
@@ -849,6 +863,60 @@ export const stripeWebhookEvents = pgTable("stripe_webhook_events", {
 export const insertStripeWebhookEventSchema = createInsertSchema(stripeWebhookEvents).omit({ id: true, processedAt: true });
 export type InsertStripeWebhookEvent = z.infer<typeof insertStripeWebhookEventSchema>;
 export type StripeWebhookEvent = typeof stripeWebhookEvents.$inferSelect;
+
+export const STRIPE_MATCH_STATUSES = ["auto_matched", "manually_matched", "unmatched", "ambiguous", "ignored"] as const;
+export type StripeMatchStatus = typeof STRIPE_MATCH_STATUSES[number];
+
+export const STRIPE_MATCH_METHODS = ["exact_email", "normalized_name_email", "normalized_name_only", "manual", "none"] as const;
+export type StripeMatchMethod = typeof STRIPE_MATCH_METHODS[number];
+
+export const stripeCustomerMatches = pgTable("stripe_customer_matches", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gymId: varchar("gym_id").notNull().references(() => gyms.id),
+  stripeCustomerId: text("stripe_customer_id").notNull(),
+  stripeCustomerEmail: text("stripe_customer_email"),
+  stripeCustomerName: text("stripe_customer_name"),
+  memberId: varchar("member_id").references(() => members.id),
+  matchStatus: text("match_status").notNull().default("unmatched"),
+  matchMethod: text("match_method").notNull().default("none"),
+  matchConfidence: integer("match_confidence").notNull().default(0),
+  matchedAt: timestamp("matched_at"),
+  matchedBy: varchar("matched_by"),
+  notes: text("notes"),
+}, (table) => [
+  index("idx_stripe_customer_matches_gym").on(table.gymId),
+  index("idx_stripe_customer_matches_status").on(table.matchStatus),
+  uniqueIndex("idx_stripe_customer_match_unique").on(table.gymId, table.stripeCustomerId),
+]);
+
+export const stripeCustomerMatchesRelations = relations(stripeCustomerMatches, ({ one }) => ({
+  gym: one(gyms, { fields: [stripeCustomerMatches.gymId], references: [gyms.id] }),
+  member: one(members, { fields: [stripeCustomerMatches.memberId], references: [members.id] }),
+}));
+
+export const insertStripeCustomerMatchSchema = createInsertSchema(stripeCustomerMatches).omit({ id: true, matchedAt: true });
+export type InsertStripeCustomerMatch = z.infer<typeof insertStripeCustomerMatchSchema>;
+export type StripeCustomerMatch = typeof stripeCustomerMatches.$inferSelect;
+
+export const stripeIntegrationEvents = pgTable("stripe_integration_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gymId: varchar("gym_id").notNull().references(() => gyms.id),
+  eventType: text("event_type").notNull(),
+  details: jsonb("details"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  createdBy: varchar("created_by"),
+}, (table) => [
+  index("idx_stripe_integration_events_gym").on(table.gymId),
+  index("idx_stripe_integration_events_type").on(table.eventType),
+]);
+
+export const stripeIntegrationEventsRelations = relations(stripeIntegrationEvents, ({ one }) => ({
+  gym: one(gyms, { fields: [stripeIntegrationEvents.gymId], references: [gyms.id] }),
+}));
+
+export const insertStripeIntegrationEventSchema = createInsertSchema(stripeIntegrationEvents).omit({ id: true, createdAt: true });
+export type InsertStripeIntegrationEvent = z.infer<typeof insertStripeIntegrationEventSchema>;
+export type StripeIntegrationEvent = typeof stripeIntegrationEvents.$inferSelect;
 
 export const SUBSCRIPTION_PLANS = ["starter", "pro"] as const;
 export type SubscriptionPlan = typeof SUBSCRIPTION_PLANS[number];
