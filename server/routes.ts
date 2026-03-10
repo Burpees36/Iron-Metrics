@@ -3484,7 +3484,7 @@ export async function registerRoutes(
       let emailError: string | null = null;
 
       try {
-        const appUrl = process.env.APP_URL || "https://ironmetrics.app";
+        const appUrl = process.env.APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN || "ironmetrics.app"}`;
         const inviteLink = `${appUrl}/invite/${token}`;
 
         const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
