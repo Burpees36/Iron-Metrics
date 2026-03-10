@@ -59,6 +59,7 @@ export interface IStorage {
 
   upsertMember(member: InsertMember): Promise<{ action: "inserted" | "updated" }>;
   getMemberById(id: string): Promise<Member | undefined>;
+  getMemberByIdAndGym(id: string, gymId: string): Promise<Member | undefined>;
   getMembersByGym(gymId: string): Promise<Member[]>;
   updateGym(id: string, updates: Partial<Gym>): Promise<Gym>;
   getActiveMembers(gymId: string, asOfDate: string): Promise<Member[]>;
@@ -208,8 +209,10 @@ export interface IStorage {
   updateStripeWebhookEventStatus(stripeEventId: string, status: string): Promise<void>;
 
   getStripeCustomerMatches(gymId: string, options?: { status?: string; search?: string; limit?: number; offset?: number }): Promise<StripeCustomerMatch[]>;
+  getStripeCustomerMatchByIdAndGym(id: string, gymId: string): Promise<StripeCustomerMatch | undefined>;
   upsertStripeCustomerMatch(data: InsertStripeCustomerMatch): Promise<StripeCustomerMatch>;
   updateStripeCustomerMatch(id: string, updates: Partial<StripeCustomerMatch>): Promise<StripeCustomerMatch>;
+  getStripeBillingRecordCoverageCount(gymId: string): Promise<{ total: number; linked: number }>;
   getStripeMatchCounts(gymId: string): Promise<{ matched: number; unmatched: number; ambiguous: number; ignored: number; total: number }>;
   deleteStripeCustomerMatches(gymId: string): Promise<void>;
 
@@ -270,6 +273,13 @@ export class DatabaseStorage implements IStorage {
 
   async getMemberById(id: string): Promise<Member | undefined> {
     const [member] = await db.select().from(members).where(eq(members.id, id));
+    return member;
+  }
+
+  async getMemberByIdAndGym(id: string, gymId: string): Promise<Member | undefined> {
+    const [member] = await db.select().from(members)
+      .where(and(eq(members.id, id), eq(members.gymId, gymId)))
+      .limit(1);
     return member;
   }
 
@@ -1230,6 +1240,13 @@ export class DatabaseStorage implements IStorage {
       .offset(options?.offset ?? 0);
   }
 
+  async getStripeCustomerMatchByIdAndGym(id: string, gymId: string): Promise<StripeCustomerMatch | undefined> {
+    const [match] = await db.select().from(stripeCustomerMatches)
+      .where(and(eq(stripeCustomerMatches.id, id), eq(stripeCustomerMatches.gymId, gymId)))
+      .limit(1);
+    return match;
+  }
+
   async upsertStripeCustomerMatch(data: InsertStripeCustomerMatch): Promise<StripeCustomerMatch> {
     const [result] = await db
       .insert(stripeCustomerMatches)
@@ -1258,6 +1275,15 @@ export class DatabaseStorage implements IStorage {
       .where(eq(stripeCustomerMatches.id, id))
       .returning();
     return updated;
+  }
+
+  async getStripeBillingRecordCoverageCount(gymId: string): Promise<{ total: number; linked: number }> {
+    const [result] = await db.select({
+      total: sql<number>`count(*)`,
+      linked: sql<number>`count(${stripeBillingRecords.memberId})`,
+    }).from(stripeBillingRecords)
+      .where(eq(stripeBillingRecords.gymId, gymId));
+    return { total: Number(result?.total ?? 0), linked: Number(result?.linked ?? 0) };
   }
 
   async getStripeMatchCounts(gymId: string): Promise<{ matched: number; unmatched: number; ambiguous: number; ignored: number; total: number }> {

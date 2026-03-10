@@ -1624,7 +1624,22 @@ export async function registerRoutes(
       }
 
       const apiKey = decryptStripeKey(connection.apiKeyEncrypted);
-      const { dryRun, windowDays } = req.body || {};
+      const { dryRun, windowDays, confirmFirstSync } = req.body || {};
+
+      if (!dryRun) {
+        const existingSyncRuns = await storage.getStripeSyncRuns(req.params.id, 50);
+        const hasCompletedDryRun = existingSyncRuns.some(r => r.isDryRun && (r.status === "dry_run_completed" || r.status === "completed"));
+        const hasCompletedLiveSync = existingSyncRuns.some(r => !r.isDryRun && r.status === "completed");
+        if (!hasCompletedDryRun) {
+          return res.status(400).json({ message: "A dry run is required before the first live sync. Run a dry run to preview the data." });
+        }
+        if (!hasCompletedLiveSync && !confirmFirstSync) {
+          return res.status(400).json({
+            message: "This is the first live sync. Please confirm to proceed.",
+            requiresConfirmation: true,
+          });
+        }
+      }
 
       if (dryRun) {
         try {
@@ -1905,8 +1920,10 @@ export async function registerRoutes(
       if (!hasRefunds && (hasInvoices || hasCharges)) partialAccessIssues.push("No refund data available.");
       if (!hasSubscriptions && (hasInvoices || hasCharges)) partialAccessIssues.push("Subscription data not available.");
 
-      const matchCoverage = totalCustomers > 0 ? Math.round((linkedCount / totalCustomers) * 100) : 0;
-      const billingLinked = recordCount > 0 ? Math.round((linkedCount / Math.max(totalCustomers, 1)) * 100) : 0;
+      const customerMatchCoverage = totalCustomers > 0 ? Math.round((linkedCount / totalCustomers) * 100) : 0;
+
+      const coverageCounts = await storage.getStripeBillingRecordCoverageCount(req.params.id);
+      const billingRecordCoverage = coverageCounts.total > 0 ? Math.round((coverageCounts.linked / coverageCounts.total) * 100) : 0;
 
       let overallStatus: string;
       let fallbackRecommendation: string;
@@ -1919,7 +1936,7 @@ export async function registerRoutes(
       } else if (partialAccessIssues.length > 0 && !hasInvoices && !hasCharges) {
         overallStatus = "partial_data";
         fallbackRecommendation = "fallback_import_recommended";
-      } else if (matchCoverage < 50) {
+      } else if (customerMatchCoverage < 50) {
         overallStatus = "needs_matching_review";
         fallbackRecommendation = "direct_sync_partially_usable";
       } else if (partialAccessIssues.length > 0) {
@@ -1930,12 +1947,15 @@ export async function registerRoutes(
         fallbackRecommendation = "direct_sync_usable";
       }
 
+      const allSyncRuns = await storage.getStripeSyncRuns(req.params.id, 100);
+      const hasCompletedDryRun = allSyncRuns.some(r => r.isDryRun && (r.status === "dry_run_completed" || r.status === "completed"));
+
       res.json({
         connectionStatus: connection?.status || "disconnected",
         overallStatus,
         fallbackRecommendation,
-        matchCoverage,
-        billingLinked,
+        customerMatchCoverage,
+        billingRecordCoverage,
         webhookSuccessRate,
         recordCount,
         matchCounts,
@@ -1947,6 +1967,7 @@ export async function registerRoutes(
         fallbackNotes: connection?.fallbackNotes || null,
         lastSyncAt: connection?.lastSyncAt || null,
         lastWebhookAt: webhookEvents[0]?.processedAt || null,
+        hasCompletedDryRun,
       });
     } catch (error: any) {
       res.status(500).json({ message: "Failed to fetch data quality" });

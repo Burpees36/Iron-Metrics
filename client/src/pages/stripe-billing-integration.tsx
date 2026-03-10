@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -114,8 +114,8 @@ interface DataQuality {
   connectionStatus: string;
   overallStatus: string;
   fallbackRecommendation: string;
-  matchCoverage: number;
-  billingLinked: number;
+  customerMatchCoverage: number;
+  billingRecordCoverage: number;
   webhookSuccessRate: number | null;
   recordCount: number;
   matchCounts: MatchCounts;
@@ -127,6 +127,7 @@ interface DataQuality {
   fallbackNotes: string | null;
   lastSyncAt: string | null;
   lastWebhookAt: string | null;
+  hasCompletedDryRun: boolean;
 }
 
 interface IntegrationEvent {
@@ -362,12 +363,33 @@ export default function StripeBillingIntegration() {
     },
   });
 
+  const [showSyncConfirm, setShowSyncConfirm] = useState(false);
+  const [pendingSyncOpts, setPendingSyncOpts] = useState<{ windowDays?: number } | null>(null);
+
   const syncMutation = useMutation({
-    mutationFn: async (opts: { dryRun?: boolean; windowDays?: number }) => {
-      const res = await apiRequest("POST", `/api/gyms/${gymId}/stripe/sync`, opts);
-      return res.json();
+    mutationFn: async (opts: { dryRun?: boolean; windowDays?: number; confirmFirstSync?: boolean }) => {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch(`/api/gyms/${gymId}/stripe/sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        credentials: "include",
+        body: JSON.stringify(opts),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.requiresConfirmation) {
+          return { ...data, _confirmation: true, _windowDays: opts.windowDays };
+        }
+        throw new Error(data.message || "Sync failed");
+      }
+      return data;
     },
     onSuccess: (data, variables) => {
+      if (data._confirmation) {
+        setPendingSyncOpts({ windowDays: data._windowDays });
+        setShowSyncConfirm(true);
+        return;
+      }
       if (variables.dryRun) {
         toast({ title: "Dry run completed", description: "Review the results below before running a live sync." });
         invalidateAll();
@@ -634,14 +656,48 @@ export default function StripeBillingIntegration() {
               </Button>
               <Button
                 onClick={() => syncMutation.mutate({ windowDays })}
-                disabled={syncMutation.isPending}
+                disabled={syncMutation.isPending || !dataQuality?.hasCompletedDryRun}
                 className="flex-1"
                 data-testid="button-live-sync"
+                title={!dataQuality?.hasCompletedDryRun ? "Run a dry run first to preview data" : undefined}
               >
                 {syncMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
                 Run Live Sync
               </Button>
             </div>
+
+            {showSyncConfirm && (
+              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-md p-3 space-y-2" data-testid="sync-confirmation">
+                <p className="text-sm font-medium flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-yellow-500" />
+                  First Live Sync Confirmation
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  This will import payment records into your gym's billing data. This action creates new records based on your Stripe account data.
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setShowSyncConfirm(false);
+                      syncMutation.mutate({ ...pendingSyncOpts, confirmFirstSync: true });
+                    }}
+                    disabled={syncMutation.isPending}
+                    data-testid="button-confirm-sync"
+                  >
+                    Confirm & Sync
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => { setShowSyncConfirm(false); setPendingSyncOpts(null); }}
+                    data-testid="button-cancel-sync"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {latestDryRun?.dryRunSummary && (
               <div className="bg-blue-500/5 border border-blue-500/20 rounded-md p-3 space-y-2" data-testid="dry-run-results">
@@ -927,10 +983,11 @@ export default function StripeBillingIntegration() {
               </Badge>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <ReadinessBlock label="Connection" ok={dataQuality.connectionStatus === "connected"} detail={dataQuality.connectionStatus} />
               <ReadinessBlock label="Payment History" ok={dataQuality.recordCount > 0} detail={`${dataQuality.recordCount} records`} />
-              <ReadinessBlock label="Member Matching" ok={dataQuality.matchCoverage >= 80} detail={`${dataQuality.matchCoverage}% coverage`} />
+              <ReadinessBlock label="Customer Match" ok={dataQuality.customerMatchCoverage >= 80} detail={`${dataQuality.customerMatchCoverage}% of customers`} />
+              <ReadinessBlock label="Billing Coverage" ok={dataQuality.billingRecordCoverage >= 80} detail={`${dataQuality.billingRecordCoverage}% of records`} />
               <ReadinessBlock label="Invoices" ok={dataQuality.hasInvoices} detail={dataQuality.hasInvoices ? "Available" : "Missing"} />
               <ReadinessBlock label="Refunds" ok={dataQuality.hasRefunds} detail={dataQuality.hasRefunds ? "Available" : "Not found"} />
               <ReadinessBlock label="Webhooks" ok={(dataQuality.webhookSuccessRate ?? 0) >= 80} detail={dataQuality.webhookSuccessRate !== null ? `${dataQuality.webhookSuccessRate}% success` : "No events"} />

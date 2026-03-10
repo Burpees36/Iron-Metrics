@@ -3,7 +3,23 @@ import { storage } from "./storage";
 import type { Member } from "@shared/schema";
 import crypto from "crypto";
 
-const ENCRYPTION_KEY = process.env.STRIPE_ENCRYPTION_KEY || process.env.DATABASE_URL?.slice(0, 32) || "iron-metrics-stripe-key-default!";
+// STRIPE_ENCRYPTION_KEY is required for production. Fallback to DATABASE_URL derivative only in development.
+function getEncryptionKey(): string {
+  const key = process.env.STRIPE_ENCRYPTION_KEY;
+  if (key) return key;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("STRIPE_ENCRYPTION_KEY environment variable is required in production");
+  }
+  const fallback = process.env.DATABASE_URL?.slice(0, 32);
+  if (fallback) {
+    console.warn("[stripe-billing] WARNING: Using DATABASE_URL-derived encryption key. Set STRIPE_ENCRYPTION_KEY for production.");
+    return fallback;
+  }
+  console.warn("[stripe-billing] WARNING: Using default encryption key. This is NOT safe for production.");
+  return "iron-metrics-stripe-key-default!";
+}
+
+const ENCRYPTION_KEY = getEncryptionKey();
 
 export function encryptApiKey(apiKey: string): string {
   const iv = crypto.randomBytes(16);
@@ -394,6 +410,10 @@ export async function processWebhookEvent(
         break;
       }
 
+      // Subscription lifecycle events are received and acknowledged but not yet mapped
+      // to billing records. Reserved for future subscription-state tracking and
+      // billing reconciliation features. The events are still stored in stripeWebhookEvents
+      // for audit purposes.
       case "customer.subscription.updated":
       case "customer.subscription.deleted": {
         break;
@@ -403,5 +423,15 @@ export async function processWebhookEvent(
   } catch (err: any) {
     console.error(`[stripe-billing] Webhook processing error for ${event.type}:`, err.message);
     await storage.updateStripeWebhookEventStatus(event.id, "failed").catch(() => {});
+    await storage.createStripeIntegrationEvent({
+      gymId,
+      eventType: "webhook_failure",
+      details: {
+        stripeEventId: event.id,
+        webhookEventType: event.type,
+        error: err.message || "Unknown processing error",
+        occurredAt: new Date().toISOString(),
+      },
+    }).catch(() => {});
   }
 }

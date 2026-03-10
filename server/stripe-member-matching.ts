@@ -136,15 +136,13 @@ export async function runAutoMatching(gymId: string): Promise<{ matched: number;
 }
 
 async function verifyMatchBelongsToGym(matchId: string, gymId: string) {
-  const matches = await storage.getStripeCustomerMatches(gymId, { search: "" });
-  const match = matches.find(m => m.id === matchId);
+  const match = await storage.getStripeCustomerMatchByIdAndGym(matchId, gymId);
   if (!match) throw new Error("Match record not found or does not belong to this gym");
   return match;
 }
 
 async function verifyMemberBelongsToGym(memberId: string, gymId: string) {
-  const members = await storage.getMembersByGym(gymId);
-  const member = members.find(m => m.id === memberId);
+  const member = await storage.getMemberByIdAndGym(memberId, gymId);
   if (!member) throw new Error("Member not found or does not belong to this gym");
   return member;
 }

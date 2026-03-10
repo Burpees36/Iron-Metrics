@@ -1,0 +1,128 @@
+Apply the following hardening fixes and quality improvements to the existing Stripe Billing Integration implementation for Iron Metrics.
+
+Goal:
+Close the remaining gaps identified in the validation report, tighten production standards, improve observability, and enforce a higher onboarding safety standard before real gym onboarding.
+
+Important:
+Preserve all existing working behavior.
+Do not remove or weaken any current authorization, tenant isolation, encryption, sync, webhook, or onboarding functionality.
+This is a targeted improvement pass.
+
+Requirements:
+
+1. Log webhook failures into the integration timeline
+   Problem:
+   Webhook failures are tracked in stripeWebhookEvents with status = "failed" but are not written to stripeIntegrationEvents, so the frontend Integration Timeline does not show webhook issues.
+
+   Fix:
+   - In the webhook processing error path, create a stripeIntegrationEvent with eventType = "webhook_failure"
+   - Include safe structured details such as:
+     - webhook event type
+     - stripe event id
+     - gym id
+     - failure reason/message
+     - processing timestamp
+   - Do not include secrets or raw sensitive payload data
+   - Ensure webhook failures appear in the Integration Timeline UI
+
+2. Require a dedicated production encryption key
+   Problem:
+   STRIPE_ENCRYPTION_KEY currently falls back to DATABASE_URL.slice(0,32) or a hardcoded default string. This is not acceptable for production-grade secret management.
+
+   Fix:
+   - Remove insecure fallback behavior for production use
+   - Require a dedicated STRIPE_ENCRYPTION_KEY environment variable for encryption/decryption of Stripe API keys
+   - If the key is missing in environments where Stripe connection actions are attempted, fail safely with a clear server-side error
+   - Add startup validation or guarded runtime validation so this is easy to diagnose
+   - Keep behavior secure and explicit
+   - Do not expose the encryption key to client-side code
+
+3. Clarify and correct the misleading billingLinked metric
+   Problem:
+   billingLinked currently measures matched customers / total customers, but the naming implies linked billing records.
+
+   Fix:
+   - Rename the backend metric and related frontend labels to reflect what is truly measured
+   - Distinguish clearly between:
+     - customer match coverage
+     - billing record match coverage
+   - If both metrics are useful, return both
+   - Update UI copy so the owner/admin sees accurate terminology
+   - Avoid misleading labels like “Member Matching” if the denominator is not billing records
+   - Keep the language professional and precise
+
+4. Add a dry-run safety gate before first live sync
+   Problem:
+   Users can run a live sync immediately without first running a dry run.
+
+   Fix:
+   - Require at least one successful dry run before the first live sync
+   - If no dry run exists yet, disable or block live sync and show a clear explanation
+   - Add a confirmation dialog before the first live sync even after dry-run succeeds
+   - Allow subsequent live syncs without unnecessary friction, but still keep an optional confirmation where appropriate
+   - Reflect this state in the onboarding checklist/readiness UI
+
+5. Optimize verifyMatchBelongsToGym lookup
+   Problem:
+   verifyMatchBelongsToGym currently loads all matches for the gym and searches in memory, which is inefficient at scale.
+
+   Fix:
+   - Replace this with a direct storage/database query using match id + gym id
+   - Add a dedicated storage method such as getStripeCustomerMatchByIdAndGym(id, gymId)
+   - Ensure all existing tenant validation behavior remains intact
+   - Preserve current authorization and safety semantics while improving performance
+
+6. Explicitly document current subscription webhook behavior
+   Problem:
+   customer.subscription.updated and customer.subscription.deleted are received but effectively no-op.
+
+   Fix:
+   - Add clear internal code comments and developer-facing notes indicating that subscription webhook handling is currently intentionally limited
+   - Log a low-severity integration/debug event when useful, or clearly mark in code that these are reserved for future billing reconciliation/subscription-state features
+   - Do not pretend these webhooks are fully implemented if they are not
+   - Keep this transparent and maintainable
+
+7. Mark reconciliation fields as future-facing or implement minimal safe defaults
+   Problem:
+   expectedAmount, varianceAmount, varianceType, and reconciliationStatus exist in schema but are not meaningfully populated yet.
+
+   Fix:
+   Choose one of these approaches:
+   - Preferred: explicitly mark these fields and related UI as “not yet active” / future billing reconciliation support
+   OR
+   - Minimal implementation: set safe, intentional placeholder values during sync so these fields are not misleading
+   Requirements:
+   - No misleading implied reconciliation logic
+   - No fake precision
+   - Be explicit in code and UI if reconciliation is not active yet
+
+8. Raise the implementation standard across the board
+   Perform a focused quality pass on the Stripe Billing Integration implementation:
+   - verify naming consistency
+   - remove misleading labels
+   - improve inline code comments where behavior is non-obvious
+   - ensure safe error messages
+   - ensure no sensitive values are logged
+   - ensure admin/debug surfaces are accurate and professional
+   - ensure onboarding/readiness messaging reflects actual system behavior, not aspirational behavior
+
+9. Add regression-safe validation
+   After making the fixes:
+   - run or simulate targeted validation on the changed areas
+   - confirm no regressions in:
+     - owner-only mutations
+     - webhook signature verification
+     - idempotent sync behavior
+     - disconnect cleanup
+     - demo mode restrictions
+     - frontend integration timeline
+     - onboarding checklist behavior
+
+Output:
+Return a concise implementation report containing:
+1. What was changed
+2. Any env vars now required
+3. Any UI wording changes
+4. Any behavior changes affecting onboarding
+5. Any remaining intentionally deferred areas
+6. Results of the regression validation for the modified areas

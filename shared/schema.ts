@@ -823,6 +823,8 @@ export const stripeBillingRecords = pgTable("stripe_billing_records", {
   customerEmail: text("customer_email"),
   customerName: text("customer_name"),
   source: text("source").notNull().default("stripe"),
+  // Reconciliation fields — reserved for future billing reconciliation feature.
+  // Not actively populated by current sync logic. Default values are intentional placeholders.
   expectedAmount: integer("expected_amount"),
   varianceAmount: integer("variance_amount"),
   varianceType: text("variance_type").default("none"),
