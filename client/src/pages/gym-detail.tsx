@@ -1251,7 +1251,7 @@ function OnboardingChecklist({ gymId, month }: { gymId: string; month: string })
             <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
               <Gauge className="w-7 h-7 text-primary" />
             </div>
-            <h2 className="text-lg font-bold" data-testid="text-onboarding-title">Set Up Your Stability Engine</h2>
+            <h2 className="text-lg font-bold" data-testid="text-onboarding-title">Set Up Your Command Center</h2>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
               Complete these steps to unlock your retention intelligence for {month}.
             </p>

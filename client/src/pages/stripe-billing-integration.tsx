@@ -54,6 +54,10 @@ import {
   BarChart3,
   AlertCircle,
   Info,
+  Copy,
+  Clipboard,
+  Lightbulb,
+  Sparkles,
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -190,7 +194,7 @@ function getOnboardingPhase(
   const hasDryRun = dataQuality?.hasCompletedDryRun ||
     syncRuns?.some(r => r.isDryRun || r.runType === "dry_run");
   const hasLiveSync = syncRuns?.some(r =>
-    !r.isDryRun && r.runType !== "dry_run" && r.status === "completed"
+    !r.isDryRun && r.runType !== "dry_run" && (r.status === "completed" || r.status === "completed_with_errors")
   );
 
   if (!hasDryRun) return "connected_no_dry_run";
@@ -219,7 +223,7 @@ function getBlockingIssues(
     issues.push("The most recent import failed. Review sync history for details and try again.");
   }
   const hasLiveSync = syncRuns?.some(r =>
-    !r.isDryRun && r.runType !== "dry_run" && r.status === "completed"
+    !r.isDryRun && r.runType !== "dry_run" && (r.status === "completed" || r.status === "completed_with_errors")
   );
   if (hasLiveSync && (dataQuality?.recordCount ?? 0) === 0) {
     issues.push("Live sync completed but no billing records were imported. Verify your Stripe account has payment history.");
@@ -357,7 +361,7 @@ function OnboardingSummaryCard({
 }) {
   const isReady = phase === "ready";
   const hasLiveSync = syncRuns?.some(r =>
-    !r.isDryRun && r.runType !== "dry_run" && r.status === "completed"
+    !r.isDryRun && r.runType !== "dry_run" && (r.status === "completed" || r.status === "completed_with_errors")
   );
 
   return (
@@ -437,7 +441,7 @@ function OnboardingChecklist({ gymId, status, dataQuality, syncRuns, matchCounts
   const hasDryRun = dataQuality?.hasCompletedDryRun ||
     syncRuns?.some(r => r.isDryRun || r.runType === "dry_run");
   const hasLiveSync = syncRuns?.some(r =>
-    !r.isDryRun && r.runType !== "dry_run" && r.status === "completed"
+    !r.isDryRun && r.runType !== "dry_run" && (r.status === "completed" || r.status === "completed_with_errors")
   );
   const hasRecords = (dataQuality?.recordCount || 0) > 0 || (status?.recordsSynced || 0) > 0;
   const hasMatchingRun = (matchCounts?.total || 0) > 0;
@@ -564,6 +568,374 @@ function ReadinessBlock({ label, ok, detail }: { label: string; ok: boolean; det
   );
 }
 
+function getSyncOutcome(run: StripeSyncRun): "success" | "partial" | "failed" {
+  if (run.status === "failed") return "failed";
+  if (run.status === "completed_with_errors" || run.errorCount > 0) return "partial";
+  if (run.status === "completed" || run.status === "dry_run_completed") return "success";
+  return "partial";
+}
+
+function getPartialAccessDiagnostics(run: StripeSyncRun): string[] {
+  const diagnostics: string[] = [];
+  if (run.customersFound > 0 && run.invoicesFound === 0 && run.chargesFound === 0) {
+    diagnostics.push("Customers were retrieved but no invoices or charges were returned. Your Stripe API key may not have read access to payment data.");
+  }
+  if (run.invoicesFound > 0 && run.chargesFound === 0) {
+    diagnostics.push("Invoices are accessible but charges were not returned. Some payment details may be incomplete.");
+  }
+  if (run.chargesFound > 0 && run.invoicesFound === 0) {
+    diagnostics.push("Charges are accessible but invoices were not returned. Subscription billing details may be limited.");
+  }
+  if ((run.invoicesFound > 0 || run.chargesFound > 0) && run.refundsFound === 0) {
+    diagnostics.push("No refund data was returned. Refund tracking will not be available unless your API key has refund read access.");
+  }
+  if ((run.invoicesFound > 0 || run.chargesFound > 0) && run.subscriptionsFound === 0) {
+    diagnostics.push("No subscription data was returned. Recurring billing analysis may be limited.");
+  }
+  if (run.customersFound === 0) {
+    diagnostics.push("No customers were found in your Stripe account for the selected time range. Try expanding the sync window or verify your API key permissions.");
+  }
+  return diagnostics;
+}
+
+function getTroubleshootingGuidance(
+  run: StripeSyncRun | undefined,
+  status: StripeStatus | undefined,
+  matchCounts: MatchCounts | undefined,
+  dataQuality: DataQuality | undefined,
+  events: IntegrationEvent[] | undefined
+): Array<{ scenario: string; guidance: string }> {
+  const tips: Array<{ scenario: string; guidance: string }> = [];
+
+  if (status?.connected && run && run.customersFound === 0) {
+    tips.push({
+      scenario: "No data returned from Stripe",
+      guidance: "Verify your Stripe API key has read access to customers, invoices, and charges. Try expanding the sync window to include older records."
+    });
+  }
+
+  const isRunDryRun = run && (run.isDryRun || run.runType === "dry_run");
+  if (isRunDryRun && run.status !== "failed") {
+    if (run.invoicesFound > 0 || run.chargesFound > 0) {
+      tips.push({
+        scenario: "Preview shows data — ready to import",
+        guidance: "Your dry run found records. Run a live sync to import this data into Iron Metrics."
+      });
+    }
+  }
+
+  if (run && !run.isDryRun && run.status === "completed" && run.recordsCreated === 0 && run.recordsUpdated === 0) {
+    tips.push({
+      scenario: "Import completed but no new records created",
+      guidance: "This can happen if all records were already imported from a previous sync, or if the selected time range has no billable events. Try a wider sync window."
+    });
+  }
+
+  if ((matchCounts?.unmatched || 0) > 10) {
+    tips.push({
+      scenario: "Many unmatched records",
+      guidance: "Import your full member roster before running auto-matching. For remaining unmatched records, use manual matching or mark them as ignored if they are not gym members."
+    });
+  }
+
+  const recentWebhookFailures = events?.filter(e =>
+    e.eventType === "webhook_failure" &&
+    new Date(e.createdAt) > new Date(Date.now() - 24 * 60 * 60 * 1000)
+  ) || [];
+  if (recentWebhookFailures.length > 0) {
+    tips.push({
+      scenario: "Recent webhook failures",
+      guidance: "Check your Stripe webhook configuration. Ensure the endpoint URL is correct and your signing secret matches. Review the activity log for error details."
+    });
+  }
+
+  if (run && getPartialAccessDiagnostics(run).length > 0) {
+    tips.push({
+      scenario: "Partial Stripe data access",
+      guidance: "Your API key may have limited permissions. In Stripe Dashboard, verify the key has read access to Customers, Charges, Invoices, Subscriptions, and Refunds."
+    });
+  }
+
+  if (status?.connected && (status.recordsSynced || 0) > 0 &&
+      (matchCounts?.total || 0) > 0 &&
+      ((matchCounts?.unmatched || 0) + (matchCounts?.ambiguous || 0)) > 0) {
+    tips.push({
+      scenario: "Data imported but matching incomplete",
+      guidance: "Run auto-matching to link Stripe customers to your gym members. Then review any remaining unmatched or ambiguous records manually."
+    });
+  }
+
+  return tips;
+}
+
+function PostSyncVerification({ run, connected, unmatchedCount }: { run: StripeSyncRun; connected?: boolean; unmatchedCount?: number }) {
+  const outcome = getSyncOutcome(run);
+  const diagnostics = getPartialAccessDiagnostics(run);
+  const isDryRun = run.isDryRun || run.runType === "dry_run";
+
+  const outcomeConfig = {
+    success: { label: isDryRun ? "Preview Successful" : "Import Successful", color: "text-green-600", bg: "bg-green-500/5 border-green-500/20", icon: CheckCircle2 },
+    partial: { label: isDryRun ? "Preview Completed with Warnings" : "Import Completed with Warnings", color: "text-yellow-600", bg: "bg-yellow-500/5 border-yellow-500/20", icon: AlertTriangle },
+    failed: { label: isDryRun ? "Preview Failed" : "Import Failed", color: "text-red-600", bg: "bg-red-500/5 border-red-500/20", icon: XCircle },
+  };
+
+  const config = outcomeConfig[outcome];
+  const Icon = config.icon;
+
+  return (
+    <Card className={`border ${config.bg}`} data-testid="card-post-sync-verification">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Icon className={`w-4 h-4 ${config.color}`} />
+          <span className={config.color}>{config.label}</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+          <div>
+            <p className="text-xs text-muted-foreground">Connection</p>
+            <p className={`font-semibold flex items-center gap-1 ${connected ? "text-green-600" : "text-muted-foreground"}`}>
+              {connected ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+              {connected ? "Active" : "Inactive"}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Customers</p>
+            <p className="font-semibold">{run.customersFound.toLocaleString()}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Subscriptions</p>
+            <p className="font-semibold">{run.subscriptionsFound.toLocaleString()}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Invoices</p>
+            <p className="font-semibold">{run.invoicesFound.toLocaleString()}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Charges</p>
+            <p className="font-semibold">{run.chargesFound.toLocaleString()}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Refunds</p>
+            <p className="font-semibold">{run.refundsFound.toLocaleString()}</p>
+          </div>
+          {!isDryRun && (
+            <>
+              <div>
+                <p className="text-xs text-muted-foreground">Records Created</p>
+                <p className="font-semibold">{run.recordsCreated.toLocaleString()}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Records Updated</p>
+                <p className="font-semibold">{run.recordsUpdated.toLocaleString()}</p>
+              </div>
+            </>
+          )}
+          {(unmatchedCount ?? 0) > 0 && !isDryRun && (
+            <div>
+              <p className="text-xs text-muted-foreground">Unmatched</p>
+              <p className="font-semibold text-orange-500">{unmatchedCount}</p>
+            </div>
+          )}
+          {run.errorCount > 0 && (
+            <div>
+              <p className="text-xs text-muted-foreground">Errors</p>
+              <p className="font-semibold text-red-500">{run.errorCount}</p>
+            </div>
+          )}
+        </div>
+
+        {run.warningMessages && (
+          <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-md p-2">
+            <p className="text-xs text-yellow-600 flex items-start gap-1">
+              <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+              {run.warningMessages}
+            </p>
+          </div>
+        )}
+
+        {diagnostics.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-orange-600 flex items-center gap-1">
+              <Info className="w-3 h-3" />
+              Data Access Diagnostics
+            </p>
+            {diagnostics.map((d, i) => (
+              <p key={i} className="text-xs text-muted-foreground ml-4">{d}</p>
+            ))}
+          </div>
+        )}
+
+        {run.errorDetails && (
+          <div className="bg-red-500/5 border border-red-500/20 rounded-md p-2">
+            <p className="text-xs text-red-500">{run.errorDetails}</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function FirstLiveSyncSummary({
+  run,
+  dataQuality,
+  matchCounts,
+  phase,
+}: {
+  run: StripeSyncRun;
+  dataQuality: DataQuality | undefined;
+  matchCounts: MatchCounts | undefined;
+  phase: OnboardingPhase;
+}) {
+  const outcome = getSyncOutcome(run);
+  if (outcome === "failed") return null;
+
+  const isFullyReady = phase === "ready";
+  const needsMatching = (matchCounts?.total || 0) === 0 || (matchCounts?.unmatched || 0) > 0 || (matchCounts?.ambiguous || 0) > 0;
+
+  return (
+    <Card className="border-green-500/20 bg-green-500/5" data-testid="card-first-sync-summary">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-green-500" />
+          First Import Complete
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <p className="text-xs text-muted-foreground">Data Imported</p>
+            <p className="font-semibold flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+              {run.recordsCreated.toLocaleString()} records
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Billing Ready</p>
+            <p className={`font-semibold flex items-center gap-1 ${isFullyReady ? "text-green-600" : "text-yellow-600"}`}>
+              {isFullyReady ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
+              {isFullyReady ? "Yes" : "Not yet"}
+            </p>
+          </div>
+        </div>
+
+        {!isFullyReady && (
+          <div className="bg-white/50 dark:bg-black/20 rounded-md p-3 space-y-2">
+            <p className="text-xs font-medium">What still needs review:</p>
+            <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+              {needsMatching && <li>Run auto-matching to link Stripe customers to gym members.</li>}
+              {(matchCounts?.unmatched || 0) > 0 && <li>Review {matchCounts!.unmatched} unmatched records — match manually or mark as ignored.</li>}
+              {(matchCounts?.ambiguous || 0) > 0 && <li>Review {matchCounts!.ambiguous} ambiguous matches that need confirmation.</li>}
+              {(dataQuality?.customerMatchCoverage ?? 0) < 80 && <li>Customer match coverage is below 80%. Improve matching for accurate billing insights.</li>}
+            </ul>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 text-xs">
+          <ArrowRight className="w-3.5 h-3.5 text-primary" />
+          <span className="font-medium text-primary">
+            {isFullyReady
+              ? "Billing intelligence is now active. You can close this page."
+              : needsMatching
+              ? "Next: Run auto-matching to link customers to members."
+              : "Next: Review and resolve remaining unmatched records."}
+          </span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function TroubleshootingPanel({ tips }: { tips: Array<{ scenario: string; guidance: string }> }) {
+  if (tips.length === 0) return null;
+  return (
+    <Card data-testid="card-troubleshooting">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Lightbulb className="w-4 h-4" />
+          Guidance
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {tips.map((tip, i) => (
+          <div key={i} className="flex items-start gap-3 p-2 rounded-md bg-muted/30" data-testid={`tip-${i}`}>
+            <Info className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium">{tip.scenario}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{tip.guidance}</p>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function CopyOnboardingSummaryButton({
+  gymName,
+  status,
+  dataQuality,
+  syncRuns,
+  matchCounts,
+  phase,
+  blockingIssues,
+}: {
+  gymName: string;
+  status: StripeStatus | undefined;
+  dataQuality: DataQuality | undefined;
+  syncRuns: StripeSyncRun[] | undefined;
+  matchCounts: MatchCounts | undefined;
+  phase: OnboardingPhase;
+  blockingIssues: string[];
+}) {
+  const [copied, setCopied] = useState(false);
+  const hasDryRun = dataQuality?.hasCompletedDryRun ||
+    syncRuns?.some(r => r.isDryRun || r.runType === "dry_run");
+  const hasLiveSync = syncRuns?.some(r =>
+    !r.isDryRun && r.runType !== "dry_run" && (r.status === "completed" || r.status === "completed_with_errors")
+  );
+  const recordCount = dataQuality?.recordCount ?? status?.recordsSynced ?? 0;
+
+  const handleCopy = async () => {
+    const lines = [
+      `Iron Metrics — Billing Onboarding Summary`,
+      `Gym: ${gymName}`,
+      `Date: ${new Date().toLocaleDateString()}`,
+      ``,
+      `Stripe Connected: ${status?.connected ? "Yes" : "No"}`,
+      `Dry Run Completed: ${hasDryRun ? "Yes" : "No"}`,
+      `Live Sync Completed: ${hasLiveSync ? "Yes" : "No"}`,
+      `Billing Records Imported: ${recordCount.toLocaleString()}`,
+      `Customer Match Coverage: ${(matchCounts?.total || 0) > 0 ? `${dataQuality?.customerMatchCoverage ?? 0}%` : "N/A"}`,
+      `Billing Record Coverage: ${recordCount > 0 ? `${dataQuality?.billingRecordCoverage ?? 0}%` : "N/A"}`,
+      ``,
+      `Status: ${PHASE_CONFIG[phase].title}`,
+      `Blocking Issues: ${blockingIssues.length > 0 ? blockingIssues.join("; ") : "None"}`,
+      `Next Action: ${PHASE_CONFIG[phase].action}`,
+    ];
+    try {
+      await navigator.clipboard.writeText(lines.join("\n"));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // fallback
+    }
+  };
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={handleCopy}
+      className="gap-1.5"
+      data-testid="button-copy-summary"
+    >
+      {copied ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500" /> : <Clipboard className="w-3.5 h-3.5" />}
+      {copied ? "Copied" : "Copy Summary"}
+    </Button>
+  );
+}
+
 export default function StripeBillingIntegration() {
   const { id: gymId } = useParams<{ id: string }>();
   const { toast } = useToast();
@@ -577,6 +949,11 @@ export default function StripeBillingIntegration() {
   const [fallbackNotes, setFallbackNotes] = useState("");
   const [notesLoaded, setNotesLoaded] = useState(false);
   const isAdmin = user && PLATFORM_ADMIN_IDS.includes(user.id);
+
+  const { data: gym } = useQuery<{ id: string; name: string }>({
+    queryKey: ["/api/gyms", gymId],
+    enabled: !!gymId,
+  });
 
   const { data: status, isLoading } = useQuery<StripeStatus>({
     queryKey: ["/api/gyms", gymId, "stripe", "status"],
@@ -778,19 +1155,36 @@ export default function StripeBillingIntegration() {
   const latestDryRun = syncRuns?.find(r => r.isDryRun || r.runType === "dry_run");
   const blockingIssues = getBlockingIssues(status, dataQuality, syncRuns, events);
   const phase = getOnboardingPhase(status, dataQuality, syncRuns, matchCounts, blockingIssues);
+  const mostRecentRun = syncRuns?.[0];
+  const firstLiveSync = syncRuns?.find(r => !r.isDryRun && r.runType !== "dry_run" && (r.status === "completed" || r.status === "completed_with_errors"));
+  const troubleshootingTips = getTroubleshootingGuidance(mostRecentRun, status, matchCounts, dataQuality, events);
+  const gymName = gym?.name || "Your Gym";
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center gap-3">
-        <Link href={`/gyms/${gymId}/settings`}>
-          <Button variant="ghost" size="icon" data-testid="button-back">
-            <ArrowLeft className="w-4 h-4" />
-          </Button>
-        </Link>
-        <div>
-          <h1 className="text-xl font-semibold" data-testid="text-page-title">Stripe Billing Integration</h1>
-          <p className="text-sm text-muted-foreground">Import payment history from Stripe to power billing intelligence and retention insights.</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Link href={`/gyms/${gymId}/settings`}>
+            <Button variant="ghost" size="icon" data-testid="button-back">
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
+          </Link>
+          <div>
+            <h1 className="text-xl font-semibold" data-testid="text-page-title">Stripe Billing Integration</h1>
+            <p className="text-sm text-muted-foreground">Import payment history from Stripe to power billing intelligence and retention insights.</p>
+          </div>
         </div>
+        {status?.connected && (
+          <CopyOnboardingSummaryButton
+            gymName={gymName}
+            status={status}
+            dataQuality={dataQuality}
+            syncRuns={syncRuns}
+            matchCounts={matchCounts}
+            phase={phase}
+            blockingIssues={blockingIssues}
+          />
+        )}
       </div>
 
       {isDemoUser && (
@@ -818,6 +1212,21 @@ export default function StripeBillingIntegration() {
       />
 
       <OnboardingChecklist gymId={gymId!} status={status} dataQuality={dataQuality} syncRuns={syncRuns} matchCounts={matchCounts} events={events} />
+
+      {mostRecentRun && mostRecentRun.status !== "running" && (
+        <PostSyncVerification run={mostRecentRun} connected={status?.connected} unmatchedCount={matchCounts?.unmatched} />
+      )}
+
+      {firstLiveSync && phase !== "ready" && (
+        <FirstLiveSyncSummary
+          run={firstLiveSync}
+          dataQuality={dataQuality}
+          matchCounts={matchCounts}
+          phase={phase}
+        />
+      )}
+
+      <TroubleshootingPanel tips={troubleshootingTips} />
 
       <Card data-testid="card-stripe-connection">
         <CardHeader>

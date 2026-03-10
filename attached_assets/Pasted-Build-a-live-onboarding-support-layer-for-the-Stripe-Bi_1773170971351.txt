@@ -1,0 +1,93 @@
+Build a live onboarding support layer for the Stripe Billing Integration in Iron Metrics.
+
+Goal:
+Prepare Iron Metrics for a real gym onboarding session by adding operator-facing diagnostics, troubleshooting guidance, and a clean post-sync verification experience. This is not a new analytics feature. It is a final onboarding support layer for live use.
+
+Requirements:
+
+1. Add a Post-Sync Verification panel
+   After a dry run or live sync, show a concise verification summary including:
+   - Stripe connection status
+   - whether required Stripe object types were accessible
+   - customers retrieved
+   - subscriptions retrieved
+   - invoices retrieved
+   - charges retrieved
+   - refunds retrieved
+   - billing records created
+   - billing records updated
+   - unmatched records count
+   - any warnings
+   The panel should clearly distinguish:
+   - success
+   - partial success
+   - failed
+
+2. Add operator diagnostics for partial access
+   If Stripe returns only some object types, show a clear diagnostic message explaining exactly what was accessible and what was missing.
+   Examples:
+   - invoices accessible, subscriptions unavailable
+   - charges accessible, refunds unavailable
+   - customers accessible but no invoices returned
+   Do not guess. Report what the system actually observed.
+
+3. Add troubleshooting guidance for common onboarding outcomes
+   For these scenarios, show a calm next-step recommendation:
+   - Stripe connected but no data returned
+   - dry run succeeded but live sync created zero billing records
+   - many unmatched records
+   - recent webhook failures
+   - partial Stripe access
+   - successful import but matching still incomplete
+   Each should show one or two practical next actions.
+
+4. Add a first-live-sync results modal or summary state
+   After the first successful live sync, show a dedicated success summary that answers:
+   - Was data imported successfully?
+   - Is billing setup ready yet?
+   - What still needs review?
+   - What should the operator do next?
+   Keep this concise and operational.
+
+5. Add a “copy onboarding summary” action
+   Add a button that copies a short plain-language onboarding summary to clipboard for internal use.
+   Example structure:
+   - Gym name
+   - Stripe connected: yes/no
+   - Dry run completed: yes/no
+   - Live sync completed: yes/no
+   - Billing records imported: X
+   - Customer match coverage: Y%
+   - Billing coverage: Z%
+   - Blocking issues: none / listed
+   - Recommended next action
+   This is for internal operator communication, not for customers.
+
+6. Add stronger surfacing of “usable but not ready” states
+   Distinguish between:
+   - technically connected
+   - imported some data
+   - fully billing-ready
+   The UI should not imply readiness too early.
+
+7. Preserve permissions and product standards
+   Keep all existing owner-only mutations, admin-only debug visibility, demo protections, and current readiness gating.
+   Do not expose secrets or raw technical payloads.
+   Keep wording professional and clear.
+
+8. Final targeted validation
+   After implementation, validate:
+   - post-sync verification rendering
+   - copy onboarding summary action
+   - partial access diagnostics
+   - first live sync summary behavior
+   - troubleshooting guidance visibility
+   - no regressions in readiness status logic
+
+Output:
+Return a concise report describing:
+1. What was added
+2. The different onboarding result states now supported
+3. How partial access is diagnosed
+4. What the copied onboarding summary includes
+5. Results of final targeted validation
