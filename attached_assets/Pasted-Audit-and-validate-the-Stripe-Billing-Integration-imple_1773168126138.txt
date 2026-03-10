@@ -1,0 +1,109 @@
+Audit and validate the Stripe Billing Integration implementation that was just completed.
+
+Goal:
+Systematically test what was built, verify that all intended requirements are actually implemented, identify gaps/bugs/security issues, and produce a clear validation report.
+
+Instructions:
+Perform a full implementation audit across database schema, backend routes, services, permissions, frontend UI, webhook handling, sync logic, and admin tooling.
+
+Validation scope:
+1. Database / schema validation
+   - Confirm all new tables required for Stripe billing integration exist
+   - Confirm all expected columns exist with correct types and relationships
+   - Confirm foreign keys, indexes, and cascade/delete behavior are correct
+   - Confirm billing records can persist normalized Stripe payment history
+   - Confirm sync history and webhook event tracking persist correctly
+
+2. Backend route validation
+   - Verify all intended routes exist and are wired correctly
+   - Verify connect, disconnect, status, sync, billing records, sync history, and webhook routes function as expected
+   - Verify route-level authorization is correct
+   - Confirm only authorized owner/admin roles can perform mutating actions
+   - Check for any broken or insecure access patterns
+
+3. Stripe sync service validation
+   - Verify the sync service actually pulls the intended Stripe objects:
+     - customers
+     - subscriptions
+     - invoices
+     - charges
+     - refunds
+   - Verify normalization into internal billing record storage
+   - Verify duplicate prevention/idempotency behavior
+   - Verify partial failures are handled safely
+   - Verify sync results are recorded in sync history
+
+4. Webhook validation
+   - Verify webhook signature verification is enforced
+   - Verify unsupported or unverified payloads are rejected
+   - Verify webhook events update billing records correctly
+   - Verify webhook events transition through processing states correctly
+   - Verify replay/idempotency protections if applicable
+
+5. Frontend validation
+   - Verify the Billing Integrations page exists and is accessible from Settings
+   - Verify Stripe connection status renders correctly
+   - Verify sync controls work
+   - Verify sync history displays correctly
+   - Verify error/loading/empty states are handled cleanly
+   - Verify admin debug panel is only visible to platform admins
+
+6. Security validation
+   - Verify API keys/tokens are stored securely
+   - Verify secrets are not exposed to client-side code
+   - Verify webhook secret handling is secure
+   - Verify no unsafe bypasses remain
+   - Verify disconnect cleanup does not leave orphaned records or broken references
+
+7. Functional test scenarios
+   Run and document the outcome of these scenarios:
+   - owner connects Stripe successfully
+   - unauthorized user attempts connect/disconnect/sync
+   - sync runs successfully
+   - sync runs twice without duplicating records
+   - webhook event updates an existing billing record
+   - disconnect removes or safely handles dependent records
+   - missing webhook secret causes safe failure, not silent success
+   - integration status page displays accurate data when no Stripe account is connected
+
+8. Gap analysis
+   Compare the implemented system against the intended requirements and explicitly identify:
+   - fully complete items
+   - partially complete items
+   - missing items
+   - incorrect implementations
+   - risky assumptions
+   - anything that was built but not originally requested
+
+Output format:
+Return a structured validation report with these sections:
+
+A. Executive Summary
+- overall status: pass / partial pass / fail
+- readiness level: prototype / beta-ready / needs fixes
+- top 5 issues or risks
+
+B. Requirement-by-Requirement Validation
+For each intended feature, label it:
+- PASS
+- PARTIAL
+- FAIL
+Include short evidence explaining why
+
+C. Security Findings
+List any auth, secret handling, webhook, or data integrity issues
+
+D. Functional Test Results
+Show the result of each major scenario
+
+E. Missing or Weak Areas
+List what still needs to be built or corrected before real gym onboarding
+
+F. Recommended Next Fixes
+Prioritize fixes in order of importance
+
+Important:
+Do not just summarize the code.
+Actually inspect the implementation, trace behavior, and validate that the built system matches the intended requirements.
+Be skeptical and specific.
+Call out false positives where something appears implemented but is not truly complete.
