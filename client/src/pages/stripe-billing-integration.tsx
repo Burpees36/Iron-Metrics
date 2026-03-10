@@ -52,6 +52,8 @@ import {
   CircleDot,
   FileText,
   BarChart3,
+  AlertCircle,
+  Info,
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -167,49 +169,316 @@ const SYNC_WINDOWS = [
   { value: "all", label: "All available" },
 ];
 
-function OnboardingChecklist({ gymId, status, dataQuality, syncRuns, matchCounts }: {
+type OnboardingPhase =
+  | "not_connected"
+  | "connected_no_dry_run"
+  | "dry_run_done"
+  | "live_sync_done_unmatched"
+  | "ready"
+  | "blocked";
+
+function getOnboardingPhase(
+  status: StripeStatus | undefined,
+  dataQuality: DataQuality | undefined,
+  syncRuns: StripeSyncRun[] | undefined,
+  matchCounts: MatchCounts | undefined,
+  blockingIssues: string[]
+): OnboardingPhase {
+  if (!status?.connected) return "not_connected";
+  if (blockingIssues.length > 0) return "blocked";
+
+  const hasDryRun = dataQuality?.hasCompletedDryRun ||
+    syncRuns?.some(r => r.isDryRun || r.runType === "dry_run");
+  const hasLiveSync = syncRuns?.some(r =>
+    !r.isDryRun && r.runType !== "dry_run" && r.status === "completed"
+  );
+
+  if (!hasDryRun) return "connected_no_dry_run";
+  if (!hasLiveSync) return "dry_run_done";
+
+  const hasUnresolved = (matchCounts?.unmatched || 0) > 0 || (matchCounts?.ambiguous || 0) > 0;
+  if (hasUnresolved || (dataQuality?.customerMatchCoverage ?? 0) < 80) return "live_sync_done_unmatched";
+
+  return "ready";
+}
+
+function getBlockingIssues(
+  status: StripeStatus | undefined,
+  dataQuality: DataQuality | undefined,
+  syncRuns: StripeSyncRun[] | undefined,
+  events: IntegrationEvent[] | undefined
+): string[] {
+  const issues: string[] = [];
+  if (!status?.connected) return issues;
+
+  const liveSyncs = (syncRuns || [])
+    .filter(r => !r.isDryRun && r.runType !== "dry_run")
+    .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+  const latestLiveSync = liveSyncs[0];
+  if (latestLiveSync && latestLiveSync.status === "failed") {
+    issues.push("The most recent import failed. Review sync history for details and try again.");
+  }
+  const hasLiveSync = syncRuns?.some(r =>
+    !r.isDryRun && r.runType !== "dry_run" && r.status === "completed"
+  );
+  if (hasLiveSync && (dataQuality?.recordCount ?? 0) === 0) {
+    issues.push("Live sync completed but no billing records were imported. Verify your Stripe account has payment history.");
+  }
+  const recentWebhookFailures = events?.filter(e =>
+    e.eventType === "webhook_failure" &&
+    new Date(e.createdAt) > new Date(Date.now() - 24 * 60 * 60 * 1000)
+  ) || [];
+  if (recentWebhookFailures.length >= 3) {
+    issues.push(`${recentWebhookFailures.length} webhook failures in the last 24 hours. Check your Stripe webhook configuration.`);
+  }
+  if (status?.lastErrorMessage && status.lastErrorAt) {
+    const errorAge = Date.now() - new Date(status.lastErrorAt).getTime();
+    if (errorAge < 48 * 60 * 60 * 1000) {
+      issues.push(`Recent error: ${status.lastErrorMessage}`);
+    }
+  }
+  return issues;
+}
+
+const PHASE_CONFIG: Record<OnboardingPhase, { title: string; description: string; action: string; variant: "default" | "info" | "warning" | "success" | "destructive" }> = {
+  not_connected: {
+    title: "Stripe Not Connected",
+    description: "Connect your Stripe account to begin importing payment history. Iron Metrics uses your billing data to generate retention and revenue intelligence.",
+    action: "Connect your Stripe API key to get started.",
+    variant: "default",
+  },
+  connected_no_dry_run: {
+    title: "Connection Established — Run a Preview",
+    description: "Your Stripe account is connected. Before importing data, run a dry run to preview what will be imported. This does not create any records.",
+    action: "Run a dry run to preview your Stripe data.",
+    variant: "info",
+  },
+  dry_run_done: {
+    title: "Preview Complete — Ready for Import",
+    description: "Your dry run is complete. Review the results above, then run a live sync to import your payment history into Iron Metrics.",
+    action: "Run a live sync to import payment records.",
+    variant: "info",
+  },
+  live_sync_done_unmatched: {
+    title: "Payment Data Imported — Matching Needed",
+    description: "Payment records have been imported. Some Stripe customers have not been matched to your gym members. Review and resolve unmatched records to ensure accurate billing intelligence.",
+    action: "Review and resolve unmatched billing records.",
+    variant: "warning",
+  },
+  ready: {
+    title: "Billing Setup Complete",
+    description: "Your Stripe integration is fully configured. Payment data is imported and customer records are matched. Billing intelligence is active.",
+    action: "Billing setup is ready. No action needed.",
+    variant: "success",
+  },
+  blocked: {
+    title: "Setup Blocked — Action Required",
+    description: "One or more issues are preventing the billing integration from functioning correctly. Review the blocking issues below and resolve them to continue.",
+    action: "Resolve blocking issues before proceeding.",
+    variant: "destructive",
+  },
+};
+
+function OnboardingStatusBanner({ phase }: { phase: OnboardingPhase }) {
+  const config = PHASE_CONFIG[phase];
+  const bgClass =
+    config.variant === "success" ? "bg-green-500/5 border-green-500/30" :
+    config.variant === "destructive" ? "bg-red-500/5 border-red-500/30" :
+    config.variant === "warning" ? "bg-yellow-500/5 border-yellow-500/30" :
+    config.variant === "info" ? "bg-blue-500/5 border-blue-500/30" :
+    "bg-muted/30 border-border";
+  const iconClass =
+    config.variant === "success" ? "text-green-500" :
+    config.variant === "destructive" ? "text-red-500" :
+    config.variant === "warning" ? "text-yellow-500" :
+    config.variant === "info" ? "text-blue-500" :
+    "text-muted-foreground";
+  const Icon =
+    config.variant === "success" ? CheckCircle2 :
+    config.variant === "destructive" ? AlertCircle :
+    config.variant === "warning" ? AlertTriangle :
+    Info;
+
+  return (
+    <Card className={`border ${bgClass}`} data-testid="card-onboarding-status">
+      <CardContent className="p-4 space-y-2">
+        <div className="flex items-start gap-3">
+          <Icon className={`w-5 h-5 ${iconClass} shrink-0 mt-0.5`} />
+          <div className="space-y-1">
+            <p className="font-medium text-sm" data-testid="text-onboarding-title">{config.title}</p>
+            <p className="text-sm text-muted-foreground" data-testid="text-onboarding-description">{config.description}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 ml-8">
+          <ArrowRight className="w-3.5 h-3.5 text-primary shrink-0" />
+          <p className="text-sm font-medium text-primary" data-testid="text-onboarding-action">{config.action}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function BlockingIssuesBanner({ issues }: { issues: string[] }) {
+  if (issues.length === 0) return null;
+  return (
+    <Card className="border-red-500/40 bg-red-500/5" data-testid="card-blocking-issues">
+      <CardContent className="p-4 space-y-2">
+        <div className="flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+          <p className="text-sm font-semibold text-red-600 dark:text-red-400">Blocking Issues</p>
+        </div>
+        <div className="space-y-1.5 ml-6">
+          {issues.map((issue, i) => (
+            <p key={i} className="text-sm text-red-600 dark:text-red-400 flex items-start gap-2" data-testid={`text-blocking-issue-${i}`}>
+              <span className="shrink-0 mt-1">•</span>
+              <span>{issue}</span>
+            </p>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function OnboardingSummaryCard({
+  status,
+  dataQuality,
+  syncRuns,
+  matchCounts,
+  phase,
+  blockingIssues,
+}: {
+  status: StripeStatus | undefined;
+  dataQuality: DataQuality | undefined;
+  syncRuns: StripeSyncRun[] | undefined;
+  matchCounts: MatchCounts | undefined;
+  phase: OnboardingPhase;
+  blockingIssues: string[];
+}) {
+  const isReady = phase === "ready";
+  const hasLiveSync = syncRuns?.some(r =>
+    !r.isDryRun && r.runType !== "dry_run" && r.status === "completed"
+  );
+
+  return (
+    <Card data-testid="card-onboarding-summary">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <BarChart3 className="w-4 h-4" />
+          Billing Readiness Summary
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">Status</p>
+            <div className="flex items-center gap-1.5">
+              {isReady ? (
+                <CheckCircle2 className="w-4 h-4 text-green-500" />
+              ) : blockingIssues.length > 0 ? (
+                <AlertCircle className="w-4 h-4 text-red-500" />
+              ) : (
+                <Clock className="w-4 h-4 text-yellow-500" />
+              )}
+              <span className={`text-sm font-semibold ${isReady ? "text-green-600" : blockingIssues.length > 0 ? "text-red-600" : "text-yellow-600"}`} data-testid="text-summary-status">
+                {isReady ? "Ready" : blockingIssues.length > 0 ? "Blocked" : "In Progress"}
+              </span>
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">Records Imported</p>
+            <p className="text-sm font-semibold" data-testid="text-summary-records">
+              {hasLiveSync ? (dataQuality?.recordCount ?? status?.recordsSynced ?? 0).toLocaleString() : "—"}
+            </p>
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">Customer Match</p>
+            <p className="text-sm font-semibold" data-testid="text-summary-customer-match">
+              {(matchCounts?.total || 0) > 0 ? `${dataQuality?.customerMatchCoverage ?? 0}%` : "—"}
+            </p>
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">Billing Coverage</p>
+            <p className="text-sm font-semibold" data-testid="text-summary-billing-coverage">
+              {(dataQuality?.recordCount || 0) > 0 ? `${dataQuality?.billingRecordCoverage ?? 0}%` : "—"}
+            </p>
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">Blocking Issues</p>
+            <p className={`text-sm font-semibold ${blockingIssues.length > 0 ? "text-red-600" : "text-green-600"}`} data-testid="text-summary-blockers">
+              {blockingIssues.length > 0 ? `${blockingIssues.length} issue${blockingIssues.length > 1 ? "s" : ""}` : "None"}
+            </p>
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">Next Action</p>
+            <p className="text-sm font-medium text-primary" data-testid="text-summary-next-action">
+              {PHASE_CONFIG[phase].action.split(".")[0]}
+            </p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function OnboardingChecklist({ gymId, status, dataQuality, syncRuns, matchCounts, events }: {
   gymId: string;
   status: StripeStatus | undefined;
   dataQuality: DataQuality | undefined;
   syncRuns: StripeSyncRun[] | undefined;
   matchCounts: MatchCounts | undefined;
+  events: IntegrationEvent[] | undefined;
 }) {
-  const hasDryRun = syncRuns?.some(r => r.isDryRun || r.runType === "dry_run");
-  const hasLiveSync = syncRuns?.some(r => !r.isDryRun && r.runType !== "dry_run" && r.status !== "failed");
+  const hasDryRun = dataQuality?.hasCompletedDryRun ||
+    syncRuns?.some(r => r.isDryRun || r.runType === "dry_run");
+  const hasLiveSync = syncRuns?.some(r =>
+    !r.isDryRun && r.runType !== "dry_run" && r.status === "completed"
+  );
+  const hasRecords = (dataQuality?.recordCount || 0) > 0 || (status?.recordsSynced || 0) > 0;
   const hasMatchingRun = (matchCounts?.total || 0) > 0;
-  const isReady = dataQuality?.overallStatus === "ready";
+  const customerCoverageOk = (dataQuality?.customerMatchCoverage ?? 0) >= 80;
+  const billingCoverageOk = (dataQuality?.billingRecordCoverage ?? 0) >= 80;
+  const blockingIssues = getBlockingIssues(status, dataQuality, syncRuns, events);
+  const noBlockers = blockingIssues.length === 0;
 
   const steps = [
-    { label: "Connect Stripe", done: !!status?.connected, description: "Link your Stripe API key" },
-    { label: "Run dry-run sync", done: !!hasDryRun, description: "Preview what will be imported" },
-    { label: "Review dry-run results", done: hasDryRun && !!hasLiveSync, description: "Confirm the data looks right" },
-    { label: "Run live sync", done: !!hasLiveSync, description: "Import payment history" },
-    { label: "Run member matching", done: !!hasMatchingRun, description: "Link Stripe customers to members" },
-    { label: "Review matching results", done: hasMatchingRun && (matchCounts?.unmatched || 0) === 0 && (matchCounts?.ambiguous || 0) === 0, description: "Resolve unmatched records" },
-    { label: "Confirm billing data readiness", done: isReady, description: "Data quality passes all checks" },
+    { label: "Connect Stripe account", done: !!status?.connected, description: "Provide your Stripe API key to establish a secure connection." },
+    { label: "Run a dry run", done: !!hasDryRun, description: "Preview the data that will be imported without making changes." },
+    { label: "Complete first live sync", done: !!hasLiveSync, description: "Import your payment history into Iron Metrics." },
+    { label: "Verify billing records imported", done: hasRecords && !!hasLiveSync, description: "Confirm that payment records were successfully imported." },
+    { label: "Review customer match coverage", done: hasMatchingRun && customerCoverageOk, description: "Ensure most Stripe customers are linked to gym members." },
+    { label: "Review billing record coverage", done: hasMatchingRun && billingCoverageOk, description: "Ensure most billing records are associated with known members." },
+    { label: "No blocking errors", done: !!status?.connected && noBlockers, description: "All setup checks pass with no critical issues." },
   ];
 
+  const completedCount = steps.filter(s => s.done).length;
   const currentStep = steps.findIndex(s => !s.done);
   const nextAction = currentStep >= 0 ? steps[currentStep] : null;
 
   return (
     <Card data-testid="card-onboarding-checklist">
       <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
-          <ListChecks className="w-4 h-4" />
-          Billing Integration Setup
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <ListChecks className="w-4 h-4" />
+            Setup Checklist
+          </CardTitle>
+          <Badge variant="outline" className="text-xs" data-testid="badge-checklist-progress">
+            {completedCount} of {steps.length} complete
+          </Badge>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          Iron Metrics combines Stripe payment outcomes with your member data to deliver billing intelligence.
-        </p>
-
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {steps.map((step, i) => (
             <div
               key={i}
-              className={`flex items-center gap-3 p-2 rounded-md text-sm ${i === currentStep ? "bg-primary/5 border border-primary/20" : ""}`}
+              className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm ${i === currentStep ? "bg-primary/5 border border-primary/20" : ""}`}
               data-testid={`step-${i}`}
             >
               {step.done ? (
@@ -220,12 +489,12 @@ function OnboardingChecklist({ gymId, status, dataQuality, syncRuns, matchCounts
                 <div className="w-4 h-4 rounded-full border-2 border-muted-foreground/30 shrink-0" />
               )}
               <div className="flex-1 min-w-0">
-                <span className={step.done ? "text-muted-foreground line-through" : ""}>{step.label}</span>
+                <span className={step.done ? "text-muted-foreground" : ""}>{step.label}</span>
                 {i === currentStep && (
-                  <p className="text-xs text-muted-foreground">{step.description}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{step.description}</p>
                 )}
               </div>
-              {step.done && <Badge variant="outline" className="text-xs border-green-500/50 text-green-600 shrink-0">Done</Badge>}
+              {step.done && <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />}
             </div>
           ))}
         </div>
@@ -233,7 +502,14 @@ function OnboardingChecklist({ gymId, status, dataQuality, syncRuns, matchCounts
         {nextAction && (
           <div className="bg-primary/5 border border-primary/20 rounded-md p-3 flex items-center gap-2">
             <ArrowRight className="w-4 h-4 text-primary shrink-0" />
-            <p className="text-sm"><span className="font-medium">Next:</span> {nextAction.description}</p>
+            <p className="text-sm"><span className="font-medium">Next step:</span> {nextAction.description}</p>
+          </div>
+        )}
+
+        {completedCount === steps.length && (
+          <div className="bg-green-500/5 border border-green-500/20 rounded-md p-3 flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+            <p className="text-sm font-medium text-green-600">All setup steps are complete. Billing intelligence is active.</p>
           </div>
         )}
       </CardContent>
@@ -254,6 +530,14 @@ function MatchStatusBadge({ status }: { status: string }) {
 }
 
 function SyncStatusBadge({ status }: { status: string }) {
+  const label =
+    status === "completed" ? "Completed" :
+    status === "dry_run_completed" ? "Preview Complete" :
+    status === "running" ? "Running" :
+    status === "completed_with_errors" ? "Completed with Errors" :
+    status === "failed" ? "Failed" :
+    status.replace(/_/g, " ");
+
   const className =
     status === "completed" ? "border-green-500/50 text-green-600" :
     status === "dry_run_completed" ? "border-blue-500/50 text-blue-600" :
@@ -263,8 +547,20 @@ function SyncStatusBadge({ status }: { status: string }) {
   return (
     <Badge variant="outline" className={className}>
       {status === "running" && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
-      {status.replace(/_/g, " ")}
+      {label}
     </Badge>
+  );
+}
+
+function ReadinessBlock({ label, ok, detail }: { label: string; ok: boolean; detail: string }) {
+  return (
+    <div className={`rounded-md p-2.5 border text-center ${ok ? "border-green-500/20 bg-green-500/5" : "border-orange-500/20 bg-orange-500/5"}`}>
+      <div className="flex items-center justify-center gap-1.5 mb-1">
+        {ok ? <CheckCircle2 className="w-3 h-3 text-green-500" /> : <AlertTriangle className="w-3 h-3 text-orange-500" />}
+        <span className="text-xs font-medium">{label}</span>
+      </div>
+      <p className="text-xs text-muted-foreground">{detail}</p>
+    </div>
   );
 }
 
@@ -348,7 +644,7 @@ export default function StripeBillingIntegration() {
       invalidateAll();
       setApiKey("");
       setShowApiKeyInput(false);
-      toast({ title: "Stripe connected", description: "Run a dry-run sync to preview data before importing." });
+      toast({ title: "Stripe connected", description: "Your Stripe account is now linked. Run a dry run to preview your data." });
     },
     onError: (err: any) => {
       toast({ title: "Connection failed", description: err.message, variant: "destructive" });
@@ -359,7 +655,7 @@ export default function StripeBillingIntegration() {
     mutationFn: async () => { await apiRequest("DELETE", `/api/gyms/${gymId}/stripe/connect`); },
     onSuccess: () => {
       invalidateAll();
-      toast({ title: "Stripe disconnected" });
+      toast({ title: "Stripe disconnected", description: "Your Stripe account has been unlinked. Existing billing records are preserved." });
     },
   });
 
@@ -391,10 +687,10 @@ export default function StripeBillingIntegration() {
         return;
       }
       if (variables.dryRun) {
-        toast({ title: "Dry run completed", description: "Review the results below before running a live sync." });
+        toast({ title: "Dry run complete", description: "Preview results are ready. Review them below before running a live sync." });
         invalidateAll();
       } else {
-        toast({ title: "Sync started", description: "Payment history import is running in the background." });
+        toast({ title: "Live sync started", description: "Payment history is being imported. This may take a few moments." });
         setTimeout(invalidateAll, 5000);
       }
     },
@@ -410,7 +706,7 @@ export default function StripeBillingIntegration() {
     },
     onSuccess: (data) => {
       invalidateAll();
-      toast({ title: "Matching completed", description: `${data.matched} matched, ${data.ambiguous} ambiguous, ${data.unmatched} unmatched` });
+      toast({ title: "Matching complete", description: `${data.matched} matched, ${data.ambiguous} need review, ${data.unmatched} unmatched.` });
     },
     onError: (err: any) => {
       toast({ title: "Matching failed", description: err.message, variant: "destructive" });
@@ -424,7 +720,7 @@ export default function StripeBillingIntegration() {
     },
     onSuccess: (data) => {
       invalidateAll();
-      toast({ title: "Re-matching completed", description: `${data.matched} matched, ${data.ambiguous} ambiguous, ${data.unmatched} unmatched` });
+      toast({ title: "Re-matching complete", description: `${data.matched} matched, ${data.ambiguous} need review, ${data.unmatched} unmatched.` });
     },
   });
 
@@ -434,7 +730,7 @@ export default function StripeBillingIntegration() {
     },
     onSuccess: () => {
       invalidateAll();
-      toast({ title: "Member matched" });
+      toast({ title: "Member matched", description: "Stripe customer linked to gym member." });
     },
   });
 
@@ -444,7 +740,7 @@ export default function StripeBillingIntegration() {
     },
     onSuccess: () => {
       invalidateAll();
-      toast({ title: "Record unmatched" });
+      toast({ title: "Record unmatched", description: "Customer link removed. You can re-match or ignore this record." });
     },
   });
 
@@ -454,7 +750,7 @@ export default function StripeBillingIntegration() {
     },
     onSuccess: () => {
       invalidateAll();
-      toast({ title: "Record ignored" });
+      toast({ title: "Record ignored", description: "This Stripe customer will be excluded from match coverage calculations." });
     },
   });
 
@@ -471,6 +767,8 @@ export default function StripeBillingIntegration() {
     return (
       <div className="p-6 max-w-4xl mx-auto space-y-4">
         <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-48 w-full" />
         <Skeleton className="h-48 w-full" />
       </div>
     );
@@ -478,7 +776,8 @@ export default function StripeBillingIntegration() {
 
   const windowDays = syncWindow === "all" ? undefined : Number(syncWindow);
   const latestDryRun = syncRuns?.find(r => r.isDryRun || r.runType === "dry_run");
-  const hasDryRun = !!latestDryRun;
+  const blockingIssues = getBlockingIssues(status, dataQuality, syncRuns, events);
+  const phase = getOnboardingPhase(status, dataQuality, syncRuns, matchCounts, blockingIssues);
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -490,7 +789,7 @@ export default function StripeBillingIntegration() {
         </Link>
         <div>
           <h1 className="text-xl font-semibold" data-testid="text-page-title">Stripe Billing Integration</h1>
-          <p className="text-sm text-muted-foreground">Connect your Stripe account to import payment history and enable billing intelligence.</p>
+          <p className="text-sm text-muted-foreground">Import payment history from Stripe to power billing intelligence and retention insights.</p>
         </div>
       </div>
 
@@ -499,19 +798,32 @@ export default function StripeBillingIntegration() {
           <CardContent className="p-4 flex items-center gap-3">
             <AlertTriangle className="w-4 h-4 text-yellow-500 shrink-0" />
             <p className="text-sm text-yellow-600 dark:text-yellow-400" data-testid="text-demo-warning">
-              Stripe integration is disabled in demo mode.
+              You are viewing the billing integration in demo mode. Connection, sync, and matching controls are disabled.
             </p>
           </CardContent>
         </Card>
       )}
 
-      <OnboardingChecklist gymId={gymId!} status={status} dataQuality={dataQuality} syncRuns={syncRuns} matchCounts={matchCounts} />
+      <OnboardingStatusBanner phase={phase} />
+
+      <BlockingIssuesBanner issues={blockingIssues} />
+
+      <OnboardingSummaryCard
+        status={status}
+        dataQuality={dataQuality}
+        syncRuns={syncRuns}
+        matchCounts={matchCounts}
+        phase={phase}
+        blockingIssues={blockingIssues}
+      />
+
+      <OnboardingChecklist gymId={gymId!} status={status} dataQuality={dataQuality} syncRuns={syncRuns} matchCounts={matchCounts} events={events} />
 
       <Card data-testid="card-stripe-connection">
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <CreditCard className="w-4 h-4" />
-            Connection Status
+            Stripe Connection
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -540,7 +852,7 @@ export default function StripeBillingIntegration() {
           {status?.connected && (
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <p className="text-muted-foreground">API Key</p>
+                <p className="text-muted-foreground text-xs">API Key</p>
                 <p className="font-mono text-xs" data-testid="text-api-fingerprint">
                   <Shield className="w-3 h-3 inline mr-1" />
                   {status.apiKeyFingerprint}
@@ -548,29 +860,28 @@ export default function StripeBillingIntegration() {
               </div>
               {status.stripeAccountId && (
                 <div>
-                  <p className="text-muted-foreground">Account ID</p>
+                  <p className="text-muted-foreground text-xs">Account</p>
                   <p className="font-mono text-xs" data-testid="text-account-id">{status.stripeAccountId}</p>
                 </div>
               )}
               <div>
-                <p className="text-muted-foreground">Connected</p>
-                <p data-testid="text-connected-at">{status.connectedAt ? new Date(status.connectedAt).toLocaleDateString() : "—"}</p>
+                <p className="text-muted-foreground text-xs">Connected</p>
+                <p className="text-xs" data-testid="text-connected-at">{status.connectedAt ? new Date(status.connectedAt).toLocaleDateString() : "—"}</p>
               </div>
               <div>
-                <p className="text-muted-foreground">Last Sync</p>
-                <p data-testid="text-last-sync">{status.lastSyncAt ? new Date(status.lastSyncAt).toLocaleString() : "Never"}</p>
+                <p className="text-muted-foreground text-xs">Last Sync</p>
+                <p className="text-xs" data-testid="text-last-sync">{status.lastSyncAt ? new Date(status.lastSyncAt).toLocaleString() : "No sync yet"}</p>
               </div>
               <div>
-                <p className="text-muted-foreground">Records Imported</p>
-                <p className="font-semibold" data-testid="text-records-synced">
-                  <Database className="w-3 h-3 inline mr-1" />{status.recordsSynced ?? 0}
+                <p className="text-muted-foreground text-xs">Records Imported</p>
+                <p className="font-semibold text-xs" data-testid="text-records-synced">
+                  <Database className="w-3 h-3 inline mr-1" />{(status.recordsSynced ?? 0).toLocaleString()}
                 </p>
               </div>
               {status.lastErrorMessage && (
-                <div className="col-span-2">
-                  <p className="text-muted-foreground">Last Error</p>
-                  <p className="text-red-500 text-xs" data-testid="text-last-error">
-                    <AlertTriangle className="w-3 h-3 inline mr-1" />{status.lastErrorMessage}
+                <div className="col-span-2 bg-red-500/5 border border-red-500/20 rounded-md p-2">
+                  <p className="text-xs text-red-500 flex items-start gap-1" data-testid="text-last-error">
+                    <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />{status.lastErrorMessage}
                   </p>
                 </div>
               )}
@@ -582,25 +893,25 @@ export default function StripeBillingIntegration() {
               {showApiKeyInput ? (
                 <div className="space-y-3">
                   <div>
-                    <Label htmlFor="stripe-key">Stripe Secret Key</Label>
+                    <Label htmlFor="stripe-key">Stripe Restricted API Key</Label>
                     <Input
                       id="stripe-key"
                       type="password"
-                      placeholder="sk_live_... or sk_test_..."
+                      placeholder="rk_live_... or sk_test_..."
                       value={apiKey}
                       onChange={(e) => setApiKey(e.target.value)}
                       data-testid="input-stripe-key"
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      Find your API key in{" "}
+                      Use a restricted key with read-only access for security. Find your keys in{" "}
                       <a href="https://dashboard.stripe.com/apikeys" target="_blank" rel="noreferrer" className="text-primary underline">
-                        Stripe Dashboard → Developers → API Keys
+                        Stripe Dashboard
                         <ExternalLink className="w-3 h-3 inline ml-0.5" />
                       </a>
                     </p>
                   </div>
                   <div className="flex gap-2">
-                    <Button onClick={() => connectMutation.mutate(apiKey)} disabled={connectMutation.isPending || !apiKey.startsWith("sk_")} data-testid="button-connect-confirm">
+                    <Button onClick={() => connectMutation.mutate(apiKey)} disabled={connectMutation.isPending || !apiKey.startsWith("sk_") && !apiKey.startsWith("rk_")} data-testid="button-connect-confirm">
                       {connectMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CreditCard className="w-4 h-4 mr-2" />}
                       Connect
                     </Button>
@@ -608,12 +919,23 @@ export default function StripeBillingIntegration() {
                   </div>
                 </div>
               ) : (
-                <Button onClick={() => setShowApiKeyInput(true)} className="w-full" data-testid="button-connect-stripe">
-                  <CreditCard className="w-4 h-4 mr-2" />
-                  Connect Stripe
-                </Button>
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Link your Stripe account to import invoices, charges, and subscription data. Your API key is encrypted and stored securely.
+                  </p>
+                  <Button onClick={() => setShowApiKeyInput(true)} className="w-full" data-testid="button-connect-stripe">
+                    <CreditCard className="w-4 h-4 mr-2" />
+                    Connect Stripe Account
+                  </Button>
+                </div>
               )}
             </>
+          )}
+
+          {!status?.connected && isDemoUser && (
+            <p className="text-sm text-muted-foreground">
+              In demo mode, the connection panel shows what a gym owner would see before linking their Stripe account.
+            </p>
           )}
         </CardContent>
       </Card>
@@ -623,13 +945,18 @@ export default function StripeBillingIntegration() {
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <RefreshCw className="w-4 h-4" />
-              Sync Controls
+              Data Sync
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {!dataQuality?.hasCompletedDryRun
+                ? "Start with a dry run to preview the data available in your Stripe account. No records will be created."
+                : "Run a sync to import or refresh your payment data. Dry runs preview without importing."}
+            </p>
             <div className="flex items-center gap-3">
               <div className="flex-1">
-                <Label className="text-xs text-muted-foreground">Sync Window</Label>
+                <Label className="text-xs text-muted-foreground">Time Range</Label>
                 <Select value={syncWindow} onValueChange={setSyncWindow}>
                   <SelectTrigger className="mt-1" data-testid="select-sync-window">
                     <SelectValue />
@@ -652,28 +979,35 @@ export default function StripeBillingIntegration() {
                 data-testid="button-dry-run"
               >
                 {syncMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileText className="w-4 h-4 mr-2" />}
-                Run Dry Run
+                Preview Data (Dry Run)
               </Button>
               <Button
                 onClick={() => syncMutation.mutate({ windowDays })}
                 disabled={syncMutation.isPending || !dataQuality?.hasCompletedDryRun}
                 className="flex-1"
                 data-testid="button-live-sync"
-                title={!dataQuality?.hasCompletedDryRun ? "Run a dry run first to preview data" : undefined}
+                title={!dataQuality?.hasCompletedDryRun ? "Complete a dry run first to preview data" : "Import payment data from Stripe"}
               >
                 {syncMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-                Run Live Sync
+                Import Data (Live Sync)
               </Button>
             </div>
+
+            {!dataQuality?.hasCompletedDryRun && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                <Info className="w-3 h-3 shrink-0" />
+                A dry run is required before your first live sync. This lets you review the data before importing.
+              </p>
+            )}
 
             {showSyncConfirm && (
               <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-md p-3 space-y-2" data-testid="sync-confirmation">
                 <p className="text-sm font-medium flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 text-yellow-500" />
-                  First Live Sync Confirmation
+                  Confirm First Import
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  This will import payment records into your gym's billing data. This action creates new records based on your Stripe account data.
+                  This will create billing records in Iron Metrics from your Stripe payment history. Subsequent syncs will update existing records.
                 </p>
                 <div className="flex gap-2">
                   <Button
@@ -685,7 +1019,7 @@ export default function StripeBillingIntegration() {
                     disabled={syncMutation.isPending}
                     data-testid="button-confirm-sync"
                   >
-                    Confirm & Sync
+                    Confirm & Import
                   </Button>
                   <Button
                     size="sm"
@@ -703,7 +1037,7 @@ export default function StripeBillingIntegration() {
               <div className="bg-blue-500/5 border border-blue-500/20 rounded-md p-3 space-y-2" data-testid="dry-run-results">
                 <p className="text-sm font-medium flex items-center gap-2">
                   <FileText className="w-4 h-4 text-blue-500" />
-                  Dry Run Results
+                  Preview Results
                 </p>
                 <div className="grid grid-cols-3 gap-2 text-xs">
                   <div><span className="text-muted-foreground">Customers:</span> {latestDryRun.dryRunSummary.customersFound}</div>
@@ -711,7 +1045,7 @@ export default function StripeBillingIntegration() {
                   <div><span className="text-muted-foreground">Invoices:</span> {latestDryRun.dryRunSummary.invoicesFound}</div>
                   <div><span className="text-muted-foreground">Charges:</span> {latestDryRun.dryRunSummary.chargesFound}</div>
                   <div><span className="text-muted-foreground">Refunds:</span> {latestDryRun.dryRunSummary.refundsFound}</div>
-                  <div><span className="text-muted-foreground">Est. New Records:</span> {latestDryRun.dryRunSummary.estimatedNewRecords}</div>
+                  <div><span className="text-muted-foreground">Est. Records:</span> {latestDryRun.dryRunSummary.estimatedNewRecords}</div>
                 </div>
                 {latestDryRun.dryRunSummary.warnings?.length > 0 && (
                   <div className="space-y-1">
@@ -728,7 +1062,7 @@ export default function StripeBillingIntegration() {
         </Card>
       )}
 
-      {syncRuns && syncRuns.length > 0 && (
+      {syncRuns && syncRuns.length > 0 ? (
         <Card data-testid="card-sync-history">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
@@ -754,16 +1088,16 @@ export default function StripeBillingIntegration() {
                     <TableRow key={run.id} className="border-border/30" data-testid={`row-sync-${run.id}`}>
                       <TableCell className="text-xs">
                         <Badge variant="secondary" className="text-xs">
-                          {run.isDryRun || run.runType === "dry_run" ? "Dry Run" : "Live"}
+                          {run.isDryRun || run.runType === "dry_run" ? "Preview" : "Import"}
                         </Badge>
                       </TableCell>
                       <TableCell><SyncStatusBadge status={run.status} /></TableCell>
                       <TableCell className="text-xs text-muted-foreground">{new Date(run.startedAt).toLocaleString()}</TableCell>
-                      <TableCell className="text-xs">{run.syncWindowDays ? `${run.syncWindowDays}d` : "All"}</TableCell>
+                      <TableCell className="text-xs">{run.syncWindowDays ? `${run.syncWindowDays} days` : "All"}</TableCell>
                       <TableCell className="text-xs">
                         {run.isDryRun || run.runType === "dry_run"
-                          ? `~${run.invoicesFound} inv`
-                          : `${run.recordsCreated}↑ ${run.recordsUpdated}↻`
+                          ? `~${run.invoicesFound} invoices`
+                          : `${run.recordsCreated} new, ${run.recordsUpdated} updated`
                         }
                       </TableCell>
                       <TableCell className="text-xs">
@@ -776,20 +1110,36 @@ export default function StripeBillingIntegration() {
             </div>
           </CardContent>
         </Card>
-      )}
+      ) : status?.connected ? (
+        <Card data-testid="card-sync-history-empty">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Clock className="w-4 h-4" />
+              Sync History
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-center py-6">
+              <Clock className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">No sync history yet.</p>
+              <p className="text-xs text-muted-foreground mt-1">Run a dry run to preview your Stripe data before importing.</p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {status?.connected && (
         <Card data-testid="card-member-matching">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <Users className="w-4 h-4" />
-              Member Matching
+              Customer Matching
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {matchCounts && matchCounts.total > 0 ? (
               <>
-                <div className="grid grid-cols-4 gap-3 text-center">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
                   <div className="bg-green-500/5 border border-green-500/20 rounded-md p-2">
                     <p className="text-lg font-semibold text-green-600" data-testid="text-matched-count">{matchCounts.matched}</p>
                     <p className="text-xs text-muted-foreground">Matched</p>
@@ -800,13 +1150,26 @@ export default function StripeBillingIntegration() {
                   </div>
                   <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-md p-2">
                     <p className="text-lg font-semibold text-yellow-600" data-testid="text-ambiguous-count">{matchCounts.ambiguous}</p>
-                    <p className="text-xs text-muted-foreground">Ambiguous</p>
+                    <p className="text-xs text-muted-foreground">Need Review</p>
                   </div>
                   <div className="bg-muted/30 rounded-md p-2">
                     <p className="text-lg font-semibold text-muted-foreground" data-testid="text-ignored-count">{matchCounts.ignored}</p>
                     <p className="text-xs text-muted-foreground">Ignored</p>
                   </div>
                 </div>
+
+                {(matchCounts.unmatched > 0 || matchCounts.ambiguous > 0) && (
+                  <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-md p-3 flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-yellow-500 shrink-0 mt-0.5" />
+                    <p className="text-sm text-muted-foreground">
+                      {matchCounts.unmatched > 0 && matchCounts.ambiguous > 0
+                        ? `${matchCounts.unmatched} Stripe customers could not be matched and ${matchCounts.ambiguous} need manual review. Match or ignore these records to improve billing coverage.`
+                        : matchCounts.unmatched > 0
+                        ? `${matchCounts.unmatched} Stripe customers could not be matched to gym members. Match or ignore these records.`
+                        : `${matchCounts.ambiguous} Stripe customers have ambiguous matches. Review and confirm the correct member.`}
+                    </p>
+                  </div>
+                )}
 
                 <div className="flex items-center gap-2">
                   <div className="flex-1">
@@ -826,15 +1189,25 @@ export default function StripeBillingIntegration() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="all">All Records</SelectItem>
                       <SelectItem value="unmatched">Unmatched</SelectItem>
-                      <SelectItem value="ambiguous">Ambiguous</SelectItem>
+                      <SelectItem value="ambiguous">Need Review</SelectItem>
                       <SelectItem value="auto_matched">Auto-matched</SelectItem>
-                      <SelectItem value="manually_matched">Manual</SelectItem>
+                      <SelectItem value="manually_matched">Manually Matched</SelectItem>
                       <SelectItem value="ignored">Ignored</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+
+                {matches && matches.length === 0 && (matchFilter !== "all" || matchSearch) && (
+                  <div className="text-center py-4">
+                    <p className="text-sm text-muted-foreground">
+                      {matchSearch
+                        ? `No records matching "${matchSearch}".`
+                        : `No ${matchFilter === "unmatched" ? "unmatched" : matchFilter === "ambiguous" ? "records needing review" : matchFilter.replace(/_/g, " ")} records found.`}
+                    </p>
+                  </div>
+                )}
 
                 {matches && matches.length > 0 && (
                   <div className="overflow-x-auto">
@@ -879,7 +1252,7 @@ export default function StripeBillingIntegration() {
                                     size="icon"
                                     className="h-7 w-7"
                                     onClick={() => ignoreMutation.mutate(m.id)}
-                                    title="Ignore"
+                                    title="Ignore this customer"
                                     data-testid={`button-ignore-${m.id}`}
                                   >
                                     <EyeOff className="w-3 h-3" />
@@ -916,8 +1289,18 @@ export default function StripeBillingIntegration() {
                   </div>
                 )}
               </>
+            ) : (status?.recordsSynced ?? 0) > 0 ? (
+              <div className="text-center py-6">
+                <Users className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">No matching data yet.</p>
+                <p className="text-xs text-muted-foreground mt-1">Run auto-matching to link Stripe customers to your gym members.</p>
+              </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No matching data yet. Run a sync first, then run auto-matching.</p>
+              <div className="text-center py-6">
+                <Users className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">Customer matching is available after importing billing records.</p>
+                <p className="text-xs text-muted-foreground mt-1">Complete a live sync first, then run auto-matching.</p>
+              </div>
             )}
 
             {!isDemoUser && status?.connected && (
@@ -953,11 +1336,11 @@ export default function StripeBillingIntegration() {
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <BarChart3 className="w-4 h-4" />
-              Billing Data Readiness
+              Data Readiness
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Badge
                 variant="outline"
                 className={
@@ -968,49 +1351,43 @@ export default function StripeBillingIntegration() {
                 }
                 data-testid="badge-overall-status"
               >
-                {dataQuality.overallStatus.replace(/_/g, " ")}
-              </Badge>
-              <Badge
-                variant="outline"
-                className={
-                  dataQuality.fallbackRecommendation === "direct_sync_usable" ? "border-green-500/50 text-green-600" :
-                  dataQuality.fallbackRecommendation === "direct_sync_partially_usable" ? "border-yellow-500/50 text-yellow-600" :
-                  "border-red-500/50 text-red-600"
-                }
-                data-testid="badge-fallback-recommendation"
-              >
-                {dataQuality.fallbackRecommendation.replace(/_/g, " ")}
+                {dataQuality.overallStatus === "ready" ? "All Checks Passing" :
+                 dataQuality.overallStatus === "needs_matching_review" ? "Matching Review Needed" :
+                 dataQuality.overallStatus === "partial_data" ? "Partial Data Available" :
+                 dataQuality.overallStatus === "not_connected" ? "Not Connected" :
+                 dataQuality.overallStatus.replace(/_/g, " ")}
               </Badge>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <ReadinessBlock label="Connection" ok={dataQuality.connectionStatus === "connected"} detail={dataQuality.connectionStatus} />
-              <ReadinessBlock label="Payment History" ok={dataQuality.recordCount > 0} detail={`${dataQuality.recordCount} records`} />
-              <ReadinessBlock label="Customer Match" ok={dataQuality.customerMatchCoverage >= 80} detail={`${dataQuality.customerMatchCoverage}% of customers`} />
-              <ReadinessBlock label="Billing Coverage" ok={dataQuality.billingRecordCoverage >= 80} detail={`${dataQuality.billingRecordCoverage}% of records`} />
-              <ReadinessBlock label="Invoices" ok={dataQuality.hasInvoices} detail={dataQuality.hasInvoices ? "Available" : "Missing"} />
-              <ReadinessBlock label="Refunds" ok={dataQuality.hasRefunds} detail={dataQuality.hasRefunds ? "Available" : "Not found"} />
-              <ReadinessBlock label="Webhooks" ok={(dataQuality.webhookSuccessRate ?? 0) >= 80} detail={dataQuality.webhookSuccessRate !== null ? `${dataQuality.webhookSuccessRate}% success` : "No events"} />
+              <ReadinessBlock label="Connection" ok={dataQuality.connectionStatus === "connected"} detail={dataQuality.connectionStatus === "connected" ? "Active" : "Not connected"} />
+              <ReadinessBlock label="Payment Records" ok={dataQuality.recordCount > 0} detail={dataQuality.recordCount > 0 ? `${dataQuality.recordCount.toLocaleString()} imported` : "None imported"} />
+              <ReadinessBlock label="Customer Match" ok={dataQuality.customerMatchCoverage >= 80} detail={`${dataQuality.customerMatchCoverage}% of customers linked`} />
+              <ReadinessBlock label="Billing Coverage" ok={dataQuality.billingRecordCoverage >= 80} detail={`${dataQuality.billingRecordCoverage}% of records linked`} />
+              <ReadinessBlock label="Invoices" ok={dataQuality.hasInvoices} detail={dataQuality.hasInvoices ? "Available" : "Not found"} />
+              <ReadinessBlock label="Refund Data" ok={dataQuality.hasRefunds} detail={dataQuality.hasRefunds ? "Available" : "Not found"} />
+              <ReadinessBlock label="Webhooks" ok={(dataQuality.webhookSuccessRate ?? 0) >= 80} detail={dataQuality.webhookSuccessRate !== null ? `${dataQuality.webhookSuccessRate}% success rate` : "Not configured"} />
             </div>
 
             {dataQuality.partialAccessIssues.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-orange-600">Partial Access Warnings</p>
+              <div className="bg-orange-500/5 border border-orange-500/20 rounded-md p-3 space-y-1">
+                <p className="text-xs font-medium text-orange-600 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  Data Access Notes
+                </p>
                 {dataQuality.partialAccessIssues.map((issue, i) => (
-                  <p key={i} className="text-xs text-orange-600 flex items-start gap-1">
-                    <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />{issue}
-                  </p>
+                  <p key={i} className="text-xs text-orange-600 ml-4">{issue}</p>
                 ))}
               </div>
             )}
 
             {!isDemoUser && status?.connected && (
               <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Internal Notes (why fallback may be needed)</Label>
+                <Label className="text-xs text-muted-foreground">Operator Notes</Label>
                 <Textarea
                   value={fallbackNotes}
                   onChange={(e) => setFallbackNotes(e.target.value)}
-                  placeholder="e.g., 'Gym uses PaySimple for some members, Stripe only covers online signups'"
+                  placeholder="Optional: Note any context about this gym's billing setup (e.g., uses multiple payment processors)"
                   rows={2}
                   className="text-sm"
                   data-testid="textarea-fallback-notes"
@@ -1030,13 +1407,13 @@ export default function StripeBillingIntegration() {
         </Card>
       )}
 
-      {events && events.length > 0 && (
+      {events && events.length > 0 ? (
         <Card data-testid="card-integration-timeline">
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2">
                 <Activity className="w-4 h-4" />
-                Integration Timeline
+                Activity Log
               </CardTitle>
               {isAdmin && (
                 <a
@@ -1046,31 +1423,62 @@ export default function StripeBillingIntegration() {
                   data-testid="link-download-summary"
                 >
                   <Download className="w-3 h-3" />
-                  Download Summary
+                  Export Summary
                 </a>
               )}
             </div>
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y divide-border/30 max-h-64 overflow-y-auto">
-              {events.slice(0, 20).map((evt) => (
-                <div key={evt.id} className="px-4 py-2 flex items-center gap-3 text-sm" data-testid={`event-${evt.id}`}>
-                  <div className="w-2 h-2 rounded-full bg-primary/50 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <span className="font-medium text-xs">{evt.eventType.replace(/_/g, " ")}</span>
-                    {evt.details && typeof evt.details === "object" && Object.keys(evt.details).length > 0 && (
-                      <span className="text-xs text-muted-foreground ml-2">
-                        {Object.entries(evt.details).slice(0, 2).map(([k, v]) => `${k}: ${v}`).join(", ")}
+              {events.slice(0, 20).map((evt) => {
+                const isFailure = evt.eventType.includes("failure") || evt.eventType.includes("error");
+                return (
+                  <div key={evt.id} className="px-4 py-2.5 flex items-center gap-3 text-sm" data-testid={`event-${evt.id}`}>
+                    <div className={`w-2 h-2 rounded-full shrink-0 ${isFailure ? "bg-red-500" : "bg-primary/50"}`} />
+                    <div className="flex-1 min-w-0">
+                      <span className={`font-medium text-xs ${isFailure ? "text-red-500" : ""}`}>
+                        {evt.eventType === "webhook_failure" ? "Webhook Processing Failed" :
+                         evt.eventType === "sync_started" ? "Sync Started" :
+                         evt.eventType === "sync_completed" ? "Sync Completed" :
+                         evt.eventType === "dry_run_completed" ? "Preview Completed" :
+                         evt.eventType === "connection_established" ? "Stripe Connected" :
+                         evt.eventType === "matching_completed" ? "Matching Completed" :
+                         evt.eventType === "manual_match" ? "Manual Match" :
+                         evt.eventType.replace(/_/g, " ")}
                       </span>
-                    )}
+                      {evt.details && typeof evt.details === "object" && Object.keys(evt.details).length > 0 && (
+                        <span className="text-xs text-muted-foreground ml-2">
+                          {Object.entries(evt.details)
+                            .filter(([k]) => k !== "occurredAt")
+                            .slice(0, 2)
+                            .map(([k, v]) => `${k.replace(/([A-Z])/g, " $1").toLowerCase()}: ${v}`)
+                            .join(", ")}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-xs text-muted-foreground shrink-0">{new Date(evt.createdAt).toLocaleString()}</span>
                   </div>
-                  <span className="text-xs text-muted-foreground shrink-0">{new Date(evt.createdAt).toLocaleString()}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>
-      )}
+      ) : status?.connected ? (
+        <Card data-testid="card-integration-timeline-empty">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Activity className="w-4 h-4" />
+              Activity Log
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-center py-4">
+              <Activity className="w-6 h-6 text-muted-foreground/40 mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">No activity recorded yet. Events will appear here as you sync and manage billing data.</p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -1081,17 +1489,17 @@ export default function StripeBillingIntegration() {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            To receive real-time payment updates, configure a webhook in your Stripe Dashboard:
+            Webhooks keep your billing data current by receiving real-time updates from Stripe. Configure a webhook endpoint in your Stripe Dashboard to enable automatic syncing.
           </p>
           <div className="bg-muted/30 rounded-md p-3 space-y-2">
             <div>
-              <p className="text-xs text-muted-foreground">Webhook URL</p>
+              <p className="text-xs text-muted-foreground">Endpoint URL</p>
               <code className="text-xs font-mono break-all" data-testid="text-webhook-url">
                 {typeof window !== "undefined" ? `${window.location.origin}/api/stripe/billing-webhook/${gymId}` : `/api/stripe/billing-webhook/${gymId}`}
               </code>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Events to subscribe</p>
+              <p className="text-xs text-muted-foreground">Events to Subscribe</p>
               <div className="flex flex-wrap gap-1 mt-1">
                 {["invoice.paid", "invoice.payment_failed", "invoice.updated", "customer.subscription.updated", "customer.subscription.deleted"].map((evt) => (
                   <Badge key={evt} variant="secondary" className="text-xs font-mono">{evt}</Badge>
@@ -1117,19 +1525,19 @@ export default function StripeBillingIntegration() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <p className="text-muted-foreground">Connection Status</p>
+                <p className="text-muted-foreground text-xs">Connection Status</p>
                 <p className="font-mono text-xs">{debugData.connection?.status || "none"}</p>
               </div>
               <div>
-                <p className="text-muted-foreground">Total Billing Records</p>
-                <p className="font-semibold">{debugData.totalBillingRecords}</p>
+                <p className="text-muted-foreground text-xs">Total Billing Records</p>
+                <p className="font-semibold">{debugData.totalBillingRecords.toLocaleString()}</p>
               </div>
               <div>
-                <p className="text-muted-foreground">Last Sync</p>
+                <p className="text-muted-foreground text-xs">Last Sync</p>
                 <p className="text-xs">{debugData.connection?.lastSyncAt ? new Date(debugData.connection.lastSyncAt).toLocaleString() : "Never"}</p>
               </div>
               <div>
-                <p className="text-muted-foreground">Account ID</p>
+                <p className="text-muted-foreground text-xs">Account ID</p>
                 <p className="font-mono text-xs">{debugData.connection?.stripeAccountId || "—"}</p>
               </div>
             </div>
@@ -1182,18 +1590,6 @@ export default function StripeBillingIntegration() {
           </CardContent>
         </Card>
       )}
-    </div>
-  );
-}
-
-function ReadinessBlock({ label, ok, detail }: { label: string; ok: boolean; detail: string }) {
-  return (
-    <div className={`rounded-md p-2 border text-center ${ok ? "border-green-500/20 bg-green-500/5" : "border-orange-500/20 bg-orange-500/5"}`}>
-      <div className="flex items-center justify-center gap-1 mb-1">
-        {ok ? <CheckCircle2 className="w-3 h-3 text-green-500" /> : <AlertTriangle className="w-3 h-3 text-orange-500" />}
-        <span className="text-xs font-medium">{label}</span>
-      </div>
-      <p className="text-xs text-muted-foreground">{detail}</p>
     </div>
   );
 }

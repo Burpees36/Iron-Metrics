@@ -1,0 +1,97 @@
+Perform a final pre-onboarding readiness pass for the Stripe Billing Integration in Iron Metrics.
+
+Goal:
+Prepare the system for a real beta gym onboarding session by validating operator readiness, real-world failure handling, and setup guidance. This is not a feature expansion. It is a final polish and readiness verification pass before live use.
+
+Instructions:
+Review the current Stripe Billing Integration implementation and improve anything needed so the onboarding flow is smooth, clear, and resilient for a real gym owner/admin.
+
+Requirements:
+
+1. Add explicit onboarding status messaging
+   Ensure the Billing Integrations UI clearly communicates the current state in plain language for these scenarios:
+   - Stripe not connected
+   - Stripe connected but no dry run completed
+   - Dry run completed but no live sync yet
+   - Live sync completed but records not fully matched
+   - Billing setup ready
+   - Billing setup blocked by sync or webhook issues
+   The messaging should be calm, professional, and operationally useful.
+
+2. Add operator-facing next-step guidance
+   For each onboarding state, show the single most important next action.
+   Examples:
+   - Connect Stripe
+   - Run a dry run
+   - Review unmatched billing records
+   - Complete first live sync
+   - Billing setup is ready
+   Avoid vague messaging.
+
+3. Improve error and empty states
+   Review all Billing Integrations UI states and ensure there are polished messages for:
+   - no connection
+   - no sync history
+   - no billing records yet
+   - no unmatched records
+   - webhook failure present
+   - partial access to Stripe objects
+   - sync failed
+   Make sure nothing looks broken or developer-only.
+
+4. Add a preflight checklist for first live onboarding
+   Add a lightweight internal/operator checklist for the Stripe setup flow:
+   - Stripe account connected
+   - dry run completed
+   - live sync completed
+   - billing records imported
+   - customer match coverage reviewed
+   - billing record coverage reviewed
+   - no blocking errors
+   Keep it concise and useful.
+
+5. Add blocking issue surfacing
+   If there are known blocking conditions, surface them prominently in the UI:
+   - no Stripe connection
+   - no completed dry run
+   - first live sync failed
+   - critical webhook errors
+   - zero billing records after live sync
+   These should be impossible to miss.
+
+6. Add a real-world onboarding summary card
+   Add a summary card that answers:
+   - Is this gym billing-ready?
+   - How many billing records were imported?
+   - What percent of Stripe customers were matched?
+   - What percent of billing records are linked to members?
+   - Are there any blocking issues?
+   - What is the next recommended action?
+   This should be easy for an operator to interpret quickly.
+
+7. Review wording quality across the entire Billing Integrations area
+   Ensure all wording is:
+   - professional
+   - accurate
+   - non-technical where possible
+   - consistent with Iron Metrics as a serious product
+   Remove confusing internal phrasing if present.
+
+8. Final readiness validation
+   After improvements, perform a final targeted verification of:
+   - onboarding states
+   - live sync gate behavior
+   - readiness panel labels
+   - blocking issue surfacing
+   - integration timeline visibility
+   - match coverage and billing coverage display
+   - admin/debug visibility restrictions
+   - demo mode behavior
+
+Output:
+Return a concise final readiness report with:
+1. Any UI/UX improvements made
+2. Any blocking conditions now surfaced
+3. Any wording changes made
+4. Result of the final readiness validation
+5. Anything still intentionally deferred before live onboarding
