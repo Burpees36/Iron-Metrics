@@ -1,4 +1,13 @@
 import crypto from "crypto";
+import {
+  normalizeRecords,
+  extractArray,
+  assertNormalizationNotEmpty,
+  type NormalizeResult,
+  type EndpointDiagnostic,
+  type SkipReason,
+  createEndpointDiagnostic,
+} from "./sync-normalizer";
 
 const WODIFY_BASE_URL = "https://api.wodify.com/v1";
 const ENCRYPTION_ALGORITHM = "aes-256-gcm";
@@ -96,18 +105,6 @@ function selectSearchEndpoint(resource: "clients" | "memberships"): string {
 }
 
 
-function extractArrayFromResponse(data: any, ...preferredKeys: string[]): { records: any[]; key: string } | null {
-  if (Array.isArray(data)) return { records: data, key: "(root)" };
-  if (!data || typeof data !== "object") return null;
-  for (const k of preferredKeys) {
-    if (Array.isArray(data[k])) return { records: data[k], key: k };
-  }
-  for (const k of Object.keys(data)) {
-    if (Array.isArray(data[k])) return { records: data[k], key: k };
-  }
-  return null;
-}
-
 function responseKeys(data: any): string[] {
   if (Array.isArray(data)) return ["(array)"];
   if (data && typeof data === "object") return Object.keys(data);
@@ -196,8 +193,8 @@ async function wodifyFetchWithLog(
   try {
     const data = await wodifyFetch(endpoint, apiKey, params);
     const keys = responseKeys(data);
-    const extracted = extractArrayFromResponse(data);
-    const recordCount = extracted?.records.length ?? (Array.isArray(data) ? data.length : 0);
+    const extracted = extractArray(data);
+    const recordCount = extracted.records.length;
 
     const meta: WodifyRequestMeta = {
       endpoint,
@@ -390,63 +387,85 @@ const MEMBERSHIP_KEYS = ["memberships", "data", "results", "items", "records"];
 const ATTENDANCE_KEYS = ["attendance", "reservations", "data", "results", "items", "records"];
 
 
-async function fetchResourcePage(
+export interface FetchResourceResult<T = Record<string, any>> {
+  records: T[];
+  hasMore: boolean;
+  total?: number;
+  normalization: NormalizeResult<T>;
+  endpointUsed: string;
+  httpStatus: number;
+}
+
+async function fetchResourcePage<T = Record<string, any>>(
   apiKey: string,
   resource: "clients" | "memberships",
   options: { page?: number; pageSize?: number; query?: string },
-): Promise<{ records: any[]; hasMore: boolean; total?: number }> {
+): Promise<FetchResourceResult<T>> {
   const params: Record<string, string> = {};
   if (options.page) params.page = String(options.page);
   if (options.pageSize) params.page_size = String(options.pageSize);
 
   const preferredKeys = resource === "clients" ? CLIENT_KEYS : MEMBERSHIP_KEYS;
   const hasQuery = options.query && options.query.trim().length > 0;
+  const emptyResult = (endpoint: string): FetchResourceResult<T> => ({
+    records: [],
+    hasMore: false,
+    normalization: normalizeRecords<T>(null, resource, preferredKeys),
+    endpointUsed: endpoint,
+    httpStatus: 0,
+  });
 
   if (hasQuery) {
     params.q = options.query!;
     const searchEndpoint = selectSearchEndpoint(resource);
     try {
-      const { data } = await wodifyFetchWithLog(searchEndpoint, apiKey, params);
-      const extracted = extractArrayFromResponse(data, ...preferredKeys);
-      if (extracted) {
+      const { data, meta } = await wodifyFetchWithLog(searchEndpoint, apiKey, params);
+      const norm = normalizeRecords<T>(data, resource, preferredKeys);
+      if (norm.normalizedCount > 0) {
         return {
-          records: extracted.records,
-          hasMore: extracted.records.length >= (options.pageSize || DEFAULT_PAGE_SIZE),
+          records: norm.normalizedRecords,
+          hasMore: norm.normalizedCount >= (options.pageSize || DEFAULT_PAGE_SIZE),
           total: data?.total || data?.total_count,
+          normalization: norm,
+          endpointUsed: searchEndpoint,
+          httpStatus: meta.status,
         };
       }
-      console.log(`[Wodify] ${searchEndpoint} returned unrecognized structure, falling back to list endpoint: ${JSON.stringify(data).slice(0, 300)}`);
+      console.log(`[Wodify] ${searchEndpoint} returned 0 normalized records, falling back to list endpoint`);
     } catch (error: any) {
       if (isAccessDenied(error.message) || isNotFound(error.message)) {
-        console.log(`[Wodify] ${searchEndpoint} unavailable, falling back to list endpoint with query`);
+        console.log(`[Wodify] ${searchEndpoint} unavailable, falling back to list endpoint`);
       } else {
         throw error;
       }
     }
   } else {
-    const searchEndpoint = selectSearchEndpoint(resource);
-    if (!guardSearchEndpoint(searchEndpoint, params)) {
-      // intentional fall-through to list endpoint
-    }
+    guardSearchEndpoint(selectSearchEndpoint(resource), params);
   }
 
   const listEndpoint = selectListEndpoint(resource);
   try {
-    const { data } = await wodifyFetchWithLog(listEndpoint, apiKey, params);
-    const extracted = extractArrayFromResponse(data, ...preferredKeys);
-    if (extracted) {
-      return {
-        records: extracted.records,
-        hasMore: extracted.records.length >= (options.pageSize || DEFAULT_PAGE_SIZE),
-        total: data?.total || data?.total_count,
-      };
+    const { data, meta } = await wodifyFetchWithLog(listEndpoint, apiKey, params);
+    const norm = normalizeRecords<T>(data, resource, preferredKeys);
+
+    if (norm.rawCount > 0 && norm.normalizedCount === 0) {
+      console.error(`[Wodify] ALERT: ${listEndpoint} returned ${norm.rawCount} raw records but normalization produced 0. ` +
+        `detectedKey=${norm.detectedArrayKey}, skipSummary=${JSON.stringify(norm.skipSummary)}`);
+      assertNormalizationNotEmpty(norm, data, listEndpoint);
     }
-    console.log(`[Wodify] ${listEndpoint} returned unrecognized structure: ${JSON.stringify(data).slice(0, 300)}`);
-    return { records: [], hasMore: false };
+
+    return {
+      records: norm.normalizedRecords,
+      hasMore: norm.normalizedCount >= (options.pageSize || DEFAULT_PAGE_SIZE),
+      total: data?.total || data?.total_count,
+      normalization: norm,
+      endpointUsed: listEndpoint,
+      httpStatus: meta.status,
+    };
   } catch (error: any) {
     if (isAccessDenied(error.message) || isNotFound(error.message)) {
       console.warn(`[Wodify] ${listEndpoint} unavailable (${error.message.slice(0, 80)})`);
-      return { records: [], hasMore: false };
+      return emptyResult(listEndpoint);
     }
     throw error;
   }
@@ -455,49 +474,75 @@ async function fetchResourcePage(
 export async function fetchWodifyClients(
   apiKey: string,
   options?: { page?: number; pageSize?: number; query?: string },
-): Promise<{ clients: WodifyClientRecord[]; hasMore: boolean; total?: number }> {
-  const result = await fetchResourcePage(apiKey, "clients", options || {});
-  return { clients: result.records as WodifyClientRecord[], hasMore: result.hasMore, total: result.total };
+): Promise<FetchResourceResult<WodifyClientRecord>> {
+  return fetchResourcePage<WodifyClientRecord>(apiKey, "clients", options || {});
 }
 
 export async function fetchWodifyMemberships(
   apiKey: string,
   options?: { page?: number; pageSize?: number; query?: string },
-): Promise<{ memberships: WodifyMembershipRecord[]; hasMore: boolean }> {
-  const result = await fetchResourcePage(apiKey, "memberships", options || {});
-  return { memberships: result.records as WodifyMembershipRecord[], hasMore: result.hasMore };
+): Promise<FetchResourceResult<WodifyMembershipRecord>> {
+  return fetchResourcePage<WodifyMembershipRecord>(apiKey, "memberships", options || {});
 }
 
-export async function fetchAllWodifyClients(apiKey: string): Promise<WodifyClientRecord[]> {
+export interface FetchAllResult<T = Record<string, any>> {
+  records: T[];
+  pages: number;
+  endpointDiagnostic: EndpointDiagnostic;
+}
+
+export async function fetchAllWodifyClients(apiKey: string): Promise<FetchAllResult<WodifyClientRecord>> {
   const all: WodifyClientRecord[] = [];
   let page = 1;
   let hasMore = true;
+  const diag = createEndpointDiagnostic("/clients");
+  const start = Date.now();
 
   while (hasMore && page <= MAX_PAGES) {
     const result = await fetchWodifyClients(apiKey, { page, pageSize: DEFAULT_PAGE_SIZE });
-    all.push(...result.clients);
+    all.push(...result.records);
     hasMore = result.hasMore;
+    diag.httpStatus = result.httpStatus || 200;
+    diag.endpoint = result.endpointUsed;
+    diag.rawCount += result.normalization.rawCount;
+    diag.normalizedCount += result.normalization.normalizedCount;
+    for (const [reason, count] of Object.entries(result.normalization.skipSummary)) {
+      diag.skipReasons[reason as SkipReason] = (diag.skipReasons[reason as SkipReason] || 0) + count;
+    }
+    diag.skippedCount += result.normalization.skippedRecords.length;
     page++;
   }
 
-  console.log(`[Wodify] fetchAllWodifyClients complete: ${all.length} total clients across ${page - 1} page(s)`);
-  return all;
+  diag.durationMs = Date.now() - start;
+  console.log(`[Wodify] fetchAllWodifyClients complete: ${all.length} normalized across ${page - 1} page(s) (raw=${diag.rawCount})`);
+  return { records: all, pages: page - 1, endpointDiagnostic: diag };
 }
 
-export async function fetchAllWodifyMemberships(apiKey: string): Promise<WodifyMembershipRecord[]> {
+export async function fetchAllWodifyMemberships(apiKey: string): Promise<FetchAllResult<WodifyMembershipRecord>> {
   const all: WodifyMembershipRecord[] = [];
   let page = 1;
   let hasMore = true;
+  const diag = createEndpointDiagnostic("/memberships");
+  const start = Date.now();
 
   while (hasMore && page <= MAX_PAGES) {
     const result = await fetchWodifyMemberships(apiKey, { page, pageSize: DEFAULT_PAGE_SIZE });
-    all.push(...result.memberships);
+    all.push(...result.records);
     hasMore = result.hasMore;
+    diag.httpStatus = result.httpStatus || 200;
+    diag.endpoint = result.endpointUsed;
+    diag.rawCount += result.normalization.rawCount;
+    diag.normalizedCount += result.normalization.normalizedCount;
+    for (const [reason, count] of Object.entries(result.normalization.skipSummary)) {
+      diag.skipReasons[reason as SkipReason] = (diag.skipReasons[reason as SkipReason] || 0) + count;
+    }
+    diag.skippedCount += result.normalization.skippedRecords.length;
     page++;
   }
 
-  console.log(`[Wodify] fetchAllWodifyMemberships complete: ${all.length} total memberships across ${page - 1} page(s)`);
-  return all;
+  diag.durationMs = Date.now() - start;
+  console.log(`[Wodify] fetchAllWodifyMemberships complete: ${all.length} normalized across ${page - 1} page(s) (raw=${diag.rawCount})`);
+  return { records: all, pages: page - 1, endpointDiagnostic: diag };
 }
 
 
@@ -516,9 +561,9 @@ export async function fetchWodifyAttendance(
   for (const endpoint of endpoints) {
     try {
       const { data } = await wodifyFetchWithLog(endpoint, apiKey, params);
-      const extracted = extractArrayFromResponse(data, ...ATTENDANCE_KEYS);
-      if (extracted) {
-        return { records: extracted.records, hasMore: extracted.records.length >= (options?.pageSize || DEFAULT_PAGE_SIZE) };
+      const { records, detectedKey } = extractArray(data, ATTENDANCE_KEYS);
+      if (records.length > 0) {
+        return { records, hasMore: records.length >= (options?.pageSize || DEFAULT_PAGE_SIZE) };
       }
     } catch (error: any) {
       if (isAccessDenied(error.message) || isNotFound(error.message)) continue;
