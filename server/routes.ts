@@ -1365,12 +1365,12 @@ export async function registerRoutes(
       const wodifyTestRole = await getUserGymRole(req, gym);
       if (wodifyTestRole === "coach") return res.status(403).json({ message: "Coaches have read-only access" });
 
-      const { apiKey } = req.body;
-      if (!apiKey || typeof apiKey !== "string") {
+      const { apiKey: rawApiKey } = req.body;
+      if (!rawApiKey || typeof rawApiKey !== "string") {
         return res.status(400).json({ message: "API key is required" });
       }
 
-      const result = await testWodifyConnection(apiKey);
+      const result = await testWodifyConnection(rawApiKey.trim());
       res.json(result);
     } catch (error: any) {
       console.error("Error testing Wodify connection:", error);
@@ -1386,10 +1386,11 @@ export async function registerRoutes(
       const wodifyConnectRole = await getUserGymRole(req, gym);
       if (wodifyConnectRole === "coach") return res.status(403).json({ message: "Coaches have read-only access" });
 
-      const { apiKey, locationName, programName } = req.body;
-      if (!apiKey || typeof apiKey !== "string") {
+      const { apiKey: rawConnectKey, locationName, programName } = req.body;
+      if (!rawConnectKey || typeof rawConnectKey !== "string") {
         return res.status(400).json({ message: "API key is required" });
       }
+      const apiKey = rawConnectKey.trim();
 
       const testResult = await testWodifyConnection(apiKey);
       if (!testResult.success) {

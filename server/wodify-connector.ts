@@ -110,30 +110,51 @@ export async function testWodifyConnection(apiKey: string): Promise<{
   locations?: any[];
   programs?: any[];
 }> {
-  try {
-    const locationsData = await wodifyFetch("/locations", apiKey);
-    const locations = Array.isArray(locationsData) ? locationsData : (locationsData?.data || []);
-
-    let programs: any[] = [];
-    try {
-      const programsData = await wodifyFetch("/programs", apiKey);
-      programs = Array.isArray(programsData) ? programsData : (programsData?.data || []);
-    } catch {
-      // Programs endpoint may not be available on all tiers
-    }
-
-    return {
-      success: true,
-      message: `Connected successfully. Found ${locations.length} location(s).`,
-      locations,
-      programs,
-    };
-  } catch (error: any) {
-    return {
-      success: false,
-      message: error.message || "Failed to connect to Wodify",
-    };
+  const trimmedKey = apiKey.trim();
+  if (!trimmedKey) {
+    return { success: false, message: "API key is empty" };
   }
+
+  const testEndpoints = [
+    { path: "/clients/search", label: "clients" },
+    { path: "/clients", label: "clients" },
+    { path: "/workouts/formattedworkout", label: "workouts" },
+    { path: "/leads", label: "leads" },
+  ];
+
+  for (const { path, label } of testEndpoints) {
+    try {
+      const data = await wodifyFetch(path, trimmedKey);
+      const items = Array.isArray(data) ? data : (data?.data || data?.results || data?.items || []);
+      return {
+        success: true,
+        message: `Connected successfully. Verified access via ${label} endpoint.`,
+      };
+    } catch (error: any) {
+      const msg = error.message || "";
+      if (msg.includes("Missing Authentication Token")) {
+        continue;
+      }
+      if (msg.includes("403") || msg.includes("401") || msg.includes("Forbidden")) {
+        return {
+          success: false,
+          message: "Invalid API key. Wodify rejected the key. Please verify you copied the correct API key from Wodify > Automations > Integrations.",
+        };
+      }
+      if (msg.includes("404")) {
+        continue;
+      }
+      return {
+        success: false,
+        message: error.message || "Failed to connect to Wodify",
+      };
+    }
+  }
+
+  return {
+    success: false,
+    message: "Could not verify connection. None of the expected Wodify API endpoints responded. Please check your API key and Wodify plan.",
+  };
 }
 
 export interface WodifyClientRecord {
