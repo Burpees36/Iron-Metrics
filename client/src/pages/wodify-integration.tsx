@@ -261,9 +261,9 @@ export default function WodifyIntegration() {
           {isConnected ? (
             <>
               <div className="flex items-center gap-3 flex-wrap">
-                <Badge variant="default" className="gap-1" data-testid="badge-connection-status">
-                  <CheckCircle2 className="w-3 h-3" />
-                  Connected
+                <Badge variant={status?.status === "error" ? "destructive" : "default"} className="gap-1" data-testid="badge-connection-status">
+                  {status?.status === "error" ? <AlertTriangle className="w-3 h-3" /> : <CheckCircle2 className="w-3 h-3" />}
+                  {status?.status === "error" ? "Connection Error" : "Connected"}
                 </Badge>
                 {status?.apiKeyFingerprint && (
                   <span className="text-sm text-muted-foreground flex items-center gap-1">

@@ -462,8 +462,9 @@ export async function runWodifySync(
       diagnosticsSummary: buildDiagnosticsSummary(diag),
     });
 
+    const isAuthError = /unauthorized|forbidden|invalid.*key|auth|401|403/i.test(errorMsg);
     await storage.updateWodifyConnection(connection.id, {
-      status: "error",
+      ...(isAuthError ? { status: "error" as const } : {}),
       lastErrorAt: new Date(),
       lastErrorMessage: errorMsg,
     });

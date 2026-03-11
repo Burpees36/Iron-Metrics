@@ -1454,7 +1454,7 @@ export async function registerRoutes(
       const recentSyncRuns = await storage.getWodifySyncRuns(req.params.id, 5);
 
       res.json({
-        connected: connection.status === "connected",
+        connected: connection.status === "connected" || connection.status === "error",
         status: connection.status,
         apiKeyFingerprint: connection.apiKeyFingerprint,
         wodifyLocationName: connection.wodifyLocationName,
