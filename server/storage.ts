@@ -8,6 +8,7 @@ import {
   aiOperatorRuns, operatorTasks, interventionOutcomes,
   gymStaff, staffInvites, users,
   sourceProfiles, rawStagedPayloads,
+  sourceMappingConfigs, canonicalMappingRuns, canonicalPeople, canonicalMemberships, canonicalAttendance,
   type Gym, type InsertGym,
   type GymStaff, type InsertGymStaff, type GymStaffRole,
   type StaffInvite, type InsertStaffInvite,
@@ -50,6 +51,11 @@ import {
   type StripeIntegrationEvent, type InsertStripeIntegrationEvent,
   type SourceProfile, type InsertSourceProfile,
   type RawStagedPayload, type InsertRawStagedPayload,
+  type SourceMappingConfig, type InsertSourceMappingConfig,
+  type CanonicalMappingRun, type InsertCanonicalMappingRun,
+  type CanonicalPerson, type InsertCanonicalPerson,
+  type CanonicalMembership, type InsertCanonicalMembership,
+  type CanonicalAttendance, type InsertCanonicalAttendance,
 } from "@shared/schema";
 import { db } from "./db";
 import { pool } from "./db";
@@ -115,6 +121,30 @@ export interface IStorage {
   getRawStagedPayloads(gymId: string, options?: { connectionId?: string; endpoint?: string; limit?: number }): Promise<RawStagedPayload[]>;
   getRawStagedPayloadSummary(id: string): Promise<Omit<RawStagedPayload, "payloadJson"> | undefined>;
   getRawStagedPayloadCount(gymId: string, connectionId?: string): Promise<number>;
+
+  // ── Source Mapping Config ──
+  upsertMappingConfig(config: InsertSourceMappingConfig): Promise<SourceMappingConfig>;
+  getMappingConfig(gymId: string, connectionId: string, sourceType?: string): Promise<SourceMappingConfig | undefined>;
+
+  // ── Canonical Mapping Runs ──
+  createCanonicalMappingRun(run: InsertCanonicalMappingRun): Promise<CanonicalMappingRun>;
+  updateCanonicalMappingRun(id: string, updates: Partial<CanonicalMappingRun>): Promise<CanonicalMappingRun>;
+  getLatestCanonicalMappingRun(gymId: string, sourceType?: string): Promise<CanonicalMappingRun | undefined>;
+
+  // ── Canonical People ──
+  upsertCanonicalPerson(person: InsertCanonicalPerson): Promise<CanonicalPerson>;
+  getCanonicalPeople(gymId: string, options?: { status?: string; limit?: number }): Promise<CanonicalPerson[]>;
+  countCanonicalPeople(gymId: string): Promise<{ total: number; promoted: number; blocked: number; candidate: number }>;
+
+  // ── Canonical Memberships ──
+  upsertCanonicalMembership(membership: InsertCanonicalMembership): Promise<CanonicalMembership>;
+  getCanonicalMemberships(gymId: string, options?: { status?: string; limit?: number }): Promise<CanonicalMembership[]>;
+  countCanonicalMemberships(gymId: string): Promise<{ total: number; promoted: number; blocked: number; candidate: number }>;
+
+  // ── Canonical Attendance ──
+  upsertCanonicalAttendance(attendance: InsertCanonicalAttendance): Promise<CanonicalAttendance>;
+  getCanonicalAttendance(gymId: string, options?: { status?: string; limit?: number }): Promise<CanonicalAttendance[]>;
+  countCanonicalAttendance(gymId: string): Promise<{ total: number; promoted: number; blocked: number; candidate: number }>;
 
   createKnowledgeSource(source: InsertKnowledgeSource): Promise<KnowledgeSource>;
   getKnowledgeSources(): Promise<KnowledgeSource[]>;
@@ -1506,6 +1536,175 @@ export class DatabaseStorage implements IStorage {
         eq(stripeBillingRecords.gymId, gymId),
         eq(stripeBillingRecords.stripeCustomerId, stripeCustomerId),
       ));
+  }
+
+  // ── Source Mapping Config ──
+
+  async upsertMappingConfig(config: InsertSourceMappingConfig): Promise<SourceMappingConfig> {
+    const [row] = await db.insert(sourceMappingConfigs)
+      .values({ ...config, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: [sourceMappingConfigs.connectionId, sourceMappingConfigs.sourceType],
+        set: { ...config, updatedAt: new Date() },
+      })
+      .returning();
+    return row;
+  }
+
+  async getMappingConfig(gymId: string, connectionId: string, sourceType = "wodify"): Promise<SourceMappingConfig | undefined> {
+    const [row] = await db.select()
+      .from(sourceMappingConfigs)
+      .where(and(
+        eq(sourceMappingConfigs.gymId, gymId),
+        eq(sourceMappingConfigs.connectionId, connectionId),
+        eq(sourceMappingConfigs.sourceType, sourceType),
+      ))
+      .limit(1);
+    return row;
+  }
+
+  // ── Canonical Mapping Runs ──
+
+  async createCanonicalMappingRun(run: InsertCanonicalMappingRun): Promise<CanonicalMappingRun> {
+    const [created] = await db.insert(canonicalMappingRuns).values(run).returning();
+    return created;
+  }
+
+  async updateCanonicalMappingRun(id: string, updates: Partial<CanonicalMappingRun>): Promise<CanonicalMappingRun> {
+    const [updated] = await db.update(canonicalMappingRuns)
+      .set(updates)
+      .where(eq(canonicalMappingRuns.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getLatestCanonicalMappingRun(gymId: string, sourceType = "wodify"): Promise<CanonicalMappingRun | undefined> {
+    const [row] = await db.select()
+      .from(canonicalMappingRuns)
+      .where(and(eq(canonicalMappingRuns.gymId, gymId), eq(canonicalMappingRuns.sourceType, sourceType)))
+      .orderBy(desc(canonicalMappingRuns.startedAt))
+      .limit(1);
+    return row;
+  }
+
+  // ── Canonical People ──
+
+  async upsertCanonicalPerson(person: InsertCanonicalPerson): Promise<CanonicalPerson> {
+    const [row] = await db.insert(canonicalPeople)
+      .values({ ...person, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: [canonicalPeople.sourceConnectionId, canonicalPeople.sourceRecordId],
+        set: { ...person, updatedAt: new Date() },
+      })
+      .returning();
+    return row;
+  }
+
+  async getCanonicalPeople(gymId: string, options: { status?: string; limit?: number } = {}): Promise<CanonicalPerson[]> {
+    const conditions = [eq(canonicalPeople.gymId, gymId)];
+    if (options.status) conditions.push(eq(canonicalPeople.validationStatus, options.status));
+    return db.select()
+      .from(canonicalPeople)
+      .where(and(...conditions))
+      .orderBy(desc(canonicalPeople.updatedAt))
+      .limit(options.limit || 100);
+  }
+
+  async countCanonicalPeople(gymId: string): Promise<{ total: number; promoted: number; blocked: number; candidate: number }> {
+    const rows = await db.select({
+      status: canonicalPeople.validationStatus,
+      count: sql<number>`cast(count(*) as int)`,
+    })
+      .from(canonicalPeople)
+      .where(eq(canonicalPeople.gymId, gymId))
+      .groupBy(canonicalPeople.validationStatus);
+    const map = Object.fromEntries(rows.map((r) => [r.status, r.count]));
+    return {
+      total: (map.candidate || 0) + (map.promoted || 0) + (map.blocked || 0),
+      promoted: map.promoted || 0,
+      blocked: map.blocked || 0,
+      candidate: map.candidate || 0,
+    };
+  }
+
+  // ── Canonical Memberships ──
+
+  async upsertCanonicalMembership(membership: InsertCanonicalMembership): Promise<CanonicalMembership> {
+    const [row] = await db.insert(canonicalMemberships)
+      .values({ ...membership, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: [canonicalMemberships.sourceConnectionId, canonicalMemberships.sourceRecordId],
+        set: { ...membership, updatedAt: new Date() },
+      })
+      .returning();
+    return row;
+  }
+
+  async getCanonicalMemberships(gymId: string, options: { status?: string; limit?: number } = {}): Promise<CanonicalMembership[]> {
+    const conditions = [eq(canonicalMemberships.gymId, gymId)];
+    if (options.status) conditions.push(eq(canonicalMemberships.validationStatus, options.status));
+    return db.select()
+      .from(canonicalMemberships)
+      .where(and(...conditions))
+      .orderBy(desc(canonicalMemberships.updatedAt))
+      .limit(options.limit || 100);
+  }
+
+  async countCanonicalMemberships(gymId: string): Promise<{ total: number; promoted: number; blocked: number; candidate: number }> {
+    const rows = await db.select({
+      status: canonicalMemberships.validationStatus,
+      count: sql<number>`cast(count(*) as int)`,
+    })
+      .from(canonicalMemberships)
+      .where(eq(canonicalMemberships.gymId, gymId))
+      .groupBy(canonicalMemberships.validationStatus);
+    const map = Object.fromEntries(rows.map((r) => [r.status, r.count]));
+    return {
+      total: (map.candidate || 0) + (map.promoted || 0) + (map.blocked || 0),
+      promoted: map.promoted || 0,
+      blocked: map.blocked || 0,
+      candidate: map.candidate || 0,
+    };
+  }
+
+  // ── Canonical Attendance ──
+
+  async upsertCanonicalAttendance(attendance: InsertCanonicalAttendance): Promise<CanonicalAttendance> {
+    const [row] = await db.insert(canonicalAttendance)
+      .values({ ...attendance, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: [canonicalAttendance.sourceConnectionId, canonicalAttendance.sourceRecordId],
+        set: { ...attendance, updatedAt: new Date() },
+      })
+      .returning();
+    return row;
+  }
+
+  async getCanonicalAttendance(gymId: string, options: { status?: string; limit?: number } = {}): Promise<CanonicalAttendance[]> {
+    const conditions = [eq(canonicalAttendance.gymId, gymId)];
+    if (options.status) conditions.push(eq(canonicalAttendance.validationStatus, options.status));
+    return db.select()
+      .from(canonicalAttendance)
+      .where(and(...conditions))
+      .orderBy(desc(canonicalAttendance.updatedAt))
+      .limit(options.limit || 100);
+  }
+
+  async countCanonicalAttendance(gymId: string): Promise<{ total: number; promoted: number; blocked: number; candidate: number }> {
+    const rows = await db.select({
+      status: canonicalAttendance.validationStatus,
+      count: sql<number>`cast(count(*) as int)`,
+    })
+      .from(canonicalAttendance)
+      .where(eq(canonicalAttendance.gymId, gymId))
+      .groupBy(canonicalAttendance.validationStatus);
+    const map = Object.fromEntries(rows.map((r) => [r.status, r.count]));
+    return {
+      total: (map.candidate || 0) + (map.promoted || 0) + (map.blocked || 0),
+      promoted: map.promoted || 0,
+      blocked: map.blocked || 0,
+      candidate: map.candidate || 0,
+    };
   }
 }
 

@@ -1,0 +1,343 @@
+We have completed the Wodify capability discovery + raw staging foundation. Now I want to build the next architectural layer: canonical mapping and promotion rules.
+
+Context:
+- We are intentionally moving Iron Metrics toward a connector/staging/canonical architecture.
+- Long term, this should grow into a full gym operating system.
+- This sprint should NOT attempt a total product rewrite.
+- It should introduce the first canonical data layer on top of the staged Wodify data.
+- The goal is to stop relying on direct Wodify-shaped imports for core analytics.
+
+GOAL OF THIS SPRINT:
+Using staged Wodify payloads and the saved source profile, Iron Metrics should be able to:
+- map staged source records into canonical candidate records
+- persist canonical candidate records with confidence/completeness metadata
+- apply promotion rules to determine which candidates are safe for analytics-ready use
+- produce clear diagnostics on why records were promoted, staged, or blocked
+
+This sprint should focus only on 3 core domains:
+1. people
+2. memberships
+3. attendance
+
+Do NOT attempt a full billing/revenue canonicalization yet unless it is trivial to scaffold.
+
+==================================================
+1. CREATE CANONICAL DATA FOUNDATIONS
+==================================================
+
+Add canonical tables/models for the first 3 domains:
+
+A. canonical_people
+Store normalized person/member identity records derived from source systems.
+
+Fields should include at minimum:
+- id
+- gymId
+- sourceType
+- sourceConnectionId
+- sourceRecordId
+- sourceEndpoint
+- firstName
+- lastName
+- fullName
+- email
+- phone
+- externalPersonId
+- completenessLevel (full, partial, identifier_only)
+- mappingConfidence (low, medium, high)
+- validationStatus (candidate, promoted, blocked)
+- validationReasons (JSON)
+- firstSeenAt
+- lastSeenAt
+- createdAt
+- updatedAt
+
+B. canonical_memberships
+Store normalized membership/contract-style records.
+
+Fields should include at minimum:
+- id
+- gymId
+- sourceType
+- sourceConnectionId
+- sourceRecordId
+- sourceEndpoint
+- canonicalPersonId (nullable at first if unresolved)
+- membershipName / planName
+- membershipStatus
+- startDate
+- endDate
+- billingAmount
+- billingPeriod
+- externalMembershipId
+- completenessLevel
+- mappingConfidence
+- validationStatus
+- validationReasons (JSON)
+- firstSeenAt
+- lastSeenAt
+- createdAt
+- updatedAt
+
+C. canonical_attendance
+Store normalized attendance/event participation records.
+
+Fields should include at minimum:
+- id
+- gymId
+- sourceType
+- sourceConnectionId
+- sourceRecordId
+- sourceEndpoint
+- canonicalPersonId (nullable if unresolved)
+- attendanceDate
+- className
+- programName
+- locationName
+- attendanceStatus
+- externalAttendanceId
+- completenessLevel
+- mappingConfidence
+- validationStatus
+- validationReasons (JSON)
+- firstSeenAt
+- lastSeenAt
+- createdAt
+- updatedAt
+
+==================================================
+2. CREATE SOURCE-TO-CANONICAL MAPPING CONFIG
+==================================================
+
+Add a persistent mapping config model/table for each source profile / connection.
+
+This should store the actual chosen field mappings Iron Metrics will use, not just “likely” fields.
+
+For example:
+- chosen person identifier field
+- chosen membership identifier field
+- chosen attendance identifier field
+- chosen first name field
+- chosen last name field
+- chosen email field
+- chosen status field
+- chosen start/end date fields
+- chosen attendance date field
+- chosen class/program/location fields
+
+This can be partially auto-generated from the source profile in this sprint.
+Do not build a full admin mapping editor yet unless it is quick and clean.
+But do persist the chosen mapping config so it becomes the contract for later processing.
+
+==================================================
+3. BUILD CANONICAL MAPPERS
+==================================================
+
+Create reusable mapping services that:
+- read staged payload records
+- use the connection’s mapping config
+- emit canonical candidate records for people, memberships, and attendance
+
+Requirements:
+- Mappers should not be hardcoded directly inside routes
+- Keep them modular
+- Support sourceType as an input so this architecture can later support other connectors
+- Track the source staged payload id or source record reference if helpful
+
+==================================================
+4. ADD COMPLETENESS / CONFIDENCE / VALIDATION LOGIC
+==================================================
+
+For every canonical candidate, classify:
+
+A. completenessLevel
+- full
+- partial
+- identifier_only
+
+B. mappingConfidence
+- low
+- medium
+- high
+
+C. validationStatus
+- candidate
+- promoted
+- blocked
+
+D. validationReasons
+Examples:
+- missing_identifier
+- missing_name
+- missing_date
+- unresolved_person_link
+- weak_identity_match
+- unsupported_shape
+- duplicate_source_record
+- insufficient_fields_for_promotion
+
+Do not just throw away weak records silently.
+
+==================================================
+5. ADD PROMOTION RULES
+==================================================
+
+Build a promotion step that decides whether a canonical candidate is safe to be considered analytics-ready.
+
+Rules:
+- A person can be promoted if there is a reliable identity basis
+- A membership can be promoted if it has a reliable membership identifier and enough date/status linkage, even if some optional fields are missing
+- Attendance can be promoted if it has a valid attendance date and enough person linkage or stable external identity reference
+
+If a record is not safe to promote:
+- keep it as blocked or candidate
+- preserve validation reasons
+- do not silently discard it
+
+This sprint does NOT need to rewrite the whole analytics engine to consume these tables yet.
+But these promoted canonical records should be clearly marked as the future analytics-ready layer.
+
+==================================================
+6. BUILD A MAPPING + PROMOTION JOB
+==================================================
+
+Create a backend job/service that:
+- reads the latest staged Wodify payloads for a gym/connection
+- uses the saved source profile + mapping config
+- maps staged records into canonical candidates
+- applies promotion rules
+- upserts canonical records
+- returns a summary
+
+Summary should include:
+- staged payloads processed
+- people candidates created
+- memberships candidates created
+- attendance candidates created
+- promoted counts by domain
+- blocked counts by domain
+- validation reason counts
+- recommended next action
+
+==================================================
+7. ADD API ROUTES
+==================================================
+
+Add backend routes to:
+- trigger canonical mapping/promotion run manually
+- fetch latest mapping config for a connection
+- fetch latest canonical mapping summary for a gym/connection
+- list canonical people/memberships/attendance with validation status filters
+- fetch blocked-record diagnostics summary
+
+Stable typed responses only.
+
+==================================================
+8. ADD BASIC UI DIAGNOSTICS FOR CANONICAL MAPPING
+==================================================
+
+On the Wodify integration/settings page, add a new section under the source profile for canonical mapping results.
+
+Show:
+- mapping config status
+- chosen key fields
+- last mapping run time
+- people candidates / promoted / blocked
+- memberships candidates / promoted / blocked
+- attendance candidates / promoted / blocked
+- top validation blockers
+- recommended next action
+
+Add a button like:
+- “Build Canonical Mapping”
+or
+- “Generate Analytics-Ready Data Layer”
+
+This does not need to be fancy yet, but it should be understandable.
+
+==================================================
+9. KEEP SCOPE TIGHT
+==================================================
+
+Do NOT in this sprint:
+- replace the entire existing sync engine
+- rewrite all dashboard metrics to read from canonical tables
+- build a full admin mapping editor
+- build billing canonicalization in depth
+- attempt full native gym software workflows
+
+This sprint is ONLY:
+- chosen mappings
+- canonical candidates
+- promotion rules
+- diagnostics
+
+==================================================
+10. REQUIRED OUTPUT / VALIDATION
+==================================================
+
+When finished, I want a concrete implementation summary with these sections:
+
+A. Files changed
+List every file changed and why.
+
+B. New data models
+List every new canonical/mapping table and purpose.
+
+C. Mapping config example
+Show a realistic saved mapping config object for a Wodify connection.
+
+D. Canonical record examples
+Show one example each of:
+- canonical person candidate
+- canonical membership promoted record
+- canonical attendance blocked record
+
+E. Promotion rules summary
+State exactly what rules are used for promotion for:
+- people
+- memberships
+- attendance
+
+F. Mapping run summary example
+Provide a realistic example summary object including:
+- staged payloads processed
+- promoted counts
+- blocked counts
+- validation reasons
+- recommended next action
+
+G. Validation checklist
+Answer yes/no with a brief explanation for each:
+- staged payloads can be mapped into canonical candidates
+- mapping config persists
+- promoted vs blocked records are distinguished
+- blocked records retain reasons
+- canonical mapping can be triggered manually
+- canonical results are visible in UI/API
+- current app still functions without a full analytics rewrite
+
+H. Concrete manual test steps
+Give me exact steps to validate in the app:
+1. connect Wodify
+2. run data profile
+3. run canonical mapping
+4. verify counts in UI
+5. verify blocked reasons
+6. verify chosen mappings
+7. verify canonical records exist via API
+
+I. Example logs
+Show a sample successful canonical mapping log sequence.
+
+==================================================
+11. ARCHITECTURAL INTENT
+==================================================
+
+Code comments and structure should make this clear:
+- staged payloads are the raw ingestion layer
+- source profiles + mapping config define source understanding
+- canonical tables are the normalized integration layer
+- later analytics and native Iron Metrics modules should build on canonical data, not raw Wodify shapes
+
+Build this cleanly as groundwork for a future full gym operating system.

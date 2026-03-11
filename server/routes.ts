@@ -14,6 +14,7 @@ import multer from "multer";
 import { encryptApiKey, generateFingerprint, testWodifyConnection } from "./wodify-connector";
 import { runWodifySync } from "./wodify-sync";
 import { runWodifyDiscovery } from "./wodify-discovery";
+import { runCanonicalMappingJob } from "./canonical-mapping-job";
 import {
   encryptApiKey as encryptStripeKey,
   fingerprintApiKey as fingerprintStripeKey,
@@ -1683,6 +1684,135 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("Error fetching staged payload:", error);
       res.status(500).json({ message: "Failed to fetch staged payload" });
+    }
+  });
+
+  // ── Canonical Mapping Routes ──
+  // These routes expose the canonical mapping + promotion layer.
+  // Canonical records are the analytics-ready layer above raw staged payloads.
+
+  // Trigger a canonical mapping/promotion run for a gym
+  app.post("/api/gyms/:id/wodify/canonical-mapping", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      // Check for an already-running mapping job
+      const latestRun = await storage.getLatestCanonicalMappingRun(req.params.id);
+      if (latestRun?.status === "running") {
+        return res.status(409).json({ message: "A mapping job is already in progress" });
+      }
+
+      // Run asynchronously — return immediately with run ID
+      const connection = await storage.getWodifyConnection(req.params.id);
+      if (!connection) return res.status(400).json({ message: "No Wodify connection found" });
+
+      const run = await storage.createCanonicalMappingRun({
+        gymId: req.params.id,
+        connectionId: connection.id,
+        sourceType: "wodify",
+        status: "running",
+      });
+
+      res.json({ runId: run.id, message: "Canonical mapping started" });
+
+      // Background job — do not await in request handler
+      runCanonicalMappingJob(req.params.id).catch((err) => {
+        console.error("[Canonical Mapping Route] Job failed:", err);
+      });
+    } catch (error: any) {
+      console.error("Error starting canonical mapping:", error);
+      res.status(500).json({ message: "Failed to start canonical mapping" });
+    }
+  });
+
+  // Get the latest canonical mapping run status + summary
+  app.get("/api/gyms/:id/wodify/canonical-mapping", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const run = await storage.getLatestCanonicalMappingRun(req.params.id);
+      if (!run) return res.json(null);
+
+      const [peopleCounts, membershipCounts, attendanceCounts] = await Promise.all([
+        storage.countCanonicalPeople(req.params.id),
+        storage.countCanonicalMemberships(req.params.id),
+        storage.countCanonicalAttendance(req.params.id),
+      ]);
+
+      res.json({ run, peopleCounts, membershipCounts, attendanceCounts });
+    } catch (error: any) {
+      console.error("Error fetching canonical mapping:", error);
+      res.status(500).json({ message: "Failed to fetch canonical mapping" });
+    }
+  });
+
+  // Get the current mapping config for a connection
+  app.get("/api/gyms/:id/wodify/mapping-config", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const connection = await storage.getWodifyConnection(req.params.id);
+      if (!connection) return res.json(null);
+
+      const config = await storage.getMappingConfig(req.params.id, connection.id, "wodify");
+      res.json(config || null);
+    } catch (error: any) {
+      console.error("Error fetching mapping config:", error);
+      res.status(500).json({ message: "Failed to fetch mapping config" });
+    }
+  });
+
+  // List canonical people with optional status filter
+  app.get("/api/gyms/:id/canonical/people", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const status = typeof req.query.status === "string" ? req.query.status : undefined;
+      const limit = Number(req.query.limit) || 50;
+      const people = await storage.getCanonicalPeople(req.params.id, { status, limit });
+      res.json(people);
+    } catch (error: any) {
+      res.status(500).json({ message: "Failed to fetch canonical people" });
+    }
+  });
+
+  // List canonical memberships with optional status filter
+  app.get("/api/gyms/:id/canonical/memberships", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const status = typeof req.query.status === "string" ? req.query.status : undefined;
+      const limit = Number(req.query.limit) || 50;
+      const memberships = await storage.getCanonicalMemberships(req.params.id, { status, limit });
+      res.json(memberships);
+    } catch (error: any) {
+      res.status(500).json({ message: "Failed to fetch canonical memberships" });
+    }
+  });
+
+  // List canonical attendance with optional status filter
+  app.get("/api/gyms/:id/canonical/attendance", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const status = typeof req.query.status === "string" ? req.query.status : undefined;
+      const limit = Number(req.query.limit) || 50;
+      const attendance = await storage.getCanonicalAttendance(req.params.id, { status, limit });
+      res.json(attendance);
+    } catch (error: any) {
+      res.status(500).json({ message: "Failed to fetch canonical attendance" });
     }
   });
 
