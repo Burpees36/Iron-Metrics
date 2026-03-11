@@ -1,0 +1,110 @@
+I need you to fix the Wodify sync job lifecycle so the app behaves correctly for real users during long-running imports.
+
+Current observed issues:
+- The logs show memberships are being fetched successfully (example: “Pulled 14399 memberships”).
+- But the sync history UI still shows 0 memberships pulled, 0 clients pulled, and 0 members synced.
+- Multiple sync jobs are getting stuck in “running”.
+- There are still old log lines showing /memberships/search being called without q, even though the new guardrail blocks this in one code path.
+- There is currently no way for the user to stop a sync once it starts.
+
+I need this fixed in a production-quality way.
+
+Build the following:
+
+1. Eliminate all remaining bad search endpoint calls
+- Search the full codebase for every remaining call path that can hit /memberships/search or /clients/search without a q parameter.
+- Remove or refactor all of them.
+- There should be exactly one endpoint selection strategy for Wodify resources.
+- After this change, the old “q parameter is missing” log line should no longer appear anywhere in the app for sync jobs.
+
+2. Add proper sync job lifecycle management
+Each sync run must move through clear states:
+- queued
+- running
+- cancelling
+- cancelled
+- completed
+- completed_with_warnings
+- failed
+
+3. Persist progress during the sync, not only at the end
+While the job is running, persist progress updates to the sync run record so the UI can show real numbers:
+- clients pulled
+- memberships pulled
+- members normalized
+- members upserted
+- skipped count
+- error count
+- current phase (fetching, normalizing, importing, finalizing)
+- progress message
+
+Do not keep these only in memory.
+
+4. Add stop/cancel sync capability
+I need a user-visible way to stop a running sync.
+
+Implement:
+- backend endpoint to request cancellation for a running sync
+- cancellation flag stored on the sync run row or equivalent job state store
+- sync loop checks for cancellation between pages and before major phases
+- if cancellation is requested, stop gracefully and mark the run:
+  - status = cancelled
+  - finishedAt populated
+  - partial progress preserved
+  - diagnostic summary preserved
+
+5. Prevent duplicate overlapping syncs
+- Do not allow multiple backfill/incremental sync jobs for the same gym/connection to run at the same time unless explicitly intended.
+- If a sync is already running for the same gym, either:
+  - block starting a new one and surface a clean message
+  - or cancel/replace the old one intentionally with clear logic
+- Pick one strategy and implement it cleanly.
+
+6. Update sync history/status UI
+Update the sync history and status views so they show:
+- live progress counts while running
+- current phase
+- cancellation state
+- final result counts
+- warning state if partial import happened
+- a “Stop Sync” action/button when a sync is running
+
+The UI should no longer show “0 memberships pulled” if thousands have already been fetched and persisted as progress.
+
+7. Persist diagnostics summary
+At the end of the run, store a summary that includes:
+- endpoints used
+- raw records fetched
+- normalized records
+- imported/upserted records
+- skipped records
+- skip reasons
+- whether fallback import was used
+- recommended next action
+
+8. Return a clear implementation summary
+After coding, provide:
+- every file changed
+- what old search call paths were removed
+- what status model is now used
+- how cancellation works
+- how progress is persisted
+- how duplicate sync prevention works
+- what the user will now see differently in the UI
+- an example of a completed sync object and a cancelled sync object
+
+9. Verification output required
+I do not want just a generic “done” message.
+I want a concrete verification section at the end with:
+- a sample log sequence for a running sync
+- a sample log sequence for a cancelled sync
+- a sample UI state for:
+  - running
+  - cancelled
+  - completed with warnings
+- a checklist confirming:
+  - no remaining bad /search calls without q
+  - running syncs can be cancelled
+  - sync history counts update while running
+  - duplicate syncs are prevented
+  - final diagnostics are saved

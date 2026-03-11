@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Progress } from "@/components/ui/progress";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -22,6 +23,8 @@ import {
   Loader2,
   ExternalLink,
   Database,
+  Square,
+  Ban,
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -49,8 +52,58 @@ interface SyncRun {
   clientsUpserted: number;
   membershipsPulled: number;
   membershipsUpserted: number;
+  membersUpserted: number;
+  membersSkipped: number;
   errorCount: number;
   errorDetails?: string;
+  phase?: string;
+  progressMessage?: string;
+  cancelRequested?: boolean;
+  diagnosticsSummary?: any;
+}
+
+interface SyncProgress {
+  running: boolean;
+  syncRunId?: string;
+  runType?: string;
+  status?: string;
+  phase?: string;
+  progressMessage?: string;
+  clientsPulled?: number;
+  clientsUpserted?: number;
+  membershipsPulled?: number;
+  membershipsUpserted?: number;
+  membersUpserted?: number;
+  membersSkipped?: number;
+  errorCount?: number;
+  startedAt?: string;
+}
+
+const PHASE_ORDER = [
+  "initializing",
+  "fetching_clients",
+  "fetching_memberships",
+  "fetching_attendance",
+  "storing_raw_data",
+  "importing_members",
+  "finalizing",
+] as const;
+
+const PHASE_LABELS: Record<string, string> = {
+  initializing: "Initializing",
+  fetching_clients: "Fetching Clients",
+  fetching_memberships: "Fetching Memberships",
+  fetching_attendance: "Fetching Attendance",
+  storing_raw_data: "Storing Raw Data",
+  importing_members: "Importing Members",
+  finalizing: "Finalizing",
+};
+
+function getPhaseProgress(phase?: string): number {
+  if (!phase) return 0;
+  const idx = PHASE_ORDER.indexOf(phase as any);
+  if (idx < 0) return 0;
+  return Math.round(((idx + 1) / PHASE_ORDER.length) * 100);
 }
 
 export default function WodifyIntegration() {
@@ -66,7 +119,22 @@ export default function WodifyIntegration() {
   const { data: syncHistory } = useQuery<SyncRun[]>({
     queryKey: ["/api/gyms", gymId, "wodify", "sync-history"],
     enabled: status?.connected === true,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      const hasRunning = data?.some((r) => ["queued", "running", "cancelling"].includes(r.status));
+      return hasRunning ? 3000 : false;
+    },
   });
+
+  const { data: syncProgress } = useQuery<SyncProgress>({
+    queryKey: ["/api/gyms", gymId, "wodify", "sync", "progress"],
+    enabled: status?.connected === true,
+    refetchInterval: (query) => {
+      return query.state.data?.running ? 2000 : false;
+    },
+  });
+
+  const isSyncRunning = syncProgress?.running === true;
 
   const testMutation = useMutation({
     mutationFn: async (key: string) => {
@@ -118,19 +186,43 @@ export default function WodifyIntegration() {
   const syncMutation = useMutation({
     mutationFn: async (runType: string) => {
       const res = await apiRequest("POST", `/api/gyms/${gymId}/wodify/sync`, { runType });
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.message || "Sync request failed");
+      }
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "Sync started", description: "Your data is being pulled from Wodify. This may take a few minutes." });
-      setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ["/api/gyms", gymId, "wodify", "status"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/gyms", gymId, "wodify", "sync-history"] });
-      }, 3000);
+      toast({ title: "Sync started", description: "Your data is being pulled from Wodify." });
+      queryClient.invalidateQueries({ queryKey: ["/api/gyms", gymId, "wodify", "sync", "progress"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/gyms", gymId, "wodify", "sync-history"] });
     },
     onError: (err: Error) => {
       toast({ title: "Sync failed", description: err.message, variant: "destructive" });
     },
   });
+
+  const cancelMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/gyms/${gymId}/wodify/sync/cancel`);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Cancellation requested", description: "The sync will stop after its current phase completes." });
+      queryClient.invalidateQueries({ queryKey: ["/api/gyms", gymId, "wodify", "sync", "progress"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/gyms", gymId, "wodify", "sync-history"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Cancel failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  useEffect(() => {
+    if (syncProgress && !syncProgress.running) {
+      queryClient.invalidateQueries({ queryKey: ["/api/gyms", gymId, "wodify", "sync-history"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/gyms", gymId, "wodify", "status"] });
+    }
+  }, [syncProgress?.running, gymId]);
 
   const isConnected = status?.connected === true;
 
@@ -211,7 +303,7 @@ export default function WodifyIntegration() {
               <div className="flex items-center gap-2 pt-2 flex-wrap">
                 <Button
                   onClick={() => syncMutation.mutate("incremental")}
-                  disabled={syncMutation.isPending}
+                  disabled={syncMutation.isPending || isSyncRunning}
                   data-testid="button-sync-incremental"
                 >
                   {syncMutation.isPending ? (
@@ -224,22 +316,41 @@ export default function WodifyIntegration() {
                 <Button
                   variant="outline"
                   onClick={() => syncMutation.mutate("backfill")}
-                  disabled={syncMutation.isPending}
+                  disabled={syncMutation.isPending || isSyncRunning}
                   data-testid="button-sync-backfill"
                 >
                   <Database className="w-4 h-4" />
                   <span className="ml-1.5">Full Backfill</span>
                 </Button>
+                {isSyncRunning && (
+                  <Button
+                    variant="destructive"
+                    onClick={() => cancelMutation.mutate()}
+                    disabled={cancelMutation.isPending || syncProgress?.status === "cancelling"}
+                    data-testid="button-cancel-sync"
+                  >
+                    <Square className="w-4 h-4" />
+                    <span className="ml-1.5">
+                      {syncProgress?.status === "cancelling" ? "Cancelling..." : "Stop Sync"}
+                    </span>
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   onClick={() => disconnectMutation.mutate()}
-                  disabled={disconnectMutation.isPending}
+                  disabled={disconnectMutation.isPending || isSyncRunning}
                   data-testid="button-disconnect"
                 >
                   <Unplug className="w-4 h-4" />
                   <span className="ml-1.5">Disconnect</span>
                 </Button>
               </div>
+
+              {isSyncRunning && (
+                <p className="text-xs text-muted-foreground">
+                  A sync is in progress. You cannot start another sync or disconnect until it finishes.
+                </p>
+              )}
             </>
           ) : (
             <>
@@ -328,6 +439,56 @@ export default function WodifyIntegration() {
         </CardContent>
       </Card>
 
+      {isSyncRunning && syncProgress && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+              Sync in Progress
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium">
+                  {PHASE_LABELS[syncProgress.phase || ""] || syncProgress.phase || "Starting..."}
+                </span>
+                <span className="text-muted-foreground">
+                  {getPhaseProgress(syncProgress.phase)}%
+                </span>
+              </div>
+              <Progress value={getPhaseProgress(syncProgress.phase)} className="h-2" data-testid="progress-sync" />
+              {syncProgress.progressMessage && (
+                <p className="text-xs text-muted-foreground" data-testid="text-progress-message">
+                  {syncProgress.progressMessage}
+                </p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <ProgressStat label="Clients Pulled" value={syncProgress.clientsPulled || 0} />
+              <ProgressStat label="Memberships Pulled" value={syncProgress.membershipsPulled || 0} />
+              <ProgressStat label="Members Imported" value={syncProgress.membersUpserted || 0} />
+              <ProgressStat label="Skipped" value={syncProgress.membersSkipped || 0} />
+            </div>
+
+            {syncProgress.status === "cancelling" && (
+              <div className="flex items-center gap-2 text-sm text-yellow-600">
+                <Ban className="w-4 h-4" />
+                Cancellation requested — stopping after current phase...
+              </div>
+            )}
+
+            {syncProgress.startedAt && (
+              <p className="text-xs text-muted-foreground">
+                Started {formatTimeAgo(syncProgress.startedAt)}
+                {" · "}{syncProgress.runType === "backfill" ? "Full Backfill" : "Incremental Sync"}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {isConnected && (syncHistory || status?.recentSyncRuns) && (
         <Card>
           <CardHeader>
@@ -355,29 +516,27 @@ export default function WodifyIntegration() {
                       data-testid={`sync-run-${run.id}`}
                     >
                       <div className="pt-0.5">
-                        {run.status === "completed" ? (
-                          <CheckCircle2 className="w-4 h-4 text-green-500" />
-                        ) : run.status === "running" ? (
-                          <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-                        ) : run.status === "completed_with_errors" ? (
-                          <AlertTriangle className="w-4 h-4 text-yellow-500" />
-                        ) : (
-                          <XCircle className="w-4 h-4 text-destructive" />
-                        )}
+                        <SyncStatusIcon status={run.status} />
                       </div>
                       <div className="flex-1 min-w-0 space-y-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-medium capitalize">
-                            {run.runType} sync
+                          <span className="text-sm font-medium">
+                            {run.runType === "backfill" ? "Full Backfill" : "Incremental Sync"}
                           </span>
-                          <Badge variant="secondary" className="text-xs">
-                            {run.status.replace(/_/g, " ")}
-                          </Badge>
+                          <SyncStatusBadge status={run.status} />
                         </div>
+
+                        {["running", "queued", "cancelling"].includes(run.status) && run.progressMessage && (
+                          <p className="text-xs text-blue-600">{run.progressMessage}</p>
+                        )}
+
                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                          <span>{run.clientsUpserted} members synced</span>
+                          <span>{run.membersUpserted || run.clientsUpserted} members synced</span>
                           <span>{run.clientsPulled} clients pulled</span>
                           <span>{run.membershipsPulled} memberships pulled</span>
+                          {(run.membersSkipped || 0) > 0 && (
+                            <span>{run.membersSkipped} skipped</span>
+                          )}
                           {run.errorCount > 0 && (
                             <span className="text-destructive">{run.errorCount} errors</span>
                           )}
@@ -428,6 +587,58 @@ export default function WodifyIntegration() {
       </Card>
     </div>
   );
+}
+
+function ProgressStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="text-center p-2 rounded-md bg-muted/50">
+      <p className="text-lg font-semibold tabular-nums">{value.toLocaleString()}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+    </div>
+  );
+}
+
+function SyncStatusIcon({ status }: { status: string }) {
+  switch (status) {
+    case "completed":
+      return <CheckCircle2 className="w-4 h-4 text-green-500" />;
+    case "running":
+    case "queued":
+      return <Loader2 className="w-4 h-4 animate-spin text-blue-500" />;
+    case "cancelling":
+      return <Loader2 className="w-4 h-4 animate-spin text-yellow-500" />;
+    case "cancelled":
+      return <Ban className="w-4 h-4 text-muted-foreground" />;
+    case "completed_with_errors":
+    case "completed_with_warnings":
+      return <AlertTriangle className="w-4 h-4 text-yellow-500" />;
+    case "failed":
+      return <XCircle className="w-4 h-4 text-destructive" />;
+    default:
+      return <Clock className="w-4 h-4 text-muted-foreground" />;
+  }
+}
+
+function SyncStatusBadge({ status }: { status: string }) {
+  const label = status.replace(/_/g, " ");
+  switch (status) {
+    case "completed":
+      return <Badge variant="default" className="text-xs bg-green-600">{label}</Badge>;
+    case "running":
+    case "queued":
+      return <Badge variant="default" className="text-xs bg-blue-600">{label}</Badge>;
+    case "cancelling":
+      return <Badge variant="default" className="text-xs bg-yellow-600">{label}</Badge>;
+    case "cancelled":
+      return <Badge variant="secondary" className="text-xs">{label}</Badge>;
+    case "completed_with_errors":
+    case "completed_with_warnings":
+      return <Badge variant="default" className="text-xs bg-yellow-600">{label}</Badge>;
+    case "failed":
+      return <Badge variant="destructive" className="text-xs">{label}</Badge>;
+    default:
+      return <Badge variant="secondary" className="text-xs">{label}</Badge>;
+  }
 }
 
 function formatTimeAgo(dateStr: string): string {

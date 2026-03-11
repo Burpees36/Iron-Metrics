@@ -169,6 +169,15 @@ app.use((req, res, next) => {
 
   await registerRoutes(httpServer, app);
 
+  try {
+    const cleaned = await storage.cleanupStaleWodifySyncs();
+    if (cleaned > 0) {
+      log(`Cleaned up ${cleaned} stale Wodify sync run(s) from previous session`, "wodify");
+    }
+  } catch (err) {
+    console.warn("[Wodify] Failed to clean up stale sync runs:", (err as Error).message);
+  }
+
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";

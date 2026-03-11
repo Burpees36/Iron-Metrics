@@ -85,17 +85,6 @@ function logRequest(meta: WodifyRequestMeta): void {
 }
 
 
-function isSearchEndpoint(endpoint: string): boolean {
-  return endpoint.includes("/search");
-}
-
-function guardSearchEndpoint(endpoint: string, params: Record<string, string>): boolean {
-  if (!isSearchEndpoint(endpoint)) return true;
-  if (params.q && params.q.trim().length > 0) return true;
-  console.warn(`[Wodify] BLOCKED: search endpoint ${endpoint} called without query parameter — use list endpoint instead`);
-  return false;
-}
-
 function selectListEndpoint(resource: "clients" | "memberships"): string {
   return `/${resource}`;
 }
@@ -439,8 +428,6 @@ async function fetchResourcePage<T = Record<string, any>>(
         throw error;
       }
     }
-  } else {
-    guardSearchEndpoint(selectSearchEndpoint(resource), params);
   }
 
   const listEndpoint = selectListEndpoint(resource);
@@ -491,7 +478,10 @@ export interface FetchAllResult<T = Record<string, any>> {
   endpointDiagnostic: EndpointDiagnostic;
 }
 
-export async function fetchAllWodifyClients(apiKey: string): Promise<FetchAllResult<WodifyClientRecord>> {
+export async function fetchAllWodifyClients(
+  apiKey: string,
+  cancelCheck?: () => Promise<boolean>,
+): Promise<FetchAllResult<WodifyClientRecord>> {
   const all: WodifyClientRecord[] = [];
   let page = 1;
   let hasMore = true;
@@ -499,6 +489,10 @@ export async function fetchAllWodifyClients(apiKey: string): Promise<FetchAllRes
   const start = Date.now();
 
   while (hasMore && page <= MAX_PAGES) {
+    if (cancelCheck && page > 1 && await cancelCheck()) {
+      console.log(`[Wodify] fetchAllWodifyClients cancelled at page ${page}`);
+      break;
+    }
     const result = await fetchWodifyClients(apiKey, { page, pageSize: DEFAULT_PAGE_SIZE });
     all.push(...result.records);
     hasMore = result.hasMore;
@@ -518,7 +512,10 @@ export async function fetchAllWodifyClients(apiKey: string): Promise<FetchAllRes
   return { records: all, pages: page - 1, endpointDiagnostic: diag };
 }
 
-export async function fetchAllWodifyMemberships(apiKey: string): Promise<FetchAllResult<WodifyMembershipRecord>> {
+export async function fetchAllWodifyMemberships(
+  apiKey: string,
+  cancelCheck?: () => Promise<boolean>,
+): Promise<FetchAllResult<WodifyMembershipRecord>> {
   const all: WodifyMembershipRecord[] = [];
   let page = 1;
   let hasMore = true;
@@ -526,6 +523,10 @@ export async function fetchAllWodifyMemberships(apiKey: string): Promise<FetchAl
   const start = Date.now();
 
   while (hasMore && page <= MAX_PAGES) {
+    if (cancelCheck && page > 1 && await cancelCheck()) {
+      console.log(`[Wodify] fetchAllWodifyMemberships cancelled at page ${page}`);
+      break;
+    }
     const result = await fetchWodifyMemberships(apiKey, { page, pageSize: DEFAULT_PAGE_SIZE });
     all.push(...result.records);
     hasMore = result.hasMore;

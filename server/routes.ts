@@ -1480,6 +1480,15 @@ export async function registerRoutes(
       const wodifySyncRole = await getUserGymRole(req, gym);
       if (wodifySyncRole === "coach") return res.status(403).json({ message: "Coaches have read-only access" });
 
+      const existingRun = await storage.getRunningWodifySync(req.params.id);
+      if (existingRun) {
+        return res.status(409).json({
+          message: "A sync is already running. Please wait for it to finish or cancel it first.",
+          runningRunId: existingRun.id,
+          status: existingRun.status,
+        });
+      }
+
       const runType = req.body?.runType === "backfill" ? "backfill" : "incremental";
 
       res.json({ message: "Sync started", status: "running" });
@@ -1490,6 +1499,66 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("Error triggering Wodify sync:", error);
       res.status(500).json({ message: "Failed to trigger sync" });
+    }
+  });
+
+  app.post("/api/gyms/:id/wodify/sync/cancel", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const cancelRole = await getUserGymRole(req, gym);
+      if (cancelRole === "coach") return res.status(403).json({ message: "Coaches have read-only access" });
+
+      const runningSync = await storage.getRunningWodifySync(req.params.id);
+      if (!runningSync) {
+        return res.status(404).json({ message: "No running sync to cancel" });
+      }
+
+      await storage.updateWodifySyncRun(runningSync.id, {
+        cancelRequested: true,
+        status: "cancelling",
+        progressMessage: "Cancellation requested...",
+      });
+
+      console.log(`[Wodify Sync] Cancel requested for run ${runningSync.id} (gym ${req.params.id})`);
+      res.json({ message: "Cancellation requested", syncRunId: runningSync.id });
+    } catch (error: any) {
+      console.error("Error cancelling Wodify sync:", error);
+      res.status(500).json({ message: "Failed to cancel sync" });
+    }
+  });
+
+  app.get("/api/gyms/:id/wodify/sync/progress", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const runningSync = await storage.getRunningWodifySync(req.params.id);
+      if (!runningSync) {
+        return res.json({ running: false });
+      }
+
+      res.json({
+        running: true,
+        syncRunId: runningSync.id,
+        runType: runningSync.runType,
+        status: runningSync.status,
+        phase: runningSync.phase,
+        progressMessage: runningSync.progressMessage,
+        clientsPulled: runningSync.clientsPulled,
+        clientsUpserted: runningSync.clientsUpserted,
+        membershipsPulled: runningSync.membershipsPulled,
+        membershipsUpserted: runningSync.membershipsUpserted,
+        membersUpserted: runningSync.membersUpserted,
+        membersSkipped: runningSync.membersSkipped,
+        errorCount: runningSync.errorCount,
+        startedAt: runningSync.startedAt,
+      });
+    } catch (error: any) {
+      console.error("Error fetching sync progress:", error);
+      res.status(500).json({ message: "Failed to fetch sync progress" });
     }
   });
 

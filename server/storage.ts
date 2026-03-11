@@ -492,6 +492,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteWodifyConnection(gymId: string): Promise<void> {
+    await db.delete(wodifyRawMemberships).where(eq(wodifyRawMemberships.gymId, gymId));
+    await db.delete(wodifyRawClients).where(eq(wodifyRawClients.gymId, gymId));
+    const connection = await this.getWodifyConnection(gymId);
+    if (connection) {
+      await db.delete(wodifySyncRuns).where(eq(wodifySyncRuns.connectionId, connection.id));
+    }
     await db.delete(wodifyConnections).where(eq(wodifyConnections.gymId, gymId));
   }
 
@@ -516,6 +522,29 @@ export class DatabaseStorage implements IStorage {
       .where(eq(wodifySyncRuns.gymId, gymId))
       .orderBy(desc(wodifySyncRuns.startedAt))
       .limit(limit);
+  }
+
+  async getRunningWodifySync(gymId: string): Promise<WodifySyncRun | null> {
+    const [running] = await db
+      .select()
+      .from(wodifySyncRuns)
+      .where(and(eq(wodifySyncRuns.gymId, gymId), inArray(wodifySyncRuns.status, ["queued", "running", "cancelling"])))
+      .orderBy(desc(wodifySyncRuns.startedAt))
+      .limit(1);
+    return running || null;
+  }
+
+  async cleanupStaleWodifySyncs(): Promise<number> {
+    const stale = await db
+      .update(wodifySyncRuns)
+      .set({
+        status: "failed",
+        finishedAt: new Date(),
+        progressMessage: "Interrupted by server restart",
+      })
+      .where(inArray(wodifySyncRuns.status, ["queued", "running", "cancelling"]))
+      .returning();
+    return stale.length;
   }
 
   async upsertWodifyRawClient(client: InsertWodifyRawClient): Promise<void> {

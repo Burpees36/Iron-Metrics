@@ -301,7 +301,7 @@ export const wodifySyncRuns = pgTable("wodify_sync_runs", {
   gymId: varchar("gym_id").notNull().references(() => gyms.id),
   connectionId: varchar("connection_id").notNull().references(() => wodifyConnections.id),
   runType: text("run_type").notNull().default("incremental"),
-  status: text("status").notNull().default("running"),
+  status: text("status").notNull().default("queued"),
   startedAt: timestamp("started_at").defaultNow(),
   finishedAt: timestamp("finished_at"),
   cursorStart: timestamp("cursor_start"),
@@ -310,8 +310,14 @@ export const wodifySyncRuns = pgTable("wodify_sync_runs", {
   clientsUpserted: integer("clients_upserted").notNull().default(0),
   membershipsPulled: integer("memberships_pulled").notNull().default(0),
   membershipsUpserted: integer("memberships_upserted").notNull().default(0),
+  membersUpserted: integer("members_upserted").notNull().default(0),
+  membersSkipped: integer("members_skipped").notNull().default(0),
   errorCount: integer("error_count").notNull().default(0),
   errorDetails: text("error_details"),
+  phase: text("phase"),
+  progressMessage: text("progress_message"),
+  cancelRequested: boolean("cancel_requested").notNull().default(false),
+  diagnosticsSummary: jsonb("diagnostics_summary"),
 }, (table) => [
   index("idx_wodify_sync_runs_gym").on(table.gymId),
   index("idx_wodify_sync_runs_connection").on(table.connectionId),
@@ -322,7 +328,7 @@ export const wodifySyncRunsRelations = relations(wodifySyncRuns, ({ one }) => ({
   connection: one(wodifyConnections, { fields: [wodifySyncRuns.connectionId], references: [wodifyConnections.id] }),
 }));
 
-export const insertWodifySyncRunSchema = createInsertSchema(wodifySyncRuns).omit({ id: true, startedAt: true, finishedAt: true });
+export const insertWodifySyncRunSchema = createInsertSchema(wodifySyncRuns).omit({ id: true, startedAt: true, finishedAt: true, cancelRequested: true, diagnosticsSummary: true, phase: true, progressMessage: true });
 export type InsertWodifySyncRun = z.infer<typeof insertWodifySyncRunSchema>;
 export type WodifySyncRun = typeof wodifySyncRuns.$inferSelect;
 
