@@ -231,6 +231,21 @@ export interface WodifyMembershipRecord {
   [key: string]: any;
 }
 
+function extractArrayFromResponse(data: any, ...keys: string[]): any[] | null {
+  if (Array.isArray(data)) return data;
+  if (!data || typeof data !== "object") return null;
+  for (const key of keys) {
+    if (Array.isArray(data[key])) return data[key];
+  }
+  for (const key of Object.keys(data)) {
+    if (Array.isArray(data[key])) {
+      console.log(`[Wodify] Found array in response key "${key}" (${data[key].length} items)`);
+      return data[key];
+    }
+  }
+  return null;
+}
+
 export async function fetchWodifyClients(
   apiKey: string,
   options?: { page?: number; pageSize?: number; query?: string },
@@ -240,30 +255,37 @@ export async function fetchWodifyClients(
   if (options?.pageSize) params.page_size = String(options.pageSize);
   if (options?.query) params.q = options.query;
 
-  try {
-    const data = await wodifyFetch("/clients/search", apiKey, params);
+  const endpoints = ["/clients/search", "/clients"];
 
-    if (Array.isArray(data)) {
-      return { clients: data, hasMore: data.length >= (options?.pageSize || 50) };
-    }
+  for (const endpoint of endpoints) {
+    try {
+      const data = await wodifyFetch(endpoint, apiKey, params);
+      console.log(`[Wodify] ${endpoint} response type: ${typeof data}, isArray: ${Array.isArray(data)}, keys: ${data && typeof data === "object" ? Object.keys(data).join(",") : "n/a"}`);
 
-    const clients = data?.data || data?.results || data?.items || [];
-    const total = data?.total || data?.total_count;
-    const hasMore = Array.isArray(clients) && clients.length >= (options?.pageSize || 50);
-
-    return { clients: Array.isArray(clients) ? clients : [], hasMore, total };
-  } catch (error: any) {
-    if (error.message?.includes("404")) {
-      try {
-        const data = await wodifyFetch("/clients", apiKey, params);
-        const clients = Array.isArray(data) ? data : (data?.data || []);
-        return { clients, hasMore: clients.length >= (options?.pageSize || 50) };
-      } catch {
-        throw error;
+      const clients = extractArrayFromResponse(data, "clients", "data", "results", "items", "records");
+      if (clients !== null) {
+        const total = data?.total || data?.total_count;
+        const hasMore = clients.length >= (options?.pageSize || 50);
+        console.log(`[Wodify] ${endpoint} returned ${clients.length} clients`);
+        return { clients, hasMore, total };
       }
+
+      if (Array.isArray(data)) {
+        return { clients: data, hasMore: data.length >= (options?.pageSize || 50) };
+      }
+
+      console.log(`[Wodify] ${endpoint} returned unrecognized structure: ${JSON.stringify(data).slice(0, 500)}`);
+    } catch (error: any) {
+      console.log(`[Wodify] ${endpoint} failed: ${error.message}`);
+      if (error.message?.includes("Missing Authentication Token")) continue;
+      if (error.message?.includes("403") || error.message?.includes("Forbidden")) continue;
+      if (error.message?.includes("404")) continue;
+      throw error;
     }
-    throw error;
   }
+
+  console.warn(`[Wodify] No client endpoints returned data — API key may lack client access`);
+  return { clients: [], hasMore: false };
 }
 
 export async function fetchAllWodifyClients(apiKey: string): Promise<WodifyClientRecord[]> {
@@ -293,29 +315,36 @@ export async function fetchWodifyMemberships(
   if (options?.pageSize) params.page_size = String(options.pageSize);
   if (options?.query) params.q = options.query;
 
-  try {
-    const data = await wodifyFetch("/memberships/search", apiKey, params);
+  const endpoints = ["/memberships/search", "/memberships"];
 
-    if (Array.isArray(data)) {
-      return { memberships: data, hasMore: data.length >= (options?.pageSize || 50) };
-    }
+  for (const endpoint of endpoints) {
+    try {
+      const data = await wodifyFetch(endpoint, apiKey, params);
+      console.log(`[Wodify] ${endpoint} response type: ${typeof data}, isArray: ${Array.isArray(data)}, keys: ${data && typeof data === "object" ? Object.keys(data).join(",") : "n/a"}`);
 
-    const memberships = data?.data || data?.results || data?.items || [];
-    const hasMore = Array.isArray(memberships) && memberships.length >= (options?.pageSize || 50);
-
-    return { memberships: Array.isArray(memberships) ? memberships : [], hasMore };
-  } catch (error: any) {
-    if (error.message?.includes("404")) {
-      try {
-        const data = await wodifyFetch("/memberships", apiKey, params);
-        const memberships = Array.isArray(data) ? data : (data?.data || []);
-        return { memberships, hasMore: memberships.length >= (options?.pageSize || 50) };
-      } catch {
-        return { memberships: [], hasMore: false };
+      const memberships = extractArrayFromResponse(data, "memberships", "data", "results", "items", "records");
+      if (memberships !== null) {
+        const hasMore = memberships.length >= (options?.pageSize || 50);
+        console.log(`[Wodify] ${endpoint} returned ${memberships.length} memberships`);
+        return { memberships, hasMore };
       }
+
+      if (Array.isArray(data)) {
+        return { memberships: data, hasMore: data.length >= (options?.pageSize || 50) };
+      }
+
+      console.log(`[Wodify] ${endpoint} returned unrecognized structure: ${JSON.stringify(data).slice(0, 500)}`);
+    } catch (error: any) {
+      console.log(`[Wodify] ${endpoint} failed: ${error.message}`);
+      if (error.message?.includes("Missing Authentication Token")) continue;
+      if (error.message?.includes("403") || error.message?.includes("Forbidden")) continue;
+      if (error.message?.includes("404")) continue;
+      throw error;
     }
-    return { memberships: [], hasMore: false };
   }
+
+  console.warn(`[Wodify] No membership endpoints returned data — API key may lack membership access`);
+  return { memberships: [], hasMore: false };
 }
 
 export async function fetchAllWodifyMemberships(apiKey: string): Promise<WodifyMembershipRecord[]> {
