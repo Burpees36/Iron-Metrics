@@ -3,27 +3,38 @@ import { storage } from "./storage";
 import type { Member } from "@shared/schema";
 import crypto from "crypto";
 
-// STRIPE_ENCRYPTION_KEY is required for production. Fallback to DATABASE_URL derivative only in development.
+let _encryptionKey: string | null = null;
+
 function getEncryptionKey(): string {
+  if (_encryptionKey) return _encryptionKey;
   const key = process.env.STRIPE_ENCRYPTION_KEY;
-  if (key) return key;
+  if (key) {
+    _encryptionKey = key;
+    return key;
+  }
   if (process.env.NODE_ENV === "production") {
-    throw new Error("STRIPE_ENCRYPTION_KEY environment variable is required in production");
+    const fallback = process.env.DATABASE_URL?.slice(0, 32);
+    if (fallback) {
+      console.warn("[stripe-billing] WARNING: STRIPE_ENCRYPTION_KEY not set. Using DATABASE_URL-derived key. Set STRIPE_ENCRYPTION_KEY for full production security.");
+      _encryptionKey = fallback;
+      return fallback;
+    }
+    throw new Error("STRIPE_ENCRYPTION_KEY environment variable is required in production when DATABASE_URL is unavailable");
   }
   const fallback = process.env.DATABASE_URL?.slice(0, 32);
   if (fallback) {
     console.warn("[stripe-billing] WARNING: Using DATABASE_URL-derived encryption key. Set STRIPE_ENCRYPTION_KEY for production.");
+    _encryptionKey = fallback;
     return fallback;
   }
   console.warn("[stripe-billing] WARNING: Using default encryption key. This is NOT safe for production.");
-  return "iron-metrics-stripe-key-default!";
+  _encryptionKey = "iron-metrics-stripe-key-default!";
+  return _encryptionKey;
 }
-
-const ENCRYPTION_KEY = getEncryptionKey();
 
 export function encryptApiKey(apiKey: string): string {
   const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipheriv("aes-256-cbc", Buffer.from(ENCRYPTION_KEY.padEnd(32, "0").slice(0, 32)), iv);
+  const cipher = crypto.createCipheriv("aes-256-cbc", Buffer.from(getEncryptionKey().padEnd(32, "0").slice(0, 32)), iv);
   let encrypted = cipher.update(apiKey, "utf8", "hex");
   encrypted += cipher.final("hex");
   return iv.toString("hex") + ":" + encrypted;
@@ -32,7 +43,7 @@ export function encryptApiKey(apiKey: string): string {
 export function decryptApiKey(encrypted: string): string {
   const [ivHex, encryptedData] = encrypted.split(":");
   const iv = Buffer.from(ivHex, "hex");
-  const decipher = crypto.createDecipheriv("aes-256-cbc", Buffer.from(ENCRYPTION_KEY.padEnd(32, "0").slice(0, 32)), iv);
+  const decipher = crypto.createDecipheriv("aes-256-cbc", Buffer.from(getEncryptionKey().padEnd(32, "0").slice(0, 32)), iv);
   let decrypted = decipher.update(encryptedData, "hex", "utf8");
   decrypted += decipher.final("utf8");
   return decrypted;
