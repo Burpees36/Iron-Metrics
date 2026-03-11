@@ -25,6 +25,11 @@ import {
   Database,
   Square,
   Ban,
+  Search,
+  Eye,
+  FileText,
+  Lock,
+  Inbox,
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -79,6 +84,36 @@ interface SyncProgress {
   startedAt?: string;
 }
 
+interface SourceProfileData {
+  hasProfile: boolean;
+  profile?: {
+    id: string;
+    profileStatus: string;
+    profiledAt: string;
+    discoveredEndpoints: string[];
+    blockedEndpoints: string[];
+    emptyEndpoints: string[];
+    endpointSummaries: Array<{
+      endpoint: string;
+      statusCode: number;
+      topLevelKeys: string[];
+      detectedArrayKey: string | null;
+      sampleRecordCount: number;
+      sampleFieldNames: string[];
+      notes: string;
+    }>;
+    discoveredIdentifierCandidates: string[];
+    discoveredDateFields: string[];
+    discoveredRevenueFields: string[];
+    discoveredStatusFields: string[];
+    profileWarnings: string[];
+    recommendedNextAction: string | null;
+    profileConfidence: string;
+    totalDurationMs: number | null;
+  };
+  stagedPayloadCount?: number;
+}
+
 const PHASE_ORDER = [
   "initializing",
   "fetching_clients",
@@ -114,6 +149,18 @@ export default function WodifyIntegration() {
 
   const { data: status, isLoading } = useQuery<WodifyStatus>({
     queryKey: ["/api/gyms", gymId, "wodify", "status"],
+  });
+
+  const { data: profileData } = useQuery<SourceProfileData>({
+    queryKey: ["/api/gyms", gymId, "wodify", "profile"],
+    enabled: status?.connected === true,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (data?.profile?.profileStatus === "running" || data?.profile?.profileStatus === "queued") {
+        return 3000;
+      }
+      return false;
+    },
   });
 
   const { data: syncHistory } = useQuery<SyncRun[]>({
@@ -214,6 +261,24 @@ export default function WodifyIntegration() {
     },
     onError: (err: Error) => {
       toast({ title: "Cancel failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const profileMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/gyms/${gymId}/wodify/profile`);
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.message || "Profile scan failed");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Profile scan started", description: "Scanning Wodify data structure..." });
+      queryClient.invalidateQueries({ queryKey: ["/api/gyms", gymId, "wodify", "profile"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Profile scan failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -557,6 +622,177 @@ export default function WodifyIntegration() {
         </Card>
       )}
 
+      {isConnected && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Search className="w-4 h-4" />
+              Data Source Profile
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                onClick={() => profileMutation.mutate()}
+                disabled={profileMutation.isPending || profileData?.profile?.profileStatus === "running" || isSyncRunning}
+                data-testid="button-run-profile"
+              >
+                {profileMutation.isPending || profileData?.profile?.profileStatus === "running" ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Search className="w-4 h-4" />
+                )}
+                <span className="ml-1.5">
+                  {profileData?.profile?.profileStatus === "running" ? "Scanning..." : "Scan Wodify Data Structure"}
+                </span>
+              </Button>
+              {profileData?.profile?.profileStatus === "running" && (
+                <span className="text-xs text-muted-foreground">Profile scan in progress...</span>
+              )}
+            </div>
+
+            {profileData?.hasProfile && profileData.profile && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <ProfileStatusBadge status={profileData.profile.profileStatus} />
+                  <ConfidenceBadge confidence={profileData.profile.profileConfidence} />
+                  {profileData.profile.profiledAt && (
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      Profiled {formatTimeAgo(profileData.profile.profiledAt)}
+                    </span>
+                  )}
+                  {profileData.profile.totalDurationMs && (
+                    <span className="text-xs text-muted-foreground">
+                      ({(profileData.profile.totalDurationMs / 1000).toFixed(1)}s)
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <ProfileStat
+                    icon={<CheckCircle2 className="w-3.5 h-3.5 text-green-500" />}
+                    label="Accessible"
+                    value={profileData.profile.discoveredEndpoints.length}
+                    items={profileData.profile.discoveredEndpoints}
+                    testId="stat-accessible"
+                  />
+                  <ProfileStat
+                    icon={<Lock className="w-3.5 h-3.5 text-red-400" />}
+                    label="Blocked"
+                    value={profileData.profile.blockedEndpoints.length}
+                    items={profileData.profile.blockedEndpoints}
+                    testId="stat-blocked"
+                  />
+                  <ProfileStat
+                    icon={<Inbox className="w-3.5 h-3.5 text-muted-foreground" />}
+                    label="Empty"
+                    value={profileData.profile.emptyEndpoints.length}
+                    items={profileData.profile.emptyEndpoints}
+                    testId="stat-empty"
+                  />
+                  <ProfileStat
+                    icon={<FileText className="w-3.5 h-3.5 text-blue-400" />}
+                    label="Staged Payloads"
+                    value={profileData.stagedPayloadCount || 0}
+                    testId="stat-staged"
+                  />
+                </div>
+
+                {profileData.profile.discoveredIdentifierCandidates.length > 0 && (
+                  <FieldSection
+                    title="Identifier Fields"
+                    fields={profileData.profile.discoveredIdentifierCandidates}
+                    testId="fields-identifiers"
+                  />
+                )}
+                {profileData.profile.discoveredDateFields.length > 0 && (
+                  <FieldSection
+                    title="Date Fields"
+                    fields={profileData.profile.discoveredDateFields}
+                    testId="fields-dates"
+                  />
+                )}
+                {profileData.profile.discoveredRevenueFields.length > 0 && (
+                  <FieldSection
+                    title="Revenue / Billing Fields"
+                    fields={profileData.profile.discoveredRevenueFields}
+                    testId="fields-revenue"
+                  />
+                )}
+                {profileData.profile.discoveredStatusFields.length > 0 && (
+                  <FieldSection
+                    title="Status Fields"
+                    fields={profileData.profile.discoveredStatusFields}
+                    testId="fields-status"
+                  />
+                )}
+
+                {profileData.profile.endpointSummaries.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium flex items-center gap-1.5">
+                      <Eye className="w-3.5 h-3.5" />
+                      Endpoint Details
+                    </p>
+                    <div className="space-y-2">
+                      {profileData.profile.endpointSummaries.map((ep, i) => (
+                        <div
+                          key={i}
+                          className="p-2.5 rounded-md border text-xs space-y-1"
+                          data-testid={`endpoint-summary-${i}`}
+                        >
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono font-medium">{ep.endpoint}</span>
+                            <Badge variant="secondary" className="text-[10px]">{ep.sampleRecordCount} records</Badge>
+                            {ep.detectedArrayKey && (
+                              <span className="text-muted-foreground">array: <span className="font-mono">{ep.detectedArrayKey}</span></span>
+                            )}
+                          </div>
+                          {ep.sampleFieldNames.length > 0 && (
+                            <p className="text-muted-foreground">
+                              Fields: {ep.sampleFieldNames.slice(0, 12).join(", ")}
+                              {ep.sampleFieldNames.length > 12 && ` +${ep.sampleFieldNames.length - 12} more`}
+                            </p>
+                          )}
+                          {ep.notes && <p className="text-muted-foreground italic">{ep.notes}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {profileData.profile.profileWarnings.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-sm font-medium flex items-center gap-1.5 text-yellow-600">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      Warnings
+                    </p>
+                    {profileData.profile.profileWarnings.map((w, i) => (
+                      <p key={i} className="text-xs text-muted-foreground pl-5" data-testid={`warning-${i}`}>{w}</p>
+                    ))}
+                  </div>
+                )}
+
+                {profileData.profile.recommendedNextAction && (
+                  <div className="p-3 rounded-md bg-muted/50 border">
+                    <p className="text-sm font-medium mb-1" data-testid="text-recommended-action">Recommended Next Action</p>
+                    <p className="text-sm text-muted-foreground" data-testid="text-recommended-action-value">
+                      {profileData.profile.recommendedNextAction}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!profileData?.hasProfile && (
+              <p className="text-sm text-muted-foreground">
+                No profile scan has been run yet. Click the button above to discover what data your Wodify API key can access.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -638,6 +874,69 @@ function SyncStatusBadge({ status }: { status: string }) {
       return <Badge variant="destructive" className="text-xs">{label}</Badge>;
     default:
       return <Badge variant="secondary" className="text-xs">{label}</Badge>;
+  }
+}
+
+function ProfileStat({ icon, label, value, items, testId }: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  items?: string[];
+  testId?: string;
+}) {
+  return (
+    <div className="p-2.5 rounded-md border bg-muted/30 space-y-1" data-testid={testId}>
+      <div className="flex items-center gap-1.5">
+        {icon}
+        <span className="text-lg font-semibold tabular-nums">{value}</span>
+      </div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      {items && items.length > 0 && (
+        <p className="text-[10px] text-muted-foreground truncate" title={items.join(", ")}>
+          {items.join(", ")}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function FieldSection({ title, fields, testId }: { title: string; fields: string[]; testId?: string }) {
+  return (
+    <div className="space-y-1" data-testid={testId}>
+      <p className="text-xs font-medium text-muted-foreground">{title}</p>
+      <div className="flex flex-wrap gap-1">
+        {fields.map((f) => (
+          <Badge key={f} variant="secondary" className="text-[10px] font-mono">{f}</Badge>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ProfileStatusBadge({ status }: { status: string }) {
+  switch (status) {
+    case "completed":
+      return <Badge variant="default" className="text-xs bg-green-600 gap-1"><CheckCircle2 className="w-3 h-3" />Completed</Badge>;
+    case "running":
+    case "queued":
+      return <Badge variant="default" className="text-xs bg-blue-600 gap-1"><Loader2 className="w-3 h-3 animate-spin" />Running</Badge>;
+    case "failed":
+      return <Badge variant="destructive" className="text-xs gap-1"><XCircle className="w-3 h-3" />Failed</Badge>;
+    default:
+      return <Badge variant="secondary" className="text-xs">{status}</Badge>;
+  }
+}
+
+function ConfidenceBadge({ confidence }: { confidence: string }) {
+  switch (confidence) {
+    case "high":
+      return <Badge variant="default" className="text-xs bg-green-600">High Confidence</Badge>;
+    case "medium":
+      return <Badge variant="default" className="text-xs bg-yellow-600">Medium Confidence</Badge>;
+    case "low":
+      return <Badge variant="default" className="text-xs bg-red-500">Low Confidence</Badge>;
+    default:
+      return <Badge variant="secondary" className="text-xs">{confidence}</Badge>;
   }
 }
 

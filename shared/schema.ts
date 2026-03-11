@@ -926,6 +926,76 @@ export const insertStripeIntegrationEventSchema = createInsertSchema(stripeInteg
 export type InsertStripeIntegrationEvent = z.infer<typeof insertStripeIntegrationEventSchema>;
 export type StripeIntegrationEvent = typeof stripeIntegrationEvents.$inferSelect;
 
+// ── Source Profiles (connector-agnostic capability discovery) ──
+
+export const sourceProfiles = pgTable("source_profiles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gymId: varchar("gym_id").notNull().references(() => gyms.id),
+  connectionId: varchar("connection_id").notNull(),
+  sourceType: text("source_type").notNull().default("wodify"),
+  profiledAt: timestamp("profiled_at").defaultNow(),
+  profileStatus: text("profile_status").notNull().default("queued"),
+  discoveredEndpoints: jsonb("discovered_endpoints").default([]),
+  blockedEndpoints: jsonb("blocked_endpoints").default([]),
+  emptyEndpoints: jsonb("empty_endpoints").default([]),
+  endpointSummaries: jsonb("endpoint_summaries").default([]),
+  discoveredIdentifierCandidates: jsonb("discovered_identifier_candidates").default([]),
+  discoveredDateFields: jsonb("discovered_date_fields").default([]),
+  discoveredRevenueFields: jsonb("discovered_revenue_fields").default([]),
+  discoveredStatusFields: jsonb("discovered_status_fields").default([]),
+  profileWarnings: jsonb("profile_warnings").default([]),
+  recommendedNextAction: text("recommended_next_action"),
+  profileConfidence: text("profile_confidence").default("low"),
+  totalDurationMs: integer("total_duration_ms"),
+}, (table) => [
+  index("idx_source_profiles_gym").on(table.gymId),
+  index("idx_source_profiles_connection").on(table.connectionId),
+]);
+
+export const sourceProfilesRelations = relations(sourceProfiles, ({ one }) => ({
+  gym: one(gyms, { fields: [sourceProfiles.gymId], references: [gyms.id] }),
+}));
+
+export const insertSourceProfileSchema = createInsertSchema(sourceProfiles).omit({ id: true, profiledAt: true });
+export type InsertSourceProfile = z.infer<typeof insertSourceProfileSchema>;
+export type SourceProfile = typeof sourceProfiles.$inferSelect;
+
+// ── Raw Staged Payloads (connector-agnostic raw response staging) ──
+
+export const rawStagedPayloads = pgTable("raw_staged_payloads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gymId: varchar("gym_id").notNull().references(() => gyms.id),
+  connectionId: varchar("connection_id").notNull(),
+  sourceType: text("source_type").notNull().default("wodify"),
+  profileRunId: varchar("profile_run_id"),
+  syncRunId: varchar("sync_run_id"),
+  endpoint: text("endpoint").notNull(),
+  pageNumber: integer("page_number").notNull().default(1),
+  requestParams: jsonb("request_params").default({}),
+  responseStatus: integer("response_status").notNull(),
+  topLevelKeys: jsonb("top_level_keys").default([]),
+  detectedArrayKey: text("detected_array_key"),
+  recordCount: integer("record_count").notNull().default(0),
+  payloadJson: jsonb("payload_json").notNull(),
+  payloadHash: text("payload_hash").notNull(),
+  fetchedAt: timestamp("fetched_at").defaultNow(),
+  parseStatus: text("parse_status").default("raw"),
+  parseNotes: text("parse_notes"),
+}, (table) => [
+  index("idx_raw_staged_gym").on(table.gymId),
+  index("idx_raw_staged_connection").on(table.connectionId),
+  index("idx_raw_staged_endpoint").on(table.endpoint),
+  uniqueIndex("idx_raw_staged_dedup").on(table.connectionId, table.endpoint, table.pageNumber, table.payloadHash),
+]);
+
+export const rawStagedPayloadsRelations = relations(rawStagedPayloads, ({ one }) => ({
+  gym: one(gyms, { fields: [rawStagedPayloads.gymId], references: [gyms.id] }),
+}));
+
+export const insertRawStagedPayloadSchema = createInsertSchema(rawStagedPayloads).omit({ id: true, fetchedAt: true });
+export type InsertRawStagedPayload = z.infer<typeof insertRawStagedPayloadSchema>;
+export type RawStagedPayload = typeof rawStagedPayloads.$inferSelect;
+
 export const SUBSCRIPTION_PLANS = ["starter", "pro"] as const;
 export type SubscriptionPlan = typeof SUBSCRIPTION_PLANS[number];
 

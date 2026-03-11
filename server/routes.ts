@@ -13,6 +13,7 @@ import { supabaseAdmin } from "./supabaseAuth";
 import multer from "multer";
 import { encryptApiKey, generateFingerprint, testWodifyConnection } from "./wodify-connector";
 import { runWodifySync } from "./wodify-sync";
+import { runWodifyDiscovery } from "./wodify-discovery";
 import {
   encryptApiKey as encryptStripeKey,
   fingerprintApiKey as fingerprintStripeKey,
@@ -1574,6 +1575,114 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("Error fetching sync history:", error);
       res.status(500).json({ message: "Failed to fetch sync history" });
+    }
+  });
+
+  // ── Wodify Source Profile / Discovery Routes ──
+
+  app.post("/api/gyms/:id/wodify/profile", isAuthenticated, demoReadOnlyGuard, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+      const role = await getUserGymRole(req, gym);
+      if (role === "coach") return res.status(403).json({ message: "Coaches have read-only access" });
+
+      const connection = await storage.getWodifyConnection(req.params.id);
+      if (!connection) {
+        return res.status(400).json({ message: "No Wodify connection found. Connect first." });
+      }
+
+      const running = await storage.getRunningSourceProfile(req.params.id, "wodify");
+      if (running) {
+        return res.status(409).json({
+          message: "A profile scan is already running.",
+          profileId: running.id,
+          status: running.profileStatus,
+        });
+      }
+
+      const profile = await storage.createSourceProfile({
+        gymId: req.params.id,
+        connectionId: connection.id,
+        sourceType: "wodify",
+        profileStatus: "queued",
+      });
+
+      res.json({ message: "Profile scan started", status: "running", profileId: profile.id });
+
+      runWodifyDiscovery(req.params.id, profile.id).catch((err) =>
+        console.error(`[Wodify Discovery] Background error for gym ${req.params.id}:`, err)
+      );
+    } catch (error: any) {
+      console.error("Error triggering Wodify profile:", error);
+      res.status(500).json({ message: "Failed to trigger profile scan" });
+    }
+  });
+
+  app.get("/api/gyms/:id/wodify/profile", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const profile = await storage.getLatestSourceProfile(req.params.id, "wodify");
+      if (!profile) {
+        return res.json({ hasProfile: false });
+      }
+
+      const payloadCount = await storage.getRawStagedPayloadCount(req.params.id, profile.connectionId);
+
+      res.json({
+        hasProfile: true,
+        profile,
+        stagedPayloadCount: payloadCount,
+      });
+    } catch (error: any) {
+      console.error("Error fetching Wodify profile:", error);
+      res.status(500).json({ message: "Failed to fetch profile" });
+    }
+  });
+
+  app.get("/api/gyms/:id/wodify/staged-payloads", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const limit = Math.min(Number(req.query.limit) || 20, 100);
+      const endpoint = req.query.endpoint as string | undefined;
+      const connectionId = req.query.connectionId as string | undefined;
+
+      const payloads = await storage.getRawStagedPayloads(req.params.id, { limit, endpoint, connectionId });
+
+      const summaries = payloads.map(({ payloadJson, ...rest }) => ({
+        ...rest,
+        hasPayload: payloadJson !== null,
+      }));
+
+      res.json(summaries);
+    } catch (error: any) {
+      console.error("Error fetching staged payloads:", error);
+      res.status(500).json({ message: "Failed to fetch staged payloads" });
+    }
+  });
+
+  app.get("/api/gyms/:id/wodify/staged-payloads/:payloadId", isAuthenticated, async (req: any, res) => {
+    try {
+      const gym = await storage.getGym(req.params.id);
+      if (!gym) return res.status(404).json({ message: "Gym not found" });
+      if (!await checkGymAccess(req, gym)) return res.status(403).json({ message: "Forbidden" });
+
+      const summary = await storage.getRawStagedPayloadSummary(req.params.payloadId);
+      if (!summary || summary.gymId !== req.params.id) {
+        return res.status(404).json({ message: "Staged payload not found" });
+      }
+
+      res.json(summary);
+    } catch (error: any) {
+      console.error("Error fetching staged payload:", error);
+      res.status(500).json({ message: "Failed to fetch staged payload" });
     }
   });
 

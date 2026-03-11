@@ -7,6 +7,7 @@ import {
   leads, consults, salesMemberships, payments,
   aiOperatorRuns, operatorTasks, interventionOutcomes,
   gymStaff, staffInvites, users,
+  sourceProfiles, rawStagedPayloads,
   type Gym, type InsertGym,
   type GymStaff, type InsertGymStaff, type GymStaffRole,
   type StaffInvite, type InsertStaffInvite,
@@ -47,6 +48,8 @@ import {
   type StripeCustomerMatch, type InsertStripeCustomerMatch,
   stripeIntegrationEvents,
   type StripeIntegrationEvent, type InsertStripeIntegrationEvent,
+  type SourceProfile, type InsertSourceProfile,
+  type RawStagedPayload, type InsertRawStagedPayload,
 } from "@shared/schema";
 import { db } from "./db";
 import { pool } from "./db";
@@ -101,6 +104,17 @@ export interface IStorage {
   upsertWodifyRawMembership(membership: InsertWodifyRawMembership): Promise<void>;
   getWodifyRawClients(gymId: string): Promise<WodifyRawClient[]>;
   getWodifyRawMemberships(gymId: string): Promise<WodifyRawMembership[]>;
+
+  createSourceProfile(profile: InsertSourceProfile): Promise<SourceProfile>;
+  updateSourceProfile(id: string, updates: Partial<SourceProfile>): Promise<SourceProfile>;
+  getLatestSourceProfile(gymId: string, sourceType?: string): Promise<SourceProfile | undefined>;
+  getSourceProfiles(gymId: string, limit?: number): Promise<SourceProfile[]>;
+  getRunningSourceProfile(gymId: string, sourceType?: string): Promise<SourceProfile | null>;
+
+  upsertRawStagedPayload(payload: InsertRawStagedPayload): Promise<RawStagedPayload>;
+  getRawStagedPayloads(gymId: string, options?: { connectionId?: string; endpoint?: string; limit?: number }): Promise<RawStagedPayload[]>;
+  getRawStagedPayloadSummary(id: string): Promise<Omit<RawStagedPayload, "payloadJson"> | undefined>;
+  getRawStagedPayloadCount(gymId: string, connectionId?: string): Promise<number>;
 
   createKnowledgeSource(source: InsertKnowledgeSource): Promise<KnowledgeSource>;
   getKnowledgeSources(): Promise<KnowledgeSource[]>;
@@ -492,6 +506,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteWodifyConnection(gymId: string): Promise<void> {
+    await db.delete(rawStagedPayloads).where(and(eq(rawStagedPayloads.gymId, gymId), eq(rawStagedPayloads.sourceType, "wodify")));
+    await db.delete(sourceProfiles).where(and(eq(sourceProfiles.gymId, gymId), eq(sourceProfiles.sourceType, "wodify")));
     await db.delete(wodifyRawMemberships).where(eq(wodifyRawMemberships.gymId, gymId));
     await db.delete(wodifyRawClients).where(eq(wodifyRawClients.gymId, gymId));
     const connection = await this.getWodifyConnection(gymId);
@@ -584,6 +600,126 @@ export class DatabaseStorage implements IStorage {
 
   async getWodifyRawMemberships(gymId: string): Promise<WodifyRawMembership[]> {
     return db.select().from(wodifyRawMemberships).where(eq(wodifyRawMemberships.gymId, gymId));
+  }
+
+  async createSourceProfile(profile: InsertSourceProfile): Promise<SourceProfile> {
+    const [created] = await db.insert(sourceProfiles).values(profile).returning();
+    return created;
+  }
+
+  async updateSourceProfile(id: string, updates: Partial<SourceProfile>): Promise<SourceProfile> {
+    const [updated] = await db
+      .update(sourceProfiles)
+      .set(updates)
+      .where(eq(sourceProfiles.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getLatestSourceProfile(gymId: string, sourceType = "wodify"): Promise<SourceProfile | undefined> {
+    const [profile] = await db
+      .select()
+      .from(sourceProfiles)
+      .where(and(eq(sourceProfiles.gymId, gymId), eq(sourceProfiles.sourceType, sourceType)))
+      .orderBy(desc(sourceProfiles.profiledAt))
+      .limit(1);
+    return profile;
+  }
+
+  async getSourceProfiles(gymId: string, limit = 10): Promise<SourceProfile[]> {
+    return db
+      .select()
+      .from(sourceProfiles)
+      .where(eq(sourceProfiles.gymId, gymId))
+      .orderBy(desc(sourceProfiles.profiledAt))
+      .limit(limit);
+  }
+
+  async getRunningSourceProfile(gymId: string, sourceType = "wodify"): Promise<SourceProfile | null> {
+    const [profile] = await db
+      .select()
+      .from(sourceProfiles)
+      .where(and(
+        eq(sourceProfiles.gymId, gymId),
+        eq(sourceProfiles.sourceType, sourceType),
+        inArray(sourceProfiles.profileStatus, ["queued", "running"]),
+      ))
+      .orderBy(desc(sourceProfiles.profiledAt))
+      .limit(1);
+    return profile || null;
+  }
+
+  async upsertRawStagedPayload(payload: InsertRawStagedPayload): Promise<RawStagedPayload> {
+    const [created] = await db
+      .insert(rawStagedPayloads)
+      .values(payload)
+      .onConflictDoUpdate({
+        target: [rawStagedPayloads.connectionId, rawStagedPayloads.endpoint, rawStagedPayloads.pageNumber, rawStagedPayloads.payloadHash],
+        set: {
+          responseStatus: payload.responseStatus,
+          topLevelKeys: payload.topLevelKeys,
+          detectedArrayKey: payload.detectedArrayKey,
+          recordCount: payload.recordCount,
+          payloadJson: payload.payloadJson,
+          fetchedAt: new Date(),
+          parseStatus: payload.parseStatus,
+          parseNotes: payload.parseNotes,
+          profileRunId: payload.profileRunId,
+          syncRunId: payload.syncRunId,
+        },
+      })
+      .returning();
+    return created;
+  }
+
+  async getRawStagedPayloads(gymId: string, options: { connectionId?: string; endpoint?: string; limit?: number } = {}): Promise<RawStagedPayload[]> {
+    const conditions = [eq(rawStagedPayloads.gymId, gymId)];
+    if (options.connectionId) conditions.push(eq(rawStagedPayloads.connectionId, options.connectionId));
+    if (options.endpoint) conditions.push(eq(rawStagedPayloads.endpoint, options.endpoint));
+
+    return db
+      .select()
+      .from(rawStagedPayloads)
+      .where(and(...conditions))
+      .orderBy(desc(rawStagedPayloads.fetchedAt))
+      .limit(options.limit || 50);
+  }
+
+  async getRawStagedPayloadSummary(id: string): Promise<Omit<RawStagedPayload, "payloadJson"> | undefined> {
+    const [row] = await db
+      .select({
+        id: rawStagedPayloads.id,
+        gymId: rawStagedPayloads.gymId,
+        connectionId: rawStagedPayloads.connectionId,
+        sourceType: rawStagedPayloads.sourceType,
+        profileRunId: rawStagedPayloads.profileRunId,
+        syncRunId: rawStagedPayloads.syncRunId,
+        endpoint: rawStagedPayloads.endpoint,
+        pageNumber: rawStagedPayloads.pageNumber,
+        requestParams: rawStagedPayloads.requestParams,
+        responseStatus: rawStagedPayloads.responseStatus,
+        topLevelKeys: rawStagedPayloads.topLevelKeys,
+        detectedArrayKey: rawStagedPayloads.detectedArrayKey,
+        recordCount: rawStagedPayloads.recordCount,
+        payloadHash: rawStagedPayloads.payloadHash,
+        fetchedAt: rawStagedPayloads.fetchedAt,
+        parseStatus: rawStagedPayloads.parseStatus,
+        parseNotes: rawStagedPayloads.parseNotes,
+      })
+      .from(rawStagedPayloads)
+      .where(eq(rawStagedPayloads.id, id));
+    return row;
+  }
+
+  async getRawStagedPayloadCount(gymId: string, connectionId?: string): Promise<number> {
+    const conditions = [eq(rawStagedPayloads.gymId, gymId)];
+    if (connectionId) conditions.push(eq(rawStagedPayloads.connectionId, connectionId));
+
+    const [result] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(rawStagedPayloads)
+      .where(and(...conditions));
+    return result?.count || 0;
   }
 
   async createKnowledgeSource(source: InsertKnowledgeSource): Promise<KnowledgeSource> {
