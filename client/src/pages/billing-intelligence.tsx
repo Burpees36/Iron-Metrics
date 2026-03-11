@@ -516,12 +516,12 @@ export default function BillingIntelligence() {
         icon={DollarSign}
       />
 
-      <div className="flex items-center justify-between mb-6" data-testid="billing-month-selector">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6" data-testid="billing-month-selector">
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" onClick={goToPrevMonth} data-testid="button-prev-month">
             <ChevronLeft className="w-4 h-4" />
           </Button>
-          <div className="text-lg font-semibold min-w-[180px] text-center">
+          <div className="text-lg font-semibold min-w-[140px] sm:min-w-[180px] text-center">
             {MONTH_NAMES[selectedMonth]} {selectedYear}
           </div>
           <Button variant="outline" size="icon" onClick={goToNextMonth} data-testid="button-next-month">
@@ -679,19 +679,19 @@ export default function BillingIntelligence() {
                   <Users className="w-4 h-4 text-muted-foreground" />
                   Member Billing Detail
                 </CardTitle>
-                <div className="flex items-center gap-2">
-                  <div className="relative">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative flex-1 min-w-[140px] sm:flex-none sm:w-[200px]">
                     <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted-foreground" />
                     <Input
                       placeholder="Search members..."
-                      className="pl-8 h-9 w-[200px] text-sm"
+                      className="pl-8 h-9 text-sm"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       data-testid="input-billing-search"
                     />
                   </div>
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="h-9 w-[120px]" data-testid="select-status-filter">
+                    <SelectTrigger className="h-9 w-[110px] sm:w-[120px]" data-testid="select-status-filter">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -703,7 +703,7 @@ export default function BillingIntelligence() {
                   </Select>
                   {membershipTypes.length > 0 && (
                     <Select value={typeFilter} onValueChange={setTypeFilter}>
-                      <SelectTrigger className="h-9 w-[140px]" data-testid="select-type-filter">
+                      <SelectTrigger className="h-9 w-[120px] sm:w-[140px]" data-testid="select-type-filter">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>

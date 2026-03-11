@@ -457,12 +457,12 @@ export default function LandingPage() {
         </div>
       </section>
       <footer className="border-t border-border/50 py-10">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-wrap items-center justify-between gap-4 text-sm text-muted-foreground">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row flex-wrap items-center justify-between gap-4 text-sm text-muted-foreground">
           <div className="flex items-center">
             <IronMetricsLogoCompact className="h-8 w-auto" variant="dark" />
           </div>
-          <div className="flex items-center gap-4">
-            <p>The Stability Command Center for gyms.</p>
+          <div className="flex flex-wrap items-center justify-center gap-4">
+            <p className="text-center sm:text-left">The Stability Command Center for gyms.</p>
             <Link href="/terms"><span className="hover:underline cursor-pointer" data-testid="link-footer-terms">Terms</span></Link>
             <Link href="/privacy"><span className="hover:underline cursor-pointer" data-testid="link-footer-privacy">Privacy</span></Link>
           </div>

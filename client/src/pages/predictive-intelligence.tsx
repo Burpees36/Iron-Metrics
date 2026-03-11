@@ -994,7 +994,7 @@ function MemberRiskView({ predictions, gymId }: { predictions: PredictiveIntelli
         <p className="text-sm leading-relaxed">{directiveSummary}</p>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3" data-testid="grid-risk-summary">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3" data-testid="grid-risk-summary">
         {allClasses.map((cls) => {
           const Icon = classIcons[cls];
           const count = summary.classBreakdown[cls] || 0;
@@ -1243,7 +1243,7 @@ function FuturePlanningView({ cohorts, scenario, gymName, recommendations, membe
           <DollarSign className="w-3.5 h-3.5" /> Where Your Revenue Is Heading
         </h3>
 
-        <div className="grid sm:grid-cols-4 gap-3" data-testid="grid-scenario-summary">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3" data-testid="grid-scenario-summary">
           <Card>
             <CardContent className="pt-4 pb-3 text-center">
               <p className="text-xs text-muted-foreground mb-1">Best Case</p>

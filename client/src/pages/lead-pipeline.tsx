@@ -144,7 +144,7 @@ export default function LeadPipeline() {
     return (
       <div className="p-6 space-y-6">
         <Skeleton className="h-8 w-48" />
-        <div className="grid grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
           {[...Array(5)].map((_, i) => (
             <div key={i} className="space-y-3">
               <Skeleton className="h-6 w-20" />
@@ -201,7 +201,7 @@ export default function LeadPipeline() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight" data-testid="heading-pipeline">Lead Pipeline</h1>
           <p className="text-sm text-muted-foreground mt-1">Track every lead from first contact to member.</p>
@@ -230,11 +230,11 @@ export default function LeadPipeline() {
               <h2 className="text-lg font-semibold" data-testid="heading-empty-state">Start tracking your leads in 60 seconds.</h2>
               <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">Every lead you add flows through your pipeline — from first contact to member. Your Sales Intelligence dashboard updates automatically.</p>
             </div>
-            <div className="flex items-center justify-center gap-8 text-sm text-muted-foreground">
+            <div className="flex items-center justify-center gap-4 sm:gap-8 text-sm text-muted-foreground flex-wrap">
               <div className="flex items-center gap-2"><span className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">1</span> Add a lead</div>
-              <ChevronRight className="w-4 h-4" />
+              <ChevronRight className="w-4 h-4 hidden sm:block" />
               <div className="flex items-center gap-2"><span className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">2</span> Book & track</div>
-              <ChevronRight className="w-4 h-4" />
+              <ChevronRight className="w-4 h-4 hidden sm:block" />
               <div className="flex items-center gap-2"><span className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">3</span> Close the sale</div>
             </div>
             <Button onClick={() => setAddOpen(true)} data-testid="button-add-lead-empty">
@@ -244,7 +244,8 @@ export default function LeadPipeline() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4" data-testid="pipeline-board">
+        <div className="overflow-x-auto -mx-6 px-6 pb-2">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 min-w-0 md:min-w-[700px] lg:min-w-0" data-testid="pipeline-board">
           {grouped.map((col) => {
             const StageIcon = col.icon;
             return (
@@ -327,6 +328,7 @@ export default function LeadPipeline() {
               </div>
             );
           })}
+        </div>
         </div>
       )}
 
