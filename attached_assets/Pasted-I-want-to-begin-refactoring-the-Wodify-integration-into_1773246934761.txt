@@ -1,0 +1,257 @@
+I want to begin refactoring the Wodify integration into a source-discovery + staging architecture that can later evolve into a full connector platform for Iron Metrics.
+
+Context:
+- The long-term direction is to move away from direct endpoint-to-member import assumptions.
+- We want Iron Metrics to support a canonical internal data model in the future, but this sprint is ONLY for laying the foundation.
+- Do not do a full rewrite of all metric logic in this sprint.
+- This sprint should focus on:
+  1. capability discovery
+  2. source profiling
+  3. raw staging persistence
+  4. diagnostics visibility
+- Preserve the current sync system enough that the app still runs, but begin shifting the Wodify integration toward a connector/staging architecture.
+
+GOAL OF THIS SPRINT:
+After connecting a Wodify account, Iron Metrics should be able to:
+- profile what the API key can actually access
+- inspect what endpoints return
+- record discovered field shapes
+- store raw payload pages in staging tables
+- display a clear source profile / diagnostics summary for that gym connection
+
+Build the following:
+
+==================================================
+1. CREATE SOURCE PROFILE / CAPABILITY DISCOVERY MODEL
+==================================================
+
+Add a persistent Wodify source profile model/table tied to the gym connection.
+
+This profile should store at minimum:
+- gymId / connectionId
+- sourceType = wodify
+- profiledAt timestamp
+- profileStatus (queued, running, completed, failed)
+- discoveredEndpoints (JSON)
+- blockedEndpoints (JSON)
+- emptyEndpoints (JSON)
+- endpointSummaries (JSON)
+- discoveredIdentifierCandidates (JSON)
+- discoveredDateFields (JSON)
+- discoveredRevenueFields (JSON)
+- discoveredStatusFields (JSON)
+- profileWarnings (JSON)
+- recommendedNextAction (string)
+- profileConfidence (low, medium, high)
+
+For endpointSummaries, store per-endpoint info like:
+- endpoint name
+- status code
+- top-level response keys
+- detected array key
+- sample record count
+- sample field names
+- notes
+
+==================================================
+2. BUILD A WODIFY CAPABILITY DISCOVERY JOB
+==================================================
+
+Create a backend job/service that runs after a connection is created or when manually triggered.
+
+This job should:
+- probe a defined list of supported Wodify endpoints using safe list-style access only
+- never call search endpoints without a q parameter
+- capture whether each endpoint is:
+  - accessible
+  - blocked
+  - empty
+  - unsupported shape
+- inspect a sample page from each accessible endpoint
+- extract:
+  - top-level keys
+  - likely array key
+  - sample field names from the first few records
+  - likely identifiers (id, external id, email, person id, client id, membership id, etc.)
+  - likely date fields
+  - likely revenue/billing fields
+  - likely status fields
+
+The discovery job should update the source profile row incrementally as it runs.
+
+==================================================
+3. ADD RAW STAGING TABLES FOR WODIFY PAYLOADS
+==================================================
+
+Create raw staging storage for Wodify responses. This should NOT replace the current sync tables yet; it is a new layer.
+
+At minimum create one generic raw payload table or a clean endpoint-specific structure that stores:
+- id
+- gymId
+- connectionId
+- sourceType
+- syncRunId or profileRunId if applicable
+- endpoint
+- pageNumber
+- requestParams (JSON)
+- responseStatus
+- topLevelKeys (JSON)
+- detectedArrayKey
+- recordCount
+- payloadJson (full raw response JSON)
+- payloadHash
+- fetchedAt
+- parseStatus
+- parseNotes
+
+Requirements:
+- Avoid duplicate storage of the exact same payload page if possible using a payload hash + endpoint/page strategy.
+- Keep this generic enough that future connectors (Mindbody, PushPress, native Iron Metrics modules) could use a similar pattern later.
+
+==================================================
+4. SAVE SAMPLE RAW PAYLOADS DURING PROFILE RUNS
+==================================================
+
+When the capability discovery job runs:
+- for each endpoint probed, store the raw response page in the staging table
+- include metadata needed for later reprocessing
+- do not just log this to console
+
+This is important because I want replayability and auditability later.
+
+==================================================
+5. BUILD FIELD PROFILING HELPERS
+==================================================
+
+Add reusable profiling helpers that can:
+- detect likely array keys from a response
+- flatten or inspect field names from sample records
+- identify likely identifier fields
+- identify likely date fields
+- identify likely money/revenue fields
+- identify likely status fields
+
+Keep these helpers connector-agnostic where possible so they can be reused for future integrations.
+
+==================================================
+6. ADD BACKEND ROUTES FOR PROFILE + STAGING VISIBILITY
+==================================================
+
+Add API routes to:
+- trigger a Wodify profile run manually
+- get the latest Wodify source profile for a gym/connection
+- list recent raw staged payloads for that gym/connection
+- get a specific staged payload summary (NOT necessarily dumping the full payload to the main UI unless needed)
+
+Make the response shapes typed and stable.
+
+==================================================
+7. ADD A BASIC UI CARD / SECTION FOR WODIFY SOURCE PROFILE
+==================================================
+
+On the Wodify integration/settings page, add a new diagnostics/profile section that shows:
+
+- profile status
+- last profiled time
+- accessible endpoints
+- blocked endpoints
+- empty endpoints
+- discovered identifier candidates
+- discovered date fields
+- discovered revenue fields
+- discovered status fields
+- profile confidence
+- recommended next action
+
+Also include a button like:
+- “Run Data Profile”
+or
+- “Scan Wodify Data Structure”
+
+This is not the full polished onboarding UI yet. Keep it clean and readable.
+
+==================================================
+8. CODE QUALITY / ARCHITECTURE REQUIREMENTS
+==================================================
+
+Requirements:
+- Do not tie this directly into the existing metrics engine yet
+- Do not rewrite all existing sync/import logic in this sprint
+- Keep current functionality working
+- Build this as a foundation for a future canonical connector architecture
+- Keep new helper utilities modular and reusable
+- Avoid Wodify-specific assumptions in the field profiling utilities unless absolutely necessary
+- Use explicit types
+- Add comments where architectural intent matters
+
+==================================================
+9. REQUIRED OUTPUT / VALIDATION
+==================================================
+
+When finished, do NOT just say “done”.
+
+I want a specific implementation summary with these sections:
+
+A. Files changed
+List every file changed and why.
+
+B. New data models
+Show the new table/model names and their purpose.
+
+C. Discovery endpoints tested
+List exactly which Wodify endpoints the profile job probes.
+
+D. Example source profile output
+Provide a realistic sample JSON object of the saved Wodify source profile, including:
+- discoveredEndpoints
+- blockedEndpoints
+- endpointSummaries
+- discoveredIdentifierCandidates
+- profileWarnings
+- recommendedNextAction
+- profileConfidence
+
+E. Example staged raw payload record
+Provide a sample saved raw staging row/object.
+
+F. Validation checklist
+Confirm each of the following with a yes/no and a brief explanation:
+- Wodify profile can be triggered manually
+- profile results persist in the database
+- raw payload pages persist in staging
+- accessible vs blocked endpoints are distinguished
+- field profiling extracts likely identifiers/dates/status/revenue fields
+- a UI diagnostics section displays the saved profile
+- no search endpoints are called without q
+
+G. Concrete test steps for me
+Give me exact manual validation steps I can perform in the app to confirm this sprint worked.
+For example:
+1. Connect Wodify key
+2. Open integration page
+3. Click Run Data Profile
+4. Observe profile status change
+5. Confirm discovered endpoints appear
+6. Confirm raw payload count appears via API or UI
+7. Confirm recommended next action is shown
+
+H. Example logs
+Show a sample expected log sequence for a successful profile run.
+
+==================================================
+10. IMPORTANT SCOPE CONTROL
+==================================================
+
+Do NOT in this sprint:
+- attempt a full canonical import rewrite
+- attempt a full metrics refactor
+- attempt full fallback member import redesign
+- attempt to replace the current sync engine entirely
+
+This sprint is ONLY the foundation:
+- discover
+- profile
+- stage
+- expose diagnostics
+
+Build this cleanly so Sprint 2 can introduce canonical mapping and promotion rules on top of it.
