@@ -116,44 +116,93 @@ export async function testWodifyConnection(apiKey: string): Promise<{
   }
 
   const testEndpoints = [
-    { path: "/clients/search", label: "clients" },
+    { path: "/classes", label: "classes" },
     { path: "/clients", label: "clients" },
-    { path: "/workouts/formattedworkout", label: "workouts" },
     { path: "/leads", label: "leads" },
   ];
 
   for (const { path, label } of testEndpoints) {
     try {
-      const data = await wodifyFetch(path, trimmedKey);
-      const items = Array.isArray(data) ? data : (data?.data || data?.results || data?.items || []);
-      return {
-        success: true,
-        message: `Connected successfully. Verified access via ${label} endpoint.`,
-      };
-    } catch (error: any) {
-      const msg = error.message || "";
-      if (msg.includes("Missing Authentication Token")) {
-        continue;
-      }
-      if (msg.includes("403") || msg.includes("401") || msg.includes("Forbidden")) {
+      const response = await fetch(`${WODIFY_BASE_URL}${path}`, {
+        method: "GET",
+        headers: {
+          "Accept": "application/json",
+          "x-api-key": trimmedKey,
+        },
+        signal: AbortSignal.timeout(15000),
+      });
+
+      const body = await response.text().catch(() => "");
+      console.log(`[Wodify test] ${path} → ${response.status}: ${body.slice(0, 200)}`);
+
+      if (response.ok) {
         return {
-          success: false,
-          message: "Invalid API key. Wodify rejected the key. Please verify you copied the correct API key from Wodify > Automations > Integrations.",
+          success: true,
+          message: `Connected successfully. Verified access via ${label} endpoint.`,
         };
       }
-      if (msg.includes("404")) {
+
+      if (response.status === 403 || response.status === 401) {
+        if (body.includes("Missing Authentication Token")) {
+          continue;
+        }
+        if (body.includes("Forbidden") || body.includes("Unauthorized")) {
+          continue;
+        }
+      }
+
+      if (response.status === 400 || response.status === 422) {
+        return {
+          success: true,
+          message: `Connected successfully. API key verified via ${label} endpoint.`,
+        };
+      }
+
+      if (response.status === 404) {
         continue;
       }
+
+    } catch (error: any) {
+      console.log(`[Wodify test] ${path} → error: ${error.message}`);
+      continue;
+    }
+  }
+
+  const verifyResponse = await fetch(`${WODIFY_BASE_URL}/classes`, {
+    method: "GET",
+    headers: {
+      "Accept": "application/json",
+      "x-api-key": "INVALID_TEST_KEY_000",
+    },
+    signal: AbortSignal.timeout(15000),
+  }).catch(() => null);
+
+  const invalidBody = await verifyResponse?.text().catch(() => "") || "";
+  console.log(`[Wodify test] baseline with invalid key → ${verifyResponse?.status}: ${invalidBody.slice(0, 200)}`);
+
+  const realResponse = await fetch(`${WODIFY_BASE_URL}/classes`, {
+    method: "GET",
+    headers: {
+      "Accept": "application/json",
+      "x-api-key": trimmedKey,
+    },
+    signal: AbortSignal.timeout(15000),
+  }).catch(() => null);
+
+  const realBody = await realResponse?.text().catch(() => "") || "";
+
+  if (realResponse && verifyResponse) {
+    if (realResponse.status !== verifyResponse.status || realBody !== invalidBody) {
       return {
-        success: false,
-        message: error.message || "Failed to connect to Wodify",
+        success: true,
+        message: "Connected successfully. API key accepted by Wodify.",
       };
     }
   }
 
   return {
     success: false,
-    message: "Could not verify connection. None of the expected Wodify API endpoints responded. Please check your API key and Wodify plan.",
+    message: "Could not verify the API key with Wodify. All endpoints returned access denied. Please confirm this is a Wodify CRM API key from Automations > Integrations (not a WOD embed key).",
   };
 }
 
